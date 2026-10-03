@@ -1,14 +1,22 @@
-const App = () => {
-	return (
-		<div className="min-h-screen flex flex-col bg-black text-white/95 items-center justify-center text-2xl font-bold text-center">
-			<img
-				className="size-40"
-				src="https://res.cloudinary.com/dltj8bim0/image/upload/v1761060580/logo_kukwt0.png"
-				alt=""
-			/>
-			<p className=" text-amber-600 font-bold">Hello Vite + React + TailwindCSS!</p>
-		</div>
-	);
-};
+import { Routes, Route } from 'react-router-dom';
+import DashboardLayout from './layouts/DashboardLayout';
+import Home from './features/dashboard/Home';
+
+function App() {
+  return (
+    <Routes>
+      {/* RUTAS PÚBLICAS (No tienen el Menú Lateral) */}
+      {/* 
+        NOTA: Aca debe ir la ruta de login 
+      */}
+
+      {/* RUTAS PRIVADAS (Tienen el Menú Lateral del Layout) */}
+      <Route element={<DashboardLayout />}>
+        {/* Cualquier ruta aca adentro, aparecerá al lado del Sidebar */}
+        <Route path="/" element={<Home />} />
+      </Route>
+    </Routes>
+  );
+}
 
 export default App;
