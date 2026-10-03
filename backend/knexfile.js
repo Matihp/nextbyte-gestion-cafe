@@ -1,39 +1,33 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-/**
- * @type { Object.<string, import("knex").Knex.Config> }
- */
 module.exports = {
   development: {
-    client: 'mysql2',
+    client: 'sqlite3',
     connection: {
-      host: process.env.DB_HOST || '127.0.0.1',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'cafe_db'
+      filename: process.env.LOCAL_DB_PATH 
+        ? path.resolve(__dirname, process.env.LOCAL_DB_PATH) 
+        : path.join(__dirname, 'dev_local.db')
     },
+    useNullAsDefault: true,
     migrations: {
-      directory: './src/db/migrations'
+      directory: path.join(__dirname, 'src', 'db', 'migrations')
     },
     seeds: {
-      directory: './src/db/seeds'
+      directory: path.join(__dirname, 'src', 'db', 'seeds')
     }
   },
 
   production: {
-    client: 'mysql2',
+    client: 'sqlite3',
     connection: {
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME
+      filename: process.env.LOCAL_DB_PATH 
+        ? path.resolve(__dirname, process.env.LOCAL_DB_PATH) 
+        : path.join(__dirname, 'contingencia.db')
     },
-    pool: {
-      min: 2,
-      max: 10
-    },
+    useNullAsDefault: true,
     migrations: {
-      directory: './src/db/migrations'
+      directory: path.join(__dirname, 'src', 'db', 'migrations')
     }
   }
 };
