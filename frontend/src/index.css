@@ -83,14 +83,14 @@
     --radius: 0.625rem;
     
     /* Variables del Sidebar de la Cafeteria */
-    --sidebar: #F3E5DC; 
-    --sidebar-foreground: #000000;
-    --sidebar-primary: #4B2B1D; 
-    --sidebar-primary-foreground: #F3E5DC; 
-    --sidebar-accent: #e6d3c3; /* Color al pasar el mouse (hover) */
-    --sidebar-accent-foreground: #9F4F2F; /* Color del texto al hacer hover (Terracota) */
-    --sidebar-border: #A67C52;
-    --sidebar-ring: #4B2B1D;
+    --sidebar: #4B2B1D; 
+    --sidebar-foreground: #F3E5DC; 
+    --sidebar-primary: #9F4F2F; 
+    --sidebar-primary-foreground: #ffffff; 
+    --sidebar-accent: #9F4F2F; /* Color al pasar el mouse (hover) y activo (Terracota) */
+    --sidebar-accent-foreground: #ffffff; 
+    --sidebar-border: rgba(75, 43, 29, 0.2);
+    --sidebar-ring: #9F4F2F;
 }
 
 .dark {
