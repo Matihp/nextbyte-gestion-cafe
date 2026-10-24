@@ -2,50 +2,33 @@ const { dbLocal } = require("../config/db");
 
 const TABLA = "insumos";
 
-const CAMPOS = [
-  "id",
-  "nombre",
-  "categoria",
-  "unidad",
-  "stock_minimo as stockMinimo",
-  "activo",
-  "created_at",
-  "updated_at",
-];
-
 const obtenerTodos = async () => {
   return await dbLocal(TABLA)
-    .select(...CAMPOS)
-    .orderBy("nombre", "asc");
-};
-
-const obtenerActivos = async () => {
-  return await dbLocal(TABLA)
-    .select(...CAMPOS)
-    .where("activo", true)
+    .select("*")
     .orderBy("nombre", "asc");
 };
 
 const obtenerPorId = async (id) => {
   return await dbLocal(TABLA)
-    .select(...CAMPOS)
     .where({ id })
     .first();
 };
 
-const crear = async (insumo, conexion = dbLocal) => {
-  const [id] = await conexion(TABLA).insert({
+const crear = async (insumo) => {
+  await dbLocal(TABLA).insert({
+    id: insumo.id,
     nombre: insumo.nombre,
-    categoria: insumo.categoria,
-    unidad: insumo.unidad,
-    stock_minimo: insumo.stockMinimo,
-    activo: true,
+    rubro: insumo.rubro,
+    cantidad_disponible: insumo.cantidad_disponible,
+    unidad_medida: insumo.unidad_medida,
+    stock_minimo: insumo.stock_minimo,
+    precio_costo: insumo.precio_costo,
+    ultima_actualizacion: insumo.ultima_actualizacion,
+    fecha_ingreso: insumo.fecha_ingreso,
+    fecha_vencimiento: insumo.fecha_vencimiento,
   });
 
-  return await conexion(TABLA)
-    .select(...CAMPOS)
-    .where({ id })
-    .first();
+  return await obtenerPorId(insumo.id);
 };
 
 const actualizar = async (id, insumo) => {
@@ -53,21 +36,14 @@ const actualizar = async (id, insumo) => {
     .where({ id })
     .update({
       nombre: insumo.nombre,
-      categoria: insumo.categoria,
-      unidad: insumo.unidad,
-      stock_minimo: insumo.stockMinimo,
-      updated_at: dbLocal.fn.now(),
-    });
-
-  return await obtenerPorId(id);
-};
-
-const cambiarEstado = async (id, activo) => {
-  await dbLocal(TABLA)
-    .where({ id })
-    .update({
-      activo,
-      updated_at: dbLocal.fn.now(),
+      rubro: insumo.rubro,
+      cantidad_disponible: insumo.cantidad_disponible,
+      unidad_medida: insumo.unidad_medida,
+      stock_minimo: insumo.stock_minimo,
+      precio_costo: insumo.precio_costo,
+      ultima_actualizacion: insumo.ultima_actualizacion,
+      fecha_ingreso: insumo.fecha_ingreso,
+      fecha_vencimiento: insumo.fecha_vencimiento,
     });
 
   return await obtenerPorId(id);
@@ -79,33 +55,10 @@ const eliminar = async (id) => {
     .del();
 };
 
-const tieneLotes = async (id) => {
-  const resultado = await dbLocal("lotes")
-    .where("insumo_id", id)
-    .count({ cantidad: "*" })
-    .first();
-
-  return Number(resultado.cantidad) > 0;
-};
-
-const tieneMovimientos = async (id) => {
-  const resultado = await dbLocal("movimientos_inventario")
-    .where("insumo_id", id)
-    .count({ cantidad: "*" })
-    .first();
-
-  return Number(resultado.cantidad) > 0;
-};
-
 module.exports = {
   obtenerTodos,
-  obtenerActivos,
   obtenerPorId,
   crear,
   actualizar,
-  cambiarEstado,
   eliminar,
-  tieneLotes,
-  tieneMovimientos,
 };
-

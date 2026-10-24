@@ -8,13 +8,6 @@ const obtenerTodos = async () => {
     .orderBy("empresa", "asc");
 };
 
-const obtenerActivos = async () => {
-  return await dbLocal(TABLA)
-    .select("*")
-    .where("activo", true)
-    .orderBy("empresa", "asc");
-};
-
 const obtenerPorId = async (id) => {
   return await dbLocal(TABLA)
     .where({ id })
@@ -28,51 +21,53 @@ const obtenerPorCodigo = async (codigo) => {
 };
 
 const crear = async (proveedor) => {
-  const [id] = await dbLocal(TABLA).insert({
+  await dbLocal(TABLA).insert({
+    id: proveedor.id,
     codigo: proveedor.codigo,
     empresa: proveedor.empresa,
-    contacto: proveedor.contacto,
-    rubro: proveedor.rubro,
-    email: proveedor.email,
+    nombre_contacto: proveedor.nombreContacto,
+    apellido_contacto: proveedor.apellidoContacto,
     telefono: proveedor.telefono,
-    activo: true,
+    email: proveedor.email,
+    rubro: proveedor.rubro,
+    insumos_asignados_ids: JSON.stringify(
+      proveedor.insumosAsignadosIds || []
+    ),
   });
 
-  return await obtenerPorId(id);
+  return await obtenerPorId(proveedor.id);
 };
 
 const actualizar = async (id, proveedor) => {
   await dbLocal(TABLA)
     .where({ id })
     .update({
+      codigo: proveedor.codigo,
       empresa: proveedor.empresa,
-      contacto: proveedor.contacto,
-      rubro: proveedor.rubro,
-      email: proveedor.email,
+      nombre_contacto: proveedor.nombreContacto,
+      apellido_contacto: proveedor.apellidoContacto,
       telefono: proveedor.telefono,
-      updated_at: dbLocal.fn.now(),
+      email: proveedor.email,
+      rubro: proveedor.rubro,
+      insumos_asignados_ids: JSON.stringify(
+        proveedor.insumosAsignadosIds || []
+      ),
     });
 
   return await obtenerPorId(id);
 };
 
-const cambiarEstado = async (id, activo) => {
-  await dbLocal(TABLA)
+const eliminar = async (id) => {
+  return await dbLocal(TABLA)
     .where({ id })
-    .update({
-      activo,
-      updated_at: dbLocal.fn.now(),
-    });
-
-  return await obtenerPorId(id);
+    .del();
 };
 
 module.exports = {
   obtenerTodos,
-  obtenerActivos,
   obtenerPorId,
   obtenerPorCodigo,
   crear,
   actualizar,
-  cambiarEstado,
+  eliminar,
 };

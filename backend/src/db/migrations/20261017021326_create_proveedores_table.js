@@ -1,46 +1,22 @@
 exports.up = function (knex) {
   return knex.schema.createTable("proveedores", (table) => {
-    table.increments("id").primary();
+    table.string("id").primary();
 
-    table
-      .string("codigo", 20)
-      .notNullable()
-      .unique();
+    table.string("codigo");
 
-    table
-      .string("empresa", 150)
-      .notNullable();
+    table.string("empresa");
 
-    table
-      .string("contacto", 120)
-      .notNullable();
+    table.string("nombre_contacto");
 
-    table
-      .string("rubro", 100)
-      .notNullable();
+    table.string("apellido_contacto");
 
-    table
-      .string("email", 150)
-      .notNullable();
+    table.string("telefono");
 
-    table
-      .string("telefono", 50)
-      .notNullable();
+    table.string("email");
 
-    table
-      .boolean("activo")
-      .notNullable()
-      .defaultTo(true);
+    table.string("rubro");
 
-    table
-      .timestamp("created_at")
-      .notNullable()
-      .defaultTo(knex.fn.now());
-
-    table
-      .timestamp("updated_at")
-      .notNullable()
-      .defaultTo(knex.fn.now());
+    table.json("insumos_asignados_ids");
   });
 };
 
