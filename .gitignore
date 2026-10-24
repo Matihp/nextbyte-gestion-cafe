@@ -1,1 +1,5 @@
 Cafeteria_1/
+node_modules/
+.env
+*.db
+backend/dev_local.db
