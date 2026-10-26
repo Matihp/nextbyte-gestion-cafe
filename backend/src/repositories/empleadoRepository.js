@@ -17,9 +17,7 @@ const deserialize = (row) => {
   if (!row) return row;
   return {
     ...row,
-    activo: Boolean(row.activo),
     dias_franco: parseJson(row.dias_franco, []),
-    dias_trabajo: parseJson(row.dias_trabajo, {}),
     permisos: parseJson(row.permisos, [])
   };
 };
@@ -29,14 +27,8 @@ const serialize = (data) => {
   if (copy.dias_franco !== undefined && typeof copy.dias_franco === 'object') {
     copy.dias_franco = JSON.stringify(copy.dias_franco);
   }
-  if (copy.dias_trabajo !== undefined && typeof copy.dias_trabajo === 'object') {
-    copy.dias_trabajo = JSON.stringify(copy.dias_trabajo);
-  }
   if (copy.permisos !== undefined && typeof copy.permisos === 'object') {
     copy.permisos = JSON.stringify(copy.permisos);
-  }
-  if (copy.activo !== undefined) {
-    copy.activo = copy.activo ? 1 : 0;
   }
   return copy;
 };
@@ -45,9 +37,6 @@ module.exports = {
   getAll: async (filters = {}) => {
     let query = dbLocal(TABLE).select('*');
 
-    if (filters.activo !== undefined) {
-      query = query.where('activo', filters.activo ? 1 : 0);
-    }
     if (filters.rol_id) {
       query = query.where('rol_id', filters.rol_id);
     }
@@ -56,7 +45,6 @@ module.exports = {
       query = query.where((qb) => {
         qb.where('nombre', 'like', term)
           .orWhere('apellido', 'like', term)
-          .orWhere('nombre_distintivo', 'like', term)
           .orWhere('legajo', 'like', term)
           .orWhere('email', 'like', term);
       });
@@ -93,7 +81,6 @@ module.exports = {
       legajo: data.legajo || null,
       nombre: data.nombre,
       apellido: data.apellido,
-      nombre_distintivo: data.nombre_distintivo || data.nombreDistintivo || null,
       email: data.email,
       contrasena: data.contrasena || data.password,
       telefono: data.telefono || null,
@@ -102,9 +89,7 @@ module.exports = {
       fecha_ingreso: data.fecha_ingreso || data.fechaIngreso || null,
       turno_habitual: data.turno_habitual || data.turnoHabitual || null,
       dias_franco: data.dias_franco || data.diasFranco || [],
-      dias_trabajo: data.dias_trabajo || data.diasTrabajo || {},
-      permisos: data.permisos || [],
-      activo: data.activo !== undefined ? data.activo : true
+      permisos: data.permisos || []
     });
 
     await dbLocal(TABLE).insert(payload);
@@ -121,15 +106,5 @@ module.exports = {
     return module.exports.getById(id);
   },
 
-  delete: (id) => dbLocal(TABLE).where({ id }).del(),
-
-  softDelete: async (id) => {
-    await dbLocal(TABLE).where({ id }).update({ activo: 0, updated_at: dbLocal.fn.now() });
-    return module.exports.getById(id);
-  },
-
-  reactivate: async (id) => {
-    await dbLocal(TABLE).where({ id }).update({ activo: 1, updated_at: dbLocal.fn.now() });
-    return module.exports.getById(id);
-  }
+  delete: (id) => dbLocal(TABLE).where({ id }).del()
 };

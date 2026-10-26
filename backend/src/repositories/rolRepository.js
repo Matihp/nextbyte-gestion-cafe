@@ -41,8 +41,7 @@ module.exports = {
       id: data.id || crypto.randomUUID(),
       nombre: data.nombre,
       es_admin: data.es_admin ? 1 : 0,
-      permisos: data.permisos ? JSON.stringify(data.permisos) : '[]',
-      descripcion: data.descripcion || null
+      permisos: data.permisos ? JSON.stringify(data.permisos) : '[]'
     };
 
     await dbLocal(TABLE).insert(payload);

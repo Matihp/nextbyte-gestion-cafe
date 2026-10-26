@@ -7,9 +7,6 @@ const sanitize = (item) => {
   const cantidad = Number(item.cantidad || 1);
   const precioVenta = Number(item.precio_venta ?? item.precioVenta ?? 0);
   const precioCosto = Number(item.precio_costo ?? item.precioCosto ?? 0);
-  const subtotal = item.subtotal !== undefined
-    ? Number(item.subtotal)
-    : Number((cantidad * precioVenta).toFixed(2));
 
   return {
     id: item.id || crypto.randomUUID(),
@@ -18,9 +15,7 @@ const sanitize = (item) => {
     nombre_producto: item.nombre_producto || item.nombreProducto,
     cantidad,
     precio_venta: precioVenta,
-    precio_costo: precioCosto,
-    subtotal,
-    notas: item.notas || null
+    precio_costo: precioCosto
   };
 };
 

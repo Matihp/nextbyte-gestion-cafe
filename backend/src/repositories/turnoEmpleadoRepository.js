@@ -3,13 +3,7 @@ const { dbLocal } = require('../config/db');
 
 const TABLE = 'turnos_empleados';
 
-const deserialize = (row) => {
-  if (!row) return row;
-  return {
-    ...row,
-    es_excepcional: Boolean(row.es_excepcional)
-  };
-};
+const deserialize = (row) => row;
 
 module.exports = {
   getAll: async (filters = {}) => {
@@ -23,9 +17,6 @@ module.exports = {
     }
     if (filters.estado) {
       query = query.where('estado', filters.estado);
-    }
-    if (filters.es_excepcional !== undefined) {
-      query = query.where('es_excepcional', filters.es_excepcional ? 1 : 0);
     }
     if (filters.desde) {
       query = query.where('fecha', '>=', filters.desde);
@@ -67,11 +58,7 @@ module.exports = {
       id: data.id || crypto.randomUUID(),
       empleado_id: data.empleado_id || data.empleadoId,
       fecha: data.fecha,
-      estado: data.estado,
-      hora_entrada: data.hora_entrada || data.horaEntrada || null,
-      hora_salida: data.hora_salida || data.horaSalida || null,
-      es_excepcional: data.es_excepcional ? 1 : 0,
-      observaciones: data.observaciones || null
+      estado: data.estado
     };
 
     await dbLocal(TABLE).insert(payload);
@@ -79,15 +66,12 @@ module.exports = {
   },
 
   update: async (id, data) => {
-    const payload = {
-      ...data,
-      updated_at: dbLocal.fn.now()
-    };
-    if (payload.es_excepcional !== undefined) {
-      payload.es_excepcional = payload.es_excepcional ? 1 : 0;
-    }
-
-    await dbLocal(TABLE).where({ id }).update(payload);
+    await dbLocal(TABLE)
+      .where({ id })
+      .update({
+        ...data,
+        updated_at: dbLocal.fn.now()
+      });
     return module.exports.getById(id);
   },
 

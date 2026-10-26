@@ -20,9 +20,6 @@ module.exports = {
     if (filters.metodo_pago || filters.metodoPago) {
       query = query.where('metodo_pago', filters.metodo_pago || filters.metodoPago);
     }
-    if (filters.empleado_id || filters.empleadoId) {
-      query = query.where('empleado_id', filters.empleado_id || filters.empleadoId);
-    }
     if (filters.fecha) {
       query = query.where('fecha', filters.fecha);
     }
@@ -37,7 +34,6 @@ module.exports = {
       query = query.where((qb) => {
         qb.where('cliente', 'like', term)
           .orWhere('id', 'like', term)
-          .orWhere('mesa', 'like', term)
           .orWhere('telefono', 'like', term);
       });
     }
@@ -79,10 +75,7 @@ module.exports = {
       direccion: data.direccion || null,
       telefono: data.telefono || null,
       fecha: data.fecha || getTodayDate(),
-      hora: data.hora || getTodayTime(),
-      empleado_id: data.empleado_id || data.empleadoId || null,
-      mesa: data.mesa || null,
-      notas: data.notas || null
+      hora: data.hora || getTodayTime()
     };
 
     const qb = trx ? trx(TABLE) : dbLocal(TABLE);

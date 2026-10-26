@@ -9,10 +9,10 @@ const TABLA = 'registro_ventas';
 
     await dbLocal(TABLA).insert({
         id: registroVenta.id,
-        pedido_id: registroVenta.pedidoId,
-        fecha_venta: registroVenta.fechaVenta,
-        total_venta: registroVenta.totalVenta,
-        total_costo: registroVenta.totalCosto,
+        pedido_id: registroVenta.pedidoId || registroVenta.pedido_id,
+        fecha: registroVenta.fecha || registroVenta.fechaVenta,
+        total_venta: registroVenta.totalVenta ?? registroVenta.total_venta,
+        total_costo: registroVenta.totalCosto ?? registroVenta.total_costo,
     });
 
     return buscarPorId(registroVenta.id)
@@ -37,8 +37,8 @@ const TABLA = 'registro_ventas';
    */
   async function listar() {
     return dbLocal(TABLA)
-        .select('id', 'pedido_id', 'fecha_venta', 'total_venta', 'total_costo')
-        .orderBy('fecha_venta', 'desc');
+        .select('id', 'pedido_id', 'fecha', 'total_venta', 'total_costo')
+        .orderBy('fecha', 'desc');
   }
 
   module.exports = {
