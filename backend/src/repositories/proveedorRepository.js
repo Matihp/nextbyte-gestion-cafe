@@ -2,22 +2,38 @@ const { dbLocal } = require("../config/db");
 
 const TABLA = "proveedores";
 
+const deserializar = (fila) => {
+  if (!fila) return fila;
+  return {
+    ...fila,
+    insumos_asignados_ids: fila.insumos_asignados_ids
+      ? JSON.parse(fila.insumos_asignados_ids)
+      : [],
+  };
+};
+
 const obtenerTodos = async () => {
-  return await dbLocal(TABLA)
+  const filas = await dbLocal(TABLA)
     .select("*")
     .orderBy("empresa", "asc");
+
+  return filas.map(deserializar);
 };
 
 const obtenerPorId = async (id) => {
-  return await dbLocal(TABLA)
+  const fila = await dbLocal(TABLA)
     .where({ id })
     .first();
+
+  return deserializar(fila);
 };
 
 const obtenerPorCodigo = async (codigo) => {
-  return await dbLocal(TABLA)
+  const fila = await dbLocal(TABLA)
     .where({ codigo })
     .first();
+
+  return deserializar(fila);
 };
 
 const crear = async (proveedor) => {
@@ -71,3 +87,4 @@ module.exports = {
   actualizar,
   eliminar,
 };
+

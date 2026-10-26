@@ -15,8 +15,7 @@ const obtenerPorId = async (id) => {
 };
 
 const crear = async (insumo) => {
-  await dbLocal(TABLA).insert({
-    id: insumo.id,
+  const [id] = await dbLocal(TABLA).insert({
     nombre: insumo.nombre,
     rubro: insumo.rubro,
     cantidad_disponible: insumo.cantidad_disponible,
@@ -28,7 +27,7 @@ const crear = async (insumo) => {
     fecha_vencimiento: insumo.fecha_vencimiento,
   });
 
-  return await obtenerPorId(insumo.id);
+  return await obtenerPorId(id);
 };
 
 const actualizar = async (id, insumo) => {
@@ -62,3 +61,4 @@ module.exports = {
   actualizar,
   eliminar,
 };
+
