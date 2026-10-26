@@ -1,64 +1,43 @@
 const { dbLocal } = require("../config/db");
 
-const TABLA = "insumos";
-
-const obtenerTodos = async () => {
-  return await dbLocal(TABLA)
-    .select("*")
-    .orderBy("nombre", "asc");
-};
-
-const obtenerPorId = async (id) => {
-  return await dbLocal(TABLA)
-    .where({ id })
-    .first();
-};
-
-const crear = async (insumo) => {
-  const [id] = await dbLocal(TABLA).insert({
-    nombre: insumo.nombre,
-    rubro: insumo.rubro,
-    cantidad_disponible: insumo.cantidad_disponible,
-    unidad_medida: insumo.unidad_medida,
-    stock_minimo: insumo.stock_minimo,
-    precio_costo: insumo.precio_costo,
-    ultima_actualizacion: insumo.ultima_actualizacion,
-    fecha_ingreso: insumo.fecha_ingreso,
-    fecha_vencimiento: insumo.fecha_vencimiento,
-  });
-
-  return await obtenerPorId(id);
-};
-
-const actualizar = async (id, insumo) => {
-  await dbLocal(TABLA)
-    .where({ id })
-    .update({
-      nombre: insumo.nombre,
-      rubro: insumo.rubro,
-      cantidad_disponible: insumo.cantidad_disponible,
-      unidad_medida: insumo.unidad_medida,
-      stock_minimo: insumo.stock_minimo,
-      precio_costo: insumo.precio_costo,
-      ultima_actualizacion: insumo.ultima_actualizacion,
-      fecha_ingreso: insumo.fecha_ingreso,
-      fecha_vencimiento: insumo.fecha_vencimiento,
-    });
-
-  return await obtenerPorId(id);
-};
-
-const eliminar = async (id) => {
-  return await dbLocal(TABLA)
-    .where({ id })
-    .del();
-};
+const TABLE = "insumos";
 
 module.exports = {
-  obtenerTodos,
-  obtenerPorId,
-  crear,
-  actualizar,
-  eliminar,
-};
+  getAll: () => dbLocal(TABLE).select("*").orderBy("nombre", "asc"),
 
+  getById: (id) => dbLocal(TABLE).where({ id }).first(),
+
+  create: async (data) => {
+    const [id] = await dbLocal(TABLE).insert({
+      nombre: data.nombre,
+      rubro: data.rubro,
+      cantidad_disponible: data.cantidad_disponible,
+      unidad_medida: data.unidad_medida,
+      stock_minimo: data.stock_minimo,
+      precio_costo: data.precio_costo,
+      ultima_actualizacion: data.ultima_actualizacion,
+      fecha_ingreso: data.fecha_ingreso,
+      fecha_vencimiento: data.fecha_vencimiento,
+    });
+
+    return module.exports.getById(id);
+  },
+
+  update: async (id, data) => {
+    await dbLocal(TABLE).where({ id }).update({
+      nombre: data.nombre,
+      rubro: data.rubro,
+      cantidad_disponible: data.cantidad_disponible,
+      unidad_medida: data.unidad_medida,
+      stock_minimo: data.stock_minimo,
+      precio_costo: data.precio_costo,
+      ultima_actualizacion: data.ultima_actualizacion,
+      fecha_ingreso: data.fecha_ingreso,
+      fecha_vencimiento: data.fecha_vencimiento,
+    });
+
+    return module.exports.getById(id);
+  },
+
+  delete: (id) => dbLocal(TABLE).where({ id }).del(),
+};
