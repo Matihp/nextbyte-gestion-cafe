@@ -1,7 +1,7 @@
 exports.up = function (knex) {
   return knex.schema.createTable('ingredientes_recetas', function (table) {
-    table.integer('receta_id').unsigned().notNullable(); // FK suelta (Fase A)
-    table.integer('insumo_id').unsigned().notNullable(); // FK suelta (Fase A - Lucas)
+    table.integer('receta_id').unsigned().notNullable().references('id').inTable('recetas').onDelete('CASCADE');
+    table.integer('insumo_id').unsigned().notNullable().references('id').inTable('insumos').onDelete('RESTRICT');
     table.decimal('cantidad', 10, 3).notNullable();
     
     // PK Compuesta

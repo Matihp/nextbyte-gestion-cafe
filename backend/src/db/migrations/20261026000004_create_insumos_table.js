@@ -2,6 +2,8 @@ exports.up = function (knex) {
   return knex.schema.createTable("insumos", (table) => {
     table.increments("id").primary();
 
+    table.string("proveedor_id").nullable().references("id").inTable("proveedores").onDelete("SET NULL");
+
     table.string("nombre");
 
     table.string("rubro");

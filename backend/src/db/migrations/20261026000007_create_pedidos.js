@@ -10,9 +10,6 @@ exports.up = function (knex) {
     table.string('telefono', 50).nullable();
     table.date('fecha').nullable();
     table.string('hora', 20).nullable();
-    table.string('empleado_id').nullable();
-    table.string('mesa', 20).nullable();
-    table.text('notas').nullable();
     table.timestamps(true, true);
 
     table.index(['estado']);

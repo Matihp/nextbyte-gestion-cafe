@@ -4,7 +4,6 @@ exports.up = function (knex) {
     table.string('nombre', 100).notNullable().unique();
     table.boolean('es_admin').notNullable().defaultTo(false);
     table.json('permisos').nullable();
-    table.string('descripcion', 255).nullable();
     table.timestamps(true, true);
   });
 };

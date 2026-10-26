@@ -1,7 +1,7 @@
 exports.up = function (knex) {
   return knex.schema.createTable("registros_mermas", (table) => {
     table.string("id").primary();
-    table.string("producto_id");
+    table.integer("producto_id").unsigned().nullable().references("id").inTable("productos").onDelete("SET NULL");
     table.string("nombre_producto");
     table.string("nombre_categoria");
     table.string("motivo");

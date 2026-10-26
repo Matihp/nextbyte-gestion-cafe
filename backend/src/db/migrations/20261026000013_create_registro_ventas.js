@@ -2,12 +2,11 @@ exports.up = function(knex) {
   return knex.schema.createTable('registro_ventas', function(table) {
     table.string('id').primary(); 
     
-    // REGLA DE ORO FASE A: Columna suelta, SIN .references()
-    table.string('pedido_id').notNullable(); 
+    table.string('pedido_id').notNullable().unique().references('id').inTable('pedidos').onDelete('CASCADE'); 
     
-    table.datetime('fecha_venta').notNullable(); 
-    table.float('total_venta').notNullable();
-    table.float('total_costo').notNullable();
+    table.date('fecha').notNullable(); 
+    table.decimal('total_venta', 10, 2).notNullable();
+    table.decimal('total_costo', 10, 2).notNullable();
     
     table.timestamps(true, true); 
   });

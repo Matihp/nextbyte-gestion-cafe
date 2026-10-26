@@ -1,11 +1,10 @@
 exports.up = function (knex) {
   return knex.schema.createTable('empleados', function (table) {
     table.string('id').primary();
-    table.string('rol_id').nullable();
+    table.string('rol_id').nullable().references('id').inTable('roles').onDelete('SET NULL');
     table.string('legajo', 50).nullable().unique();
     table.string('nombre', 100).notNullable();
     table.string('apellido', 100).notNullable();
-    table.string('nombre_distintivo', 100).nullable();
     table.string('email', 150).notNullable().unique();
     table.string('contrasena', 255).notNullable();
     table.string('telefono', 50).nullable();
@@ -14,9 +13,7 @@ exports.up = function (knex) {
     table.date('fecha_ingreso').nullable();
     table.string('turno_habitual', 50).nullable();
     table.json('dias_franco').nullable();
-    table.json('dias_trabajo').nullable();
     table.json('permisos').nullable();
-    table.boolean('activo').notNullable().defaultTo(true);
     table.timestamps(true, true);
   });
 };
