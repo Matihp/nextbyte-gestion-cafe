@@ -9,7 +9,6 @@ module.exports = {
 
   create: async (data) => {
     const [id] = await dbLocal(TABLE).insert({
-      proveedor_id: data.proveedor_id || data.proveedorId || null,
       nombre: data.nombre,
       rubro: data.rubro,
       cantidad_disponible: data.cantidad_disponible,
@@ -36,10 +35,6 @@ module.exports = {
       fecha_ingreso: data.fecha_ingreso,
       fecha_vencimiento: data.fecha_vencimiento,
     };
-
-    if (data.proveedor_id !== undefined || data.proveedorId !== undefined) {
-      payload.proveedor_id = data.proveedor_id || data.proveedorId || null;
-    }
 
     await dbLocal(TABLE).where({ id }).update(payload);
 
