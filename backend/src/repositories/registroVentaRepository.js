@@ -65,7 +65,7 @@ async function obtenerResumenGeneral() {
       costosTotales: costos,
       rentabilidad: ingresos - costos,
       cantidadVentas: Number(resultado.cantidadVentas) || 0,
-      ticketPromedio: Number(resultado.TicketPromedio) || 0
+      ticketPromedio: Number(resultado.ticketPromedio) || 0
     };
 }
 
@@ -75,7 +75,7 @@ async function obtenerResumenGeneral() {
  */
 async function obtenerVentasPorDia() {
   return await dbLocal(TABLA)
-    .select(dbLocal.raw("strftime('%Y-%m-%d', fecha_venta) as dia"))
+    .select(dbLocal.raw("strftime('%Y-%m-%d', fecha) as dia"))
     .sum('total_venta as totalDia')
     .count('id as cantidadPedidos')
     .groupBy('dia')
@@ -92,7 +92,7 @@ async function obtenerProductosMasVendidos(limite = 5) {
     .select('p.nombre as producto')
     .sum('dp.cantidad as cantidadVendida')
     .groupBy('p.id', 'p.nombre')
-    .orderBy('cantidadVendida', 'asc')
+    .orderBy('cantidadVendida', 'desc')
     .limit(limite);
 }
 
@@ -114,7 +114,7 @@ async function obtenerHistorialMermas() {
 async function obtenerVentasPorFranjaHoraria() {
   return await dbLocal(TABLA + ' as rv')
     .join('pedidos as p', 'rv.pedido_id', 'p.id')
-    .select(dbLocal.raw("strftime('%H:00', rv.fecha_venta) as hora"),
+    .select(dbLocal.raw("strftime('%H:00', rv.fecha) as hora"),
       'p.tipo_pedido'
     )
     .count('rv.id as cantidadPedidos')
