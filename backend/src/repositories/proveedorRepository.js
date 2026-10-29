@@ -2,6 +2,8 @@ const { dbLocal } = require("../config/db");
 
 const TABLE = "proveedores";
 
+const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
+
 const deserialize = (row) => {
   if (!row) return row;
   let insumosIds = row.insumos_asignados_ids;
@@ -19,13 +21,13 @@ const deserialize = (row) => {
 };
 
 module.exports = {
-  getAll: async () => {
-    const rows = await dbLocal(TABLE).select("*").orderBy("empresa", "asc");
+  getAll: async (trx = null) => {
+    const rows = await consulta(trx).select("*").orderBy("empresa", "asc");
     return rows.map(deserialize);
   },
 
-  getById: async (id) => {
-    const row = await dbLocal(TABLE).where({ id }).first();
+  getById: async (id, trx = null) => {
+    const row = await consulta(trx).where({ id }).first();
     return deserialize(row);
   },
 
@@ -53,7 +55,7 @@ module.exports = {
     return module.exports.getById(payload.id);
   },
 
-  update: async (id, data) => {
+  update: async (id, data, trx = null) => {
     const payload = {
       codigo: data.codigo,
       empresa: data.empresa,
@@ -70,8 +72,8 @@ module.exports = {
       );
     }
 
-    await dbLocal(TABLE).where({ id }).update(payload);
-    return module.exports.getById(id);
+    await consulta(trx).where({ id }).update(payload);
+    return module.exports.getById(id, trx);
   },
 
   delete: (id) => dbLocal(TABLE).where({ id }).del(),

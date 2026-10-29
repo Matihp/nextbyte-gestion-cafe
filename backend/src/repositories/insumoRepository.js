@@ -1,11 +1,26 @@
 const { dbLocal } = require("../config/db");
 
+const { hoy, ahora } = require("../utils/fechas");
+
 const TABLE = "insumos";
+
+const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
+
+const ajustarStock = async (id, variacion, trx) => {
+  await consulta(trx)
+    .where({ id })
+    .update({
+      cantidad_disponible: dbLocal.raw("cantidad_disponible + ?", [variacion]),
+      ultima_actualizacion: `${hoy()} ${ahora()}`,
+    });
+
+  return module.exports.getById(id, trx);
+};
 
 module.exports = {
   getAll: () => dbLocal(TABLE).select("*").orderBy("nombre", "asc"),
 
-  getById: (id) => dbLocal(TABLE).where({ id }).first(),
+  getById: (id, trx = null) => consulta(trx).where({ id }).first(),
 
   create: async (data) => {
     const [id] = await dbLocal(TABLE).insert({
@@ -23,7 +38,7 @@ module.exports = {
     return module.exports.getById(id);
   },
 
-  update: async (id, data) => {
+  update: async (id, data, trx = null) => {
     const payload = {
       nombre: data.nombre,
       rubro: data.rubro,
@@ -36,10 +51,14 @@ module.exports = {
       fecha_vencimiento: data.fecha_vencimiento,
     };
 
-    await dbLocal(TABLE).where({ id }).update(payload);
+    await consulta(trx).where({ id }).update(payload);
 
-    return module.exports.getById(id);
+    return module.exports.getById(id, trx);
   },
 
-  delete: (id) => dbLocal(TABLE).where({ id }).del(),
+  delete: (id, trx = null) => consulta(trx).where({ id }).del(),
+
+  descontarStock: (id, cantidad, trx = null) => ajustarStock(id, -Number(cantidad), trx),
+
+  ingresarStock: (id, cantidad, trx = null) => ajustarStock(id, Number(cantidad), trx),
 };

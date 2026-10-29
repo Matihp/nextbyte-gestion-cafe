@@ -3,10 +3,20 @@ const { dbLocal } = require("../config/db");
 
 const TABLE = "registros_mermas";
 
-module.exports = {
-  getAll: () => dbLocal(TABLE).select("*").orderBy("fecha", "desc"),
+const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
 
-  getById: (id) => dbLocal(TABLE).where({ id }).first(),
+module.exports = {
+  getAll: (filtros = {}, trx = null) => {
+    const query = consulta(trx).select("*");
+
+    if (filtros.desde) query.where("fecha", ">=", filtros.desde);
+    if (filtros.hasta) query.where("fecha", "<=", filtros.hasta);
+    if (filtros.producto_id) query.where({ producto_id: filtros.producto_id });
+
+    return query.orderBy("fecha", "desc");
+  },
+
+  getById: (id, trx = null) => consulta(trx).where({ id }).first(),
 
   getByProductoId: (productoId) =>
     dbLocal(TABLE).where({ producto_id: productoId }).orderBy("fecha", "desc"),
@@ -14,7 +24,7 @@ module.exports = {
   getByFecha: (fecha) =>
     dbLocal(TABLE).where({ fecha }).orderBy("created_at", "desc"),
 
-  create: async (data) => {
+  create: async (data, trx = null) => {
     const payload = {
       id: data.id || crypto.randomUUID(),
       producto_id: data.producto_id || data.productoId || null,
@@ -25,8 +35,8 @@ module.exports = {
       cantidad: data.cantidad !== undefined ? Number(data.cantidad) : 1,
     };
 
-    await dbLocal(TABLE).insert(payload);
-    return module.exports.getById(payload.id);
+    await consulta(trx).insert(payload);
+    return module.exports.getById(payload.id, trx);
   },
 
   update: async (id, data) => {
@@ -49,5 +59,5 @@ module.exports = {
     return module.exports.getById(id);
   },
 
-  delete: (id) => dbLocal(TABLE).where({ id }).del(),
+  delete: (id, trx = null) => consulta(trx).where({ id }).del(),
 };

@@ -59,6 +59,11 @@ module.exports = {
 
   getByEstado: (estado) => dbLocal(TABLE).where({ estado }).orderBy('created_at', 'asc'),
 
+  getByEstados: (estados, trx = null) => {
+    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
+    return qb.whereIn('estado', estados).orderBy('created_at', 'asc');
+  },
+
   getActiveComandas: () =>
     dbLocal(TABLE)
       .whereIn('estado', ['pendiente', 'en_preparacion'])
@@ -125,7 +130,7 @@ module.exports = {
     return module.exports.getById(id, trx);
   },
 
-  updateStatus: (id, newStatus) => module.exports.update(id, { estado: newStatus }),
+  updateStatus: (id, newStatus, trx = null) => module.exports.update(id, { estado: newStatus }, trx),
 
   delete: async (id) => {
     return await dbLocal.transaction(async (trx) => {
