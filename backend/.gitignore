@@ -1,3 +1,5 @@
 node_modules/
 .env
 dev_local.db
+test.db
+docs/

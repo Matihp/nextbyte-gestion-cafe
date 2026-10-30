@@ -23,6 +23,25 @@ module.exports = {
     }
   },
 
+  test: {
+    client: 'sqlite3',
+    connection: {
+      filename: path.join(__dirname, 'test.db')
+    },
+    useNullAsDefault: true,
+    pool: {
+      afterCreate: (conn, cb) => {
+        conn.run('PRAGMA foreign_keys = ON', () => {
+          conn.run('PRAGMA synchronous = OFF', () => {
+            conn.run('PRAGMA journal_mode = MEMORY', cb);
+          });
+        });
+      }
+    },
+    migrations: {
+      directory: path.join(__dirname, 'src', 'db', 'migrations')
+    }
+  },
   production: {
     client: 'sqlite3',
     connection: {
@@ -31,6 +50,11 @@ module.exports = {
         : path.join(__dirname, 'contingencia.db')
     },
     useNullAsDefault: true,
+    pool: {
+      afterCreate: (conn, cb) => {
+        conn.run('PRAGMA foreign_keys = ON', cb);
+      }
+    },
     migrations: {
       directory: path.join(__dirname, 'src', 'db', 'migrations')
     }

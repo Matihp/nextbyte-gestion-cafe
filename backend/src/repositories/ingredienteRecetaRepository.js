@@ -2,15 +2,19 @@ const { dbLocal } = require('../config/db');
 
 const TABLE = 'ingredientes_recetas';
 
+const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
+
 module.exports = {
-  getByRecetaId: (recetaId) => dbLocal(TABLE).where({ receta_id: recetaId }),
+  getByRecetaId: (recetaId, trx = null) => consulta(trx).where({ receta_id: recetaId }),
+
+  getByInsumoId: (insumoId, trx = null) => consulta(trx).where({ insumo_id: insumoId }),
   
   create: (data) => dbLocal(TABLE).insert(data),
   
-  createMany: (dataArray) => dbLocal(TABLE).insert(dataArray),
+  createMany: (dataArray, trx = null) => consulta(trx).insert(dataArray),
   
-  deleteByRecetaId: (recetaId) => 
-    dbLocal(TABLE).where({ receta_id: recetaId }).del(),
+  deleteByRecetaId: (recetaId, trx = null) => 
+    consulta(trx).where({ receta_id: recetaId }).del(),
   
   updateCantidad: (recetaId, insumoId, cantidad) => 
     dbLocal(TABLE)

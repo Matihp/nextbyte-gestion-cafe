@@ -1,13 +1,15 @@
 const { dbLocal } = require('../config/db');
 
 const TABLA = 'registro_ventas';
+
+const consulta = (trx) => (trx ? trx(TABLA) : dbLocal(TABLA));
     /**
    * Guarda una nueva venta consolidada
    * Recibe los datos en camelCase desde el Service y los mapea a snake_case para SQLite
    */
-  async function guardar(registroVenta) {
+  async function guardar(registroVenta, trx = null) {
 
-    await dbLocal(TABLA).insert({
+    await consulta(trx).insert({
         id: registroVenta.id,
         pedido_id: registroVenta.pedidoId || registroVenta.pedido_id,
         fecha: registroVenta.fecha || registroVenta.fechaVenta,
@@ -15,21 +17,21 @@ const TABLA = 'registro_ventas';
         total_costo: registroVenta.totalCosto ?? registroVenta.total_costo,
     });
 
-    return buscarPorId(registroVenta.id)
+    return buscarPorId(registroVenta.id, trx)
   }
 
   /**
    * Obtiene una venta por su ID
    */
-  async function buscarPorId(id) {
-    return dbLocal(TABLA).where({ id }).first();
+  async function buscarPorId(id, trx = null) {
+    return consulta(trx).where({ id }).first();
   }
 
   /**
    * Obtiene todas las ventas (Útil para hacer pruebas rápido)
    */
-  async function buscarPorPedidoId(pedidoId) {
-    return dbLocal(TABLA).where({ pedido_id: pedidoId }).first();
+  async function buscarPorPedidoId(pedidoId, trx = null) {
+    return consulta(trx).where({ pedido_id: pedidoId }).first();
   }
 
   /**
