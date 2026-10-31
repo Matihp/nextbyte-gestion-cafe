@@ -8,7 +8,8 @@
     "test": "jest --runInBand",
     "migrate": "knex migrate:latest",
     "seed": "knex seed:run",
-    "reset-db": "node scripts/reset-db.js"
+    "reset-db": "node scripts/reset-db.js",
+    "crear-admin": "node scripts/crear-admin.js"
   },
   "jest": {
     "testEnvironment": "node",
