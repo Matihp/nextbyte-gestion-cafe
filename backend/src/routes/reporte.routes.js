@@ -1,7 +1,8 @@
 const { Router } = require('express');
 
 const router = Router();
+const reporteController = require('../controllers/reporteController');
 
-// TODO: lo completa el dueño del módulo
+router.get('/estadisticas', reporteController.obtenerEstadisticas);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout';
 import Home from './features/dashboard/Home';
+import Estadisticas from './features/reportes/Estadisticas';
 
 // Vista vacía para los módulos que cada integrante del equipo desarrollará
 function EmptyModule() {
@@ -20,7 +21,7 @@ function App() {
         <Route path="/empleados" element={<EmptyModule />} />
         <Route path="/proveedores" element={<EmptyModule />} />
         <Route path="/caja" element={<EmptyModule />} />
-        <Route path="/estadisticas" element={<EmptyModule />} />
+        <Route path="/estadisticas" element={<Estadisticas />} />
         <Route path="/pantalla-cliente" element={<EmptyModule />} />
         <Route path="/clientes" element={<EmptyModule />} />
       </Route>
