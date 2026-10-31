@@ -1,25 +1,56 @@
-/**
- * Middleware para validar el Rol de la computadora en caso de corte de red.
- * Si no hay internet y la PC no es "Caja Principal", se debe bloquear la operación.
- */
+const jwt = require('jsonwebtoken');
+
+const rutasExentas = ['/api/health', '/api/auth/login'];
+
+const obtenerUsuario = (req) => {
+  if (req.user) return req.user;
+
+  if (process.env.AUTH_ENABLED !== 'true') {
+    return { id: 'dev', es_admin: true, permisos: ['all'] };
+  }
+
+  const cabecera = req.headers && req.headers.authorization;
+  if (!cabecera || typeof cabecera !== 'string' || !cabecera.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = cabecera.slice(7).trim();
+  if (!token) return null;
+
+  try {
+    const secret = process.env.JWT_SECRET || 'secreto_super_seguro_dev';
+    return jwt.verify(token, secret);
+  } catch {
+    return null;
+  }
+};
+
 const checkRoleOffline = (req, res, next) => {
-  // Si hay internet, no hace falta validar rol para el modo emergencia
   if (req.isOnline) {
     return next();
   }
 
-  // Si estamos offline, vemos el rol de la PC
-  const appRole = process.env.APP_ROLE || 'SECUNDARIA';
-  
-  if (appRole !== 'CAJA_PRINCIPAL') {
+  if (req.method === 'GET') {
+    return next();
+  }
+
+  const ruta = req.originalUrl || req.url;
+  const esExenta = rutasExentas.some((exenta) => ruta.startsWith(exenta));
+  if (esExenta) {
+    return next();
+  }
+
+  const usuario = obtenerUsuario(req);
+  if (!usuario || !usuario.es_admin) {
     return res.status(403).json({
       success: false,
       error: 'SIN_CONEXION',
-      message: 'Sin conexión a internet. Su rol no permite guardar datos de emergencia.'
+      message: 'Sin conexión a internet. Solo el rol Administrador puede realizar operaciones sin conexión.'
     });
   }
 
-  next();
+  req.user = usuario;
+  return next();
 };
 
 module.exports = checkRoleOffline;
