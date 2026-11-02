@@ -12,5 +12,6 @@ router.get('/top-productos', reporteController.obtenerTopProductos);
 router.get('/ganancias', reporteController.obtenerGanancias);
 router.get('/mermas', reporteController.obtenerMermas);
 router.get('/resumen', reporteController.obtenerResumen);
+router.get('/estadisticas', reporteController.obtenerEstadisticas);
 
 module.exports = router;

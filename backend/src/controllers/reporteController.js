@@ -31,11 +31,17 @@ const obtenerResumen = async (req, res) => {
   return ok(res, data);
 };
 
+const obtenerEstadisticas = async (req, res) => {
+  const data = await reporteService.obtenerDatosDashboard(req.query.desde, req.query.hasta);
+  return ok(res, data);
+};
+
 module.exports = {
   obtenerVentasDia,
   obtenerVentasRango,
   obtenerTopProductos,
   obtenerGanancias,
   obtenerMermas,
-  obtenerResumen
+  obtenerResumen,
+  obtenerEstadisticas
 };

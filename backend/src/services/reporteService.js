@@ -150,6 +150,38 @@ async function obtenerResumen() {
   };
 }
 
+async function obtenerDatosDashboard(desde, hasta) {
+  const rango = resolverRangoFechas(desde, hasta);
+
+  const [
+    ventasPorFranjaHoraria,
+    ventasPorCategoria,
+    mermas,
+    pedidosDiarios
+  ] = await Promise.all([
+    registroVentaRepository.obtenerVentasPorFranjaHoraria(),
+    registroVentaRepository.obtenerVentasPorCategoria(),
+    registroVentaRepository.obtenerMermasPorRango(rango.desde, rango.hasta),
+    registroVentaRepository.obtenerVentasRango(rango.desde, rango.hasta)
+  ]);
+
+  const mapaMermas = {};
+  for (const item of mermas) {
+    mapaMermas[item.motivo] = (mapaMermas[item.motivo] || 0) + (Number(item.cantidad_total) || 0);
+  }
+  const historialMermas = Object.entries(mapaMermas).map(([motivo, cantidad]) => ({
+    motivo,
+    cantidad
+  }));
+
+  return {
+    ventasPorFranjaHoraria,
+    ventasPorCategoria,
+    historialMermas,
+    ventasPorDia: pedidosDiarios
+  };
+}
+
 module.exports = {
   calcularGanancia,
   rangoMesActual,
@@ -158,5 +190,6 @@ module.exports = {
   obtenerTopProductos,
   obtenerGanancias,
   obtenerMermas,
-  obtenerResumen
+  obtenerResumen,
+  obtenerDatosDashboard
 };
