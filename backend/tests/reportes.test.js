@@ -456,4 +456,14 @@ describe('Pruebas de integracion - API /api/reportes', () => {
       typeof res.body.data.producto_mas_vendido_mes.nombre_producto === 'string'
     ).toBe(true);
   });
+
+  it('GET /api/reportes/estadisticas consolida las metricas para los graficos del cliente', async () => {
+    const res = await request(app).get('/api/reportes/estadisticas');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.ventasPorFranjaHoraria)).toBe(true);
+    expect(Array.isArray(res.body.data.ventasPorCategoria)).toBe(true);
+    expect(Array.isArray(res.body.data.historialMermas)).toBe(true);
+    expect(Array.isArray(res.body.data.ventasPorDia)).toBe(true);
+  });
 });

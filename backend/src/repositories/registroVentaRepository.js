@@ -154,6 +154,28 @@ async function contarInsumosEnAlerta() {
   return Number(resultado?.cantidad) || 0;
 }
 
+async function obtenerVentasPorFranjaHoraria() {
+  return await dbLocal(TABLA + ' as rv')
+    .join('pedidos as p', 'rv.pedido_id', 'p.id')
+    .select(
+      dbLocal.raw("strftime('%H:00', p.hora) as hora"),
+      'p.tipo_pedido'
+    )
+    .count('rv.id as cantidadPedidos')
+    .groupBy('hora', 'p.tipo_pedido')
+    .orderBy('hora', 'asc');
+}
+
+async function obtenerVentasPorCategoria() {
+  return await dbLocal('detalles_pedidos as dp')
+    .join('productos as p', 'dp.producto_id', 'p.id')
+    .join('categorias as c', 'p.categoria_id', 'c.id')
+    .select('c.nombre as categoria')
+    .sum('dp.cantidad as cantidadVendida')
+    .groupBy('c.id', 'c.nombre')
+    .orderBy('cantidadVendida', 'desc');
+}
+
 module.exports = {
   guardar,
   buscarPorId,
@@ -165,5 +187,7 @@ module.exports = {
   obtenerTotalesGanancias,
   obtenerMermasPorRango,
   contarPedidosActivos,
-  contarInsumosEnAlerta
+  contarInsumosEnAlerta,
+  obtenerVentasPorFranjaHoraria,
+  obtenerVentasPorCategoria
 };
