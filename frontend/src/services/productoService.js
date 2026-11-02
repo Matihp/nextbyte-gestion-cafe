@@ -1,0 +1,23 @@
+import api from './api';
+
+export const productoService = {
+  obtenerCategorias: () => api.get('/categorias'),
+  crearCategoria: (datos) => api.post('/categorias', datos),
+  actualizarCategoria: (id, datos) => api.put(`/categorias/${id}`, datos),
+  eliminarCategoria: (id) => api.delete(`/categorias/${id}`),
+
+  obtenerProductos: (params = {}) => api.get('/productos', { params }),
+  obtenerProductoPorId: (id) => api.get(`/productos/${id}`),
+  crearProducto: (datos) => api.post('/productos', datos),
+  actualizarProducto: (id, datos) => api.put(`/productos/${id}`, datos),
+  eliminarProducto: (id) => api.delete(`/productos/${id}`),
+
+  obtenerReceta: (productoId) => api.get(`/productos/${productoId}/receta`),
+  guardarReceta: (productoId, datos) => api.put(`/productos/${productoId}/receta`, datos),
+  eliminarReceta: (productoId) => api.delete(`/productos/${productoId}/receta`),
+
+  getCategorias: () => api.get('/categorias'),
+  getProductos: (params = {}) => api.get('/productos', { params })
+};
+
+export default productoService;
