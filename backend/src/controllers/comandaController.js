@@ -11,8 +11,13 @@ const cambiarEstado = async (req, res) => {
   return ok(res, data);
 };
 
-module.exports = {
-  obtenerActivas,
-  cambiarEstado
+const completar = async (req, res) => {
+  const data = await comandaService.completar(req.params.id);
+  return ok(res, data);
 };
 
+module.exports = {
+  obtenerActivas,
+  cambiarEstado,
+  completar
+};
