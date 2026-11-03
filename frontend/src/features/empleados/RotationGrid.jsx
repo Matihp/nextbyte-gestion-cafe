@@ -263,6 +263,28 @@ export function RotationGrid({
 
   const tableWidth = employees.length > 6 ? `calc(6rem + (100% - 6rem) * ${employees.length} / 6)` : '100%';
 
+  const EMPLOYEES_PER_PRINT_PAGE = 10;
+  const printChunks = (() => {
+    if (!employees || employees.length === 0) return [[]];
+    const chunks = [];
+    for (let i = 0; i < employees.length; i += EMPLOYEES_PER_PRINT_PAGE) {
+      chunks.push(employees.slice(i, i + EMPLOYEES_PER_PRINT_PAGE));
+    }
+    return chunks;
+  })();
+
+  const printDays = Array.from({ length: 7 }, (_, i) => {
+    const startDay = currentDate.getDate();
+    const yearNum = currentDate.getFullYear();
+    const monthNum = currentDate.getMonth();
+    const d = new Date(yearNum, monthNum, startDay + i);
+    const dayNum = d.getDate();
+    const dayNameShort = d.toLocaleDateString('es-ES', { weekday: 'short' });
+    const dayName = dayNameShort.charAt(0).toUpperCase() + dayNameShort.slice(1, 3);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    return { dayNum, dayName, dateStr };
+  });
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-[#EAD5C8] overflow-hidden flex flex-col h-full">
       <div className="p-4 border-b border-[#EAD5C8] bg-[#F9F4F0] flex justify-between items-center">
@@ -492,16 +514,24 @@ export function RotationGrid({
                 margin: 0 !important;
                 padding: 0 !important;
                 box-sizing: border-box;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
               }
-              #print-area table {
+              .print-page-wrapper {
+                width: 100% !important;
+                box-sizing: border-box;
+                page-break-after: always !important;
+                break-after: page !important;
+              }
+              .print-page-wrapper:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
+              }
+              .print-page-wrapper table {
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
               }
               @page {
-                size: auto;
-                margin: 10mm 15mm;
+                size: landscape;
+                margin: 8mm 10mm;
               }
             }
           `}
@@ -512,63 +542,63 @@ export function RotationGrid({
           className="w-full flex flex-col bg-white text-black print-exact-colors text-left"
           style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
         >
-          <div className="text-left mb-3 shrink-0">
-            <h1 className="text-xl font-bold uppercase tracking-wide text-[#4B2B1D] inline-block">
-              Grilla de Personal
-            </h1>
-            <span className="text-lg font-medium text-gray-500 mx-2">-</span>
-            <span className="text-sm font-semibold text-gray-600">
-              Desde: {currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })} (Próximos 7 días)
-            </span>
-          </div>
+          {printChunks.map((chunkEmployees, pageIdx) => (
+            <div
+              key={`print-page-${pageIdx}`}
+              className="print-page-wrapper w-full flex flex-col mb-8 print:mb-0"
+              style={{
+                pageBreakAfter: pageIdx < printChunks.length - 1 ? 'always' : 'auto',
+                breakAfter: pageIdx < printChunks.length - 1 ? 'page' : 'auto'
+              }}
+            >
+              <div className="flex justify-between items-center mb-3 shrink-0">
+                <div>
+                  <h1 className="text-xl font-bold uppercase tracking-wide text-[#4B2B1D] inline-block">
+                    Grilla de Personal
+                  </h1>
+                  <span className="text-lg font-medium text-gray-500 mx-2">-</span>
+                  <span className="text-sm font-semibold text-gray-600">
+                    Desde: {currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })} (Próximos 7 días)
+                  </span>
+                </div>
+                {printChunks.length > 1 && (
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider bg-gray-100 px-3 py-1 rounded border border-gray-300">
+                    Hoja {pageIdx + 1} de {printChunks.length}
+                  </div>
+                )}
+              </div>
 
-          <table
-            className="border-collapse border-2 border-gray-400 table-auto text-left"
-            style={{ minWidth: '380px', maxWidth: '100%', pageBreakInside: 'avoid', breakInside: 'avoid' }}
-          >
-            <thead className="bg-[#D7BBA6]">
-              <tr>
-                <th className="w-24 border-2 border-gray-400 p-2 text-center bg-[#D7BBA6] text-base font-bold text-[#4B2B1D]">
-                  Día
-                </th>
-                {employees.map((emp) => {
-                  const nombre = emp.firstName || emp.nombre || '';
-                  const apellido = emp.lastName || emp.apellido || '';
-                  return (
-                    <th
-                      key={emp.id}
-                      className="p-2 border-2 border-gray-400 bg-[#D7BBA6] text-center font-bold text-[#4B2B1D] text-base uppercase whitespace-pre-line min-w-[120px]"
-                    >
-                      {formatGridEmployeeName(emp)}
+              <table
+                className="border-collapse border-2 border-gray-400 table-fixed w-full text-left"
+                style={{ width: '100%', maxWidth: '100%' }}
+              >
+                <thead className="bg-[#D7BBA6]">
+                  <tr>
+                    <th className="w-24 border-2 border-gray-400 p-2 text-center bg-[#D7BBA6] text-sm font-bold text-[#4B2B1D]">
+                      Día
                     </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                const startDay = currentDate.getDate();
-                const yearNum = currentDate.getFullYear();
-                const monthNum = currentDate.getMonth();
-
-                return Array.from({ length: 7 }, (_, i) => {
-                  const d = new Date(yearNum, monthNum, startDay + i);
-                  const dayNum = d.getDate();
-                  const dayNameShort = d.toLocaleDateString('es-ES', { weekday: 'short' });
-                  const dayName = dayNameShort.charAt(0).toUpperCase() + dayNameShort.slice(1, 3);
-                  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-
-                  return (
-                    <tr key={dateStr} className="h-auto">
-                      <td className="border-2 border-gray-400 p-2 text-center text-base font-bold bg-gray-100">
-                        {dayNum} {dayName}
+                    {chunkEmployees.map((emp) => (
+                      <th
+                        key={emp.id}
+                        className="p-2 border-2 border-gray-400 bg-[#D7BBA6] text-center font-bold text-[#4B2B1D] text-xs uppercase whitespace-pre-line"
+                      >
+                        {formatGridEmployeeName(emp)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {printDays.map((day) => (
+                    <tr key={day.dateStr} className="h-auto">
+                      <td className="w-24 border-2 border-gray-400 p-2 text-center text-sm font-bold bg-gray-100">
+                        {day.dayNum} {day.dayName}
                       </td>
-                      {employees.map((emp) => {
-                        const status = getShiftStatus(emp.id, dateStr);
+                      {chunkEmployees.map((emp) => {
+                        const status = getShiftStatus(emp.id, day.dateStr);
                         return (
-                          <td key={`${emp.id}-${dateStr}`} className="border-2 border-gray-400 p-1 text-center">
+                          <td key={`${emp.id}-${day.dateStr}`} className="border-2 border-gray-400 p-1 text-center">
                             <div
-                              className={`w-full flex items-center justify-center text-sm font-bold min-h-[2.5rem] rounded px-2 ${getPrintStatusColor(
+                              className={`w-full flex items-center justify-center text-xs font-bold min-h-[2.2rem] rounded px-1 text-center leading-tight ${getPrintStatusColor(
                                 status
                               )}`}
                             >
@@ -578,11 +608,11 @@ export function RotationGrid({
                         );
                       })}
                     </tr>
-                  );
-                });
-              })()}
-            </tbody>
-          </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
       </PrintPortal>
     </div>
