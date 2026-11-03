@@ -23,7 +23,6 @@ function App() {
           <Route path="/productos" element={<Productos />} />
           <Route path="/inventario" element={<EmptyModule />} />
           <Route path="/empleados" element={<EmployeesPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/proveedores" element={<EmptyModule />} />
           <Route path="/caja" element={<EmptyModule />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
