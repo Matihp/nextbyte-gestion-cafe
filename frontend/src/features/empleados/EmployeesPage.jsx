@@ -343,9 +343,9 @@ export function EmployeesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F3E5DC]">
+    <div className="flex flex-col h-full bg-[#F3E5DC] w-full min-w-0 max-w-full overflow-hidden">
       {/* Header and Controls */}
-      <div className="flex items-center p-4 bg-[#EAD5C8] border-b border-[#D7BBA6] relative w-full h-[72px] z-30 shrink-0">
+      <div className="flex items-center p-4 bg-[#EAD5C8] border-b border-[#D7BBA6] relative w-full h-[72px] z-10 shrink-0">
         <div className="flex items-center gap-4 text-2xl font-bold text-[#4B2B1D] absolute left-1/2 -translate-x-1/2">
           <button
             type="button"
@@ -374,7 +374,7 @@ export function EmployeesPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-4 ml-auto relative z-40">
+        <div className="flex items-center gap-4 ml-auto relative z-20">
           <DropdownMenu>
             <DropdownMenuTrigger className="px-4 py-2 bg-[#9F4F2F] text-white rounded-md text-sm font-semibold hover:bg-[#8A4326] flex items-center gap-2 cursor-pointer shadow-xs transition-colors">
               <Settings className="w-4 h-4" />
@@ -410,7 +410,7 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 flex gap-4">
+      <div className="flex-1 overflow-auto p-4 flex gap-4 min-w-0 max-w-full">
         {currentView === 'grid' && (
           <>
             {/* Left Sidebar Mini Calendar */}

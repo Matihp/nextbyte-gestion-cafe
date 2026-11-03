@@ -59,8 +59,8 @@ export default function DashboardLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <Sidebar className="border-r border-sidebar-border/20 bg-sidebar text-sidebar-foreground">
+      <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
+        <Sidebar className="border-r border-sidebar-border/20 bg-sidebar text-sidebar-foreground z-40">
           {/* Logo Andén */}
           <SidebarHeader className="p-6 pb-4 flex items-center justify-center">
             <img 
@@ -109,9 +109,9 @@ export default function DashboardLayout() {
         </Sidebar>
 
         {/* Contenedor Principal */}
-        <SidebarInset className="flex-1 flex flex-col min-h-screen bg-background">
+        <SidebarInset className="flex-1 flex flex-col min-h-screen bg-background min-w-0 max-w-full overflow-x-hidden">
           {/* Header Superior */}
-          <header className="flex justify-between items-center px-8 py-5 border-b border-primary/10 bg-background relative z-30">
+          <header className="flex justify-between items-center px-8 py-5 border-b border-primary/10 bg-background relative z-10 w-full shrink-0">
             <div>
               <h1 className="text-2xl font-bold text-primary tracking-tight">{currentTitle}</h1>
               <p className="text-sm text-secondary font-medium mt-0.5">Hola, Usuario</p>
@@ -131,7 +131,7 @@ export default function DashboardLayout() {
           </header>
 
           {/* Contenido de la Pantalla Actual (Lienzo limpio con fondo bg-background) */}
-          <div className="flex-1 p-8 overflow-y-auto bg-background">
+          <div className="flex-1 p-6 md:p-8 overflow-y-auto overflow-x-hidden bg-background min-w-0 max-w-full">
             <Outlet />
           </div>
         </SidebarInset>

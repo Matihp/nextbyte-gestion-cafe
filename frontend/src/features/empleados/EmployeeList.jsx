@@ -39,7 +39,7 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
   };
 
   return (
-    <div className="flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col h-full">
+    <div className="flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col h-full min-w-0 max-w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h2 className="text-2xl font-bold text-[#4B2B1D]">Lista de Empleados</h2>
         <div className="relative w-full sm:w-72">
@@ -56,7 +56,7 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+      <div className="flex-1 overflow-auto border border-gray-200 rounded-lg max-w-full">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-[#F9F4F0] sticky top-0 z-10">
             <tr>
@@ -98,15 +98,15 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
                           {lastName.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="ml-4">
-                        <div className="text-sm font-semibold text-gray-900">
+                      <div className="ml-4 max-w-[200px] min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate" title={`${firstName} ${lastName}`}>
                           {firstName} {lastName}
                         </div>
-                        <div className="text-xs text-gray-500">{emp.email}</div>
+                        <div className="text-xs text-gray-500 truncate" title={emp.email}>{emp.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                  <td className="px-6 py-4 text-sm text-gray-600 font-mono max-w-[150px] truncate" title={emp.legajo || '-'}>
                     {emp.legajo || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -114,12 +114,12 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
                       {emp.roleId === 'role-admin' || emp.es_admin ? 'Administrador' : 'Empleado'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[150px] truncate" title={emp.phone || emp.telefono || '-'}>
                     {emp.phone || emp.telefono || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{usualShift}</div>
-                    <div className="text-xs text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap max-w-[200px]">
+                    <div className="text-sm font-medium text-gray-900 truncate">{usualShift}</div>
+                    <div className="text-xs text-gray-500 truncate">
                       {Array.isArray(workDays) && workDays.length > 0 ? workDays.join(', ') : 'Días habituales'}
                     </div>
                   </td>
