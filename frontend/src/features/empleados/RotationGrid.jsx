@@ -4,6 +4,32 @@ import { PrintPortal } from './PrintPortal';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
+export const formatGridEmployeeName = (emp) => {
+  if (!emp) return 'Empleado';
+  const rawDisplayName = (emp.displayName || '').trim();
+  const nombre = (emp.firstName || emp.nombre || '').trim();
+  const apellido = (emp.lastName || emp.apellido || '').trim();
+
+  // Si tiene un nombre distintivo específico:
+  if (rawDisplayName) {
+    if (rawDisplayName.includes(' ')) {
+      return rawDisplayName
+        .split(/\s+/)
+        .map((part) => (part.length > 6 ? `${part.slice(0, 6)}...` : part))
+        .join('\n');
+    }
+    if (rawDisplayName.length > 6) {
+      return `${rawDisplayName.slice(0, 6)}...`;
+    }
+    return rawDisplayName;
+  }
+
+  // Si no tiene nombre distintivo, formatear nombre y apellido:
+  const n = nombre.length > 6 ? `${nombre.slice(0, 6)}...` : nombre;
+  const a = apellido.length > 6 ? `${apellido.slice(0, 6)}...` : apellido;
+  return [n, a].filter(Boolean).join('\n') || 'Empleado';
+};
+
 export function RotationGrid({
   employees = [],
   shifts = [],
@@ -288,31 +314,31 @@ export function RotationGrid({
           if (activeCell) setActiveCell(null);
         }}
       >
-        <table className="border-collapse table-fixed" style={{ width: tableWidth }}>
-          <thead className="bg-[#D7BBA6] sticky top-0 z-20">
-            <tr>
+        <table className="border-collapse table-fixed w-full" style={{ minWidth: '100%', width: tableWidth }}>
+          <thead className="bg-[#D7BBA6] sticky top-0 z-20 shadow-xs">
+            <tr className="bg-[#D7BBA6]">
               <th className="w-24 border-r border-[#C29E87] bg-[#D7BBA6] sticky left-0 z-30 p-2" />
               {employees.map((emp) => {
                 const nombre = emp.firstName || emp.nombre || '';
                 const apellido = emp.lastName || emp.apellido || '';
-                const displayName = emp.displayName || `${nombre} ${apellido}`;
+                const fullName = emp.displayName || `${nombre} ${apellido}`.trim() || 'Empleado';
                 return (
                   <th
                     key={emp.id}
-                    className="min-w-[120px] p-3 text-center border-r border-[#C29E87] cursor-pointer hover:bg-[#C29E87] transition-colors"
+                    className="min-w-[120px] p-3 text-center border-r border-[#C29E87] bg-[#D7BBA6] cursor-pointer hover:bg-[#C29E87] transition-colors select-none"
                     onClick={() => onEditEmployee && onEditEmployee(emp)}
-                    title="Click para editar empleado"
+                    title={`Empleado: ${fullName} (Click para editar)`}
                   >
                     <div className="flex flex-col items-center gap-2">
-                      <Avatar className="w-12 h-12 border-2 border-white shadow-sm">
+                      <Avatar className="w-12 h-12 border-2 border-white shadow-sm shrink-0">
                         <AvatarImage src={emp.photo || emp.foto} alt={nombre} className="object-cover" />
                         <AvatarFallback className="bg-white text-[#70422B] font-bold text-sm">
                           {nombre.charAt(0)}
                           {apellido.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="text-sm font-semibold text-[#4B2B1D] leading-tight whitespace-pre-line">
-                        {emp.displayName ? emp.displayName.replace(/ /g, '\n') : `${nombre}\n${apellido}`}
+                      <div className="text-sm font-semibold text-[#4B2B1D] leading-tight whitespace-pre-line break-words max-w-[110px] text-center">
+                        {formatGridEmployeeName(emp)}
                       </div>
                     </div>
                   </th>
@@ -513,7 +539,7 @@ export function RotationGrid({
                       key={emp.id}
                       className="p-2 border-2 border-gray-400 bg-[#D7BBA6] text-center font-bold text-[#4B2B1D] text-base uppercase whitespace-pre-line min-w-[120px]"
                     >
-                      {emp.displayName ? emp.displayName.replace(/ /g, '\n') : (nombre + '\n' + apellido)}
+                      {formatGridEmployeeName(emp)}
                     </th>
                   );
                 })}
