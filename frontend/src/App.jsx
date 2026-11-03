@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import Home from './features/dashboard/Home';
 import Productos from './features/menu/Productos';
+import Estadisticas from './features/reportes/Estadisticas';
 import { Toaster } from './components/ui/sonner';
 
 function EmptyModule() {
@@ -23,7 +24,7 @@ function App() {
           <Route path="/empleados" element={<EmptyModule />} />
           <Route path="/proveedores" element={<EmptyModule />} />
           <Route path="/caja" element={<EmptyModule />} />
-          <Route path="/estadisticas" element={<EmptyModule />} />
+          <Route path="/estadisticas" element={<Estadisticas />} />
           <Route path="/pantalla-cliente" element={<EmptyModule />} />
           <Route path="/clientes" element={<EmptyModule />} />
         </Route>
