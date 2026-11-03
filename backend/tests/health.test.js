@@ -27,7 +27,7 @@ describe('Estado del servidor', () => {
   });
 
   it('los módulos registrados existen pero aún no tienen rutas (404 de ruta, no error 500)', async () => {
-    const res = await request(app).get('/api/categorias');
+    const res = await request(app).get('/api/turnos');
 
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
