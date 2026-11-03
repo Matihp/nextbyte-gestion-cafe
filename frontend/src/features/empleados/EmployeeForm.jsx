@@ -20,7 +20,7 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
     workDayShifts: {},
     photo: '',
     roleId: '',
-    password: '1234'
+    password: '123456'
   });
 
   useEffect(() => {
@@ -38,13 +38,13 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
         workDays: initialData.workDays || initialData.work_days || [],
         workDayShifts: initialData.workDayShifts || initialData.work_day_shifts || initialData.dias_franco_turnos || {},
         photo: initialData.photo || initialData.foto || '',
-        roleId: initialData.roleId || initialData.rol_id || (roles[0]?.id || 'role-employee'),
-        password: initialData.password || '1234'
+        roleId: initialData.roleId || initialData.rol_id || (roles[0]?.id || ''),
+        password: initialData.password || '123456'
       });
     } else {
       setFormData((prev) => ({
         ...prev,
-        roleId: roles.find((r) => !r.isAdmin && !r.es_admin)?.id || roles[0]?.id || 'role-employee'
+        roleId: roles.find((r) => !r.isAdmin && !r.es_admin)?.id || roles[0]?.id || ''
       }));
     }
   }, [initialData, roles]);
@@ -79,17 +79,30 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
     e.preventDefault();
     if (!formData.firstName || !formData.email) return;
 
+    const nombreLimpio = formData.firstName.trim();
+    const apellidoLimpio = (formData.lastName || '').trim() || nombreLimpio;
+    const legajoLimpio = (formData.legajo || '').trim() || String(Math.floor(1000 + Math.random() * 9000));
+    const passLimpio = formData.password && formData.password.length >= 6 ? formData.password : '123456';
+
     const newEmployee = {
       ...formData,
-      id: initialData?.id || `emp-${Date.now()}`,
-      nombre: formData.firstName,
-      apellido: formData.lastName,
-      telefono: formData.phone,
-      foto: formData.photo,
-      fecha_nacimiento: formData.birthDate,
-      fecha_ingreso: formData.joinDate,
-      turno_habitual: formData.usualShift,
-      rol_id: formData.roleId
+      id: initialData?.id,
+      firstName: nombreLimpio,
+      lastName: apellidoLimpio,
+      nombre: nombreLimpio,
+      apellido: apellidoLimpio,
+      displayName: (formData.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
+      legajo: legajoLimpio,
+      email: formData.email.trim(),
+      password: passLimpio,
+      contrasena: passLimpio,
+      telefono: formData.phone?.trim() || null,
+      foto: formData.photo?.trim() || null,
+      fecha_nacimiento: formData.birthDate || null,
+      fecha_ingreso: formData.joinDate || null,
+      turno_habitual: formData.usualShift || 'Turno Mañana',
+      dias_franco: Array.isArray(formData.workDays) ? formData.workDays : [],
+      rol_id: formData.roleId || null
     };
 
     if (onSave) {
@@ -129,12 +142,13 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                 </div>
                 <div>
                   <Label htmlFor="lastName" className="text-sm font-medium text-gray-700">
-                    Apellido
+                    Apellido *
                   </Label>
                   <Input
                     id="lastName"
                     type="text"
                     name="lastName"
+                    required
                     value={formData.lastName}
                     onChange={handleChange}
                     className="mt-1"
@@ -168,6 +182,7 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                     name="legajo"
                     value={formData.legajo}
                     onChange={handleChange}
+                    placeholder="Ej: 1001"
                     className="mt-1"
                   />
                 </div>
@@ -184,14 +199,12 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                   >
                     {roles.map((role) => (
                       <option key={role.id} value={role.id}>
-                        {role.name || role.nombre}
+                        {role.nombre || role.name}
                       </option>
                     ))}
                     {roles.length === 0 && (
                       <>
-                        <option value="role-cashier">Cajero</option>
-                        <option value="role-kitchen">Cocina</option>
-                        <option value="role-admin">Administrador</option>
+                        <option value="">Sin rol asignado</option>
                       </>
                     )}
                   </select>
@@ -264,7 +277,7 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                 </div>
                 <div>
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                    Contraseña *
+                    Contraseña * (mínimo 6 caracteres)
                   </Label>
                   <div className="relative mt-1">
                     <Input
@@ -272,6 +285,7 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       required
+                      minLength={6}
                       value={formData.password}
                       onChange={handleChange}
                       className="pr-10"
@@ -279,7 +293,7 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -295,32 +309,52 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                   id="phone"
                   type="text"
                   name="phone"
+                  placeholder="11-1234-5678"
                   value={formData.phone}
                   onChange={handleChange}
                   className="mt-1"
                 />
               </div>
 
+              {/* Días y Turnos de Trabajo */}
               <div>
-                <Label className="block text-sm font-medium text-gray-700 mb-2">Turnos por Día (workDayShifts)</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 bg-white p-4 border border-gray-300 rounded-lg">
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Días y Turnos de Trabajo
+                </Label>
+                <div className="space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
                   {daysList.map((day) => {
-                    const currentShift = formData.workDayShifts?.[day] || '';
+                    const isSelected = Boolean(formData.workDayShifts[day]);
+                    const currentShift = formData.workDayShifts[day] || 'Turno Mañana';
+
                     return (
-                      <div key={day} className="flex flex-col">
-                        <span className="text-xs font-semibold text-gray-700 mb-1">{day}</span>
-                        <select
-                          value={currentShift}
-                          onChange={(e) => handleDayShiftChange(day, e.target.value)}
-                          className="border border-gray-300 rounded-md p-2 text-xs focus:border-[#9F4F2F] focus:outline-none focus:ring-1 focus:ring-[#9F4F2F]"
-                        >
-                          <option value="">No trabaja (S/T)</option>
-                          <option value="Turno Mañana">Turno Mañana</option>
-                          <option value="Turno Tarde">Turno Tarde</option>
-                          <option value="Turno Encargado">Turno Encargado</option>
-                          <option value="Turno C.E">Turno C.E</option>
-                          <option value="Turno Único">Turno Único</option>
-                        </select>
+                      <div key={day} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              handleDayShiftChange(day, e.target.checked ? currentShift : null);
+                            }}
+                            className="rounded border-gray-300 text-[#9F4F2F] focus:ring-[#9F4F2F]"
+                          />
+                          <span className={isSelected ? 'font-medium text-gray-900' : 'text-gray-500'}>
+                            {day}
+                          </span>
+                        </label>
+
+                        {isSelected && (
+                          <select
+                            value={currentShift}
+                            onChange={(e) => handleDayShiftChange(day, e.target.value)}
+                            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#9F4F2F]"
+                          >
+                            <option value="Turno Mañana">Turno Mañana</option>
+                            <option value="Turno Tarde">Turno Tarde</option>
+                            <option value="Turno Encargado">Turno Encargado</option>
+                            <option value="Turno C.E">Turno C.E</option>
+                            <option value="Turno Único">Turno Único</option>
+                          </select>
+                        )}
                       </div>
                     );
                   })}
@@ -329,20 +363,20 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
             </div>
           </div>
 
-          <div className="pt-5 border-t border-gray-200 flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <Button
               type="button"
               variant="outline"
               onClick={onCancel}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="px-6 cursor-pointer"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-[#9F4F2F] hover:bg-[#8A4326] text-white font-semibold"
+              className="px-6 bg-[#9F4F2F] hover:bg-[#8A4326] text-white cursor-pointer"
             >
-              Guardar Empleado
+              {initialData ? 'Guardar Cambios' : 'Registrar Empleado'}
             </Button>
           </div>
         </form>
@@ -352,4 +386,3 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
 }
 
 export default EmployeeForm;
-
