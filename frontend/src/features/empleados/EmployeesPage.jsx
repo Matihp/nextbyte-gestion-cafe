@@ -33,6 +33,27 @@ const INITIAL_ROLES = [
 
 const INITIAL_EMPLOYEES = [];
 
+// Conversión de estado visual de turno a los estados de backend permitidos ('presente', 'ausente', 'franco', 'licencia', 'tarde')
+const shiftToBackendStatus = (uiStatus) => {
+  const s = String(uiStatus || '').toUpperCase().trim();
+  if (s.includes('FRANCO')) return 'franco';
+  if (s.includes('AUSENTE')) return 'ausente';
+  if (s.includes('LICENCIA') || s.includes('VACACIONES')) return 'licencia';
+  if (s.includes('TARDE')) return 'tarde';
+  return 'presente';
+};
+
+// Conversión de estado de backend a etiqueta visual para la grilla
+const backendToUiShiftStatus = (backendStatus, usualShift = 'Turno Mañana') => {
+  const s = String(backendStatus || '').toLowerCase().trim();
+  if (s === 'franco') return 'FRANCO';
+  if (s === 'ausente') return 'AUSENTE';
+  if (s === 'licencia') return 'LICENCIA';
+  if (s === 'tarde') return 'Turno Tarde';
+  if (s === 'presente') return usualShift || 'Turno Mañana';
+  return usualShift || 'Turno Mañana';
+};
+
 export function EmployeesPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showMetrics, setShowMetrics] = useState(true);
@@ -40,18 +61,30 @@ export function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState(null);
 
   const [roles, setRoles] = useState(() => {
-    const saved = localStorage.getItem('nextbyte_roles');
-    return saved ? JSON.parse(saved) : INITIAL_ROLES;
+    try {
+      const saved = localStorage.getItem('nextbyte_roles');
+      return saved ? JSON.parse(saved) : INITIAL_ROLES;
+    } catch {
+      return INITIAL_ROLES;
+    }
   });
 
   const [employees, setEmployees] = useState(() => {
-    const saved = localStorage.getItem('nextbyte_employees');
-    return saved ? JSON.parse(saved) : INITIAL_EMPLOYEES;
+    try {
+      const saved = localStorage.getItem('nextbyte_employees');
+      return saved ? JSON.parse(saved) : INITIAL_EMPLOYEES;
+    } catch {
+      return INITIAL_EMPLOYEES;
+    }
   });
 
   const [shifts, setShifts] = useState(() => {
-    const saved = localStorage.getItem('nextbyte_shifts');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('nextbyte_shifts');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   // Guardar en localStorage ante cambios
@@ -63,7 +96,7 @@ export function EmployeesPage() {
     localStorage.setItem('nextbyte_shifts', JSON.stringify(shifts));
   }, [shifts]);
 
-  // Carga e integración con el backend si está disponible
+  // Carga e integración en vivo con la base de datos (Backend Dev 2)
   useEffect(() => {
     const loadBackendData = async () => {
       try {
@@ -73,23 +106,37 @@ export function EmployeesPage() {
           turnoService.obtenerTodos()
         ]);
 
-        if (rolRes.status === 'fulfilled' && rolRes.value?.data?.data) {
-          const loadedRoles = rolRes.value.data.data;
+        if (rolRes.status === 'fulfilled') {
+          const rawRoles = rolRes.value;
+          const loadedRoles = Array.isArray(rawRoles)
+            ? rawRoles
+            : rawRoles?.data?.data || rawRoles?.data || [];
           if (Array.isArray(loadedRoles) && loadedRoles.length > 0) {
             setRoles(loadedRoles);
+            localStorage.setItem('nextbyte_roles', JSON.stringify(loadedRoles));
           }
         }
 
-        if (empRes.status === 'fulfilled' && empRes.value?.data?.data) {
-          const loadedEmps = empRes.value.data.data;
-          if (Array.isArray(loadedEmps) && loadedEmps.length > 0) {
+        if (empRes.status === 'fulfilled') {
+          const rawEmps = empRes.value;
+          const loadedEmps = Array.isArray(rawEmps)
+            ? rawEmps
+            : rawEmps?.data?.data || rawEmps?.data || [];
+          if (Array.isArray(loadedEmps)) {
             const mapped = loadedEmps.map((e) => ({
               ...e,
               firstName: e.nombre || e.firstName,
               lastName: e.apellido || e.lastName,
               displayName: e.displayName || `${e.nombre || ''} ${e.apellido || ''}`.trim(),
               usualShift: e.turno_habitual || e.usualShift || 'Turno Mañana',
-              workDayShifts: e.workDayShifts || e.dias_franco || {},
+              workDayShifts:
+                e.workDayShifts ||
+                (typeof e.dias_franco === 'object' && !Array.isArray(e.dias_franco)
+                  ? e.dias_franco
+                  : {}),
+              workDays: Array.isArray(e.dias_franco)
+                ? e.dias_franco
+                : Object.keys(e.workDayShifts || {}),
               phone: e.telefono || e.phone,
               photo: e.foto || e.photo,
               roleId: e.rol_id || e.roleId
@@ -98,20 +145,23 @@ export function EmployeesPage() {
           }
         }
 
-        if (turnoRes.status === 'fulfilled' && turnoRes.value?.data?.data) {
-          const loadedShifts = turnoRes.value.data.data;
-          if (Array.isArray(loadedShifts) && loadedShifts.length > 0) {
+        if (turnoRes.status === 'fulfilled') {
+          const rawShifts = turnoRes.value;
+          const loadedShifts = Array.isArray(rawShifts)
+            ? rawShifts
+            : rawShifts?.data?.data || rawShifts?.data || [];
+          if (Array.isArray(loadedShifts)) {
             const mappedShifts = loadedShifts.map((s) => ({
               id: s.id,
               employeeId: s.empleado_id || s.employeeId,
               date: s.fecha || s.date,
-              status: s.estado || s.status
+              status: backendToUiShiftStatus(s.estado || s.status, s.turno_habitual)
             }));
             setShifts(mappedShifts);
           }
         }
       } catch {
-        // En caso de que el backend esté en desarrollo, se conservan los datos locales
+        // En caso de corte o inicio fresco, se conservan los datos locales
       }
     };
 
@@ -119,7 +169,11 @@ export function EmployeesPage() {
   }, []);
 
   const activeEmployees = employees.filter(
-    (emp) => emp.id !== 'emp-admin' && emp.id !== 'emp-customer'
+    (emp) =>
+      emp.id !== 'emp-admin' &&
+      emp.id !== 'emp-customer' &&
+      emp.email !== 'admin@nextbyte.com' &&
+      emp.legajo !== 'ADM-001'
   );
 
   const handleEditEmployee = (emp) => {
@@ -128,37 +182,111 @@ export function EmployeesPage() {
   };
 
   const handleSaveEmployee = async (emp) => {
+    const nombreLimpio = (emp.firstName || emp.nombre || '').trim();
+    const apellidoLimpio = (emp.lastName || emp.apellido || '').trim() || nombreLimpio;
+    const legajoLimpio = String(emp.legajo || Math.floor(1000 + Math.random() * 9000)).trim();
+    const emailLimpio = (emp.email || '').trim().toLowerCase();
+    const passLimpio = emp.password && emp.password.length >= 6 ? emp.password : '123456';
+
+    // 1. Doble verificación de unicidad de email antes de enviar
+    const emailDuplicado = employees.find(
+      (e) =>
+        (e.email || '').toLowerCase().trim() === emailLimpio &&
+        (!editingEmployee || (e.id !== emp.id && e.id !== editingEmployee.id))
+    );
+
+    if (emailDuplicado) {
+      toast.error('Ya existe un empleado registrado con ese email.');
+      return;
+    }
+
+    const payloadBackend = {
+      nombre: nombreLimpio,
+      apellido: apellidoLimpio,
+      legajo: legajoLimpio,
+      email: emailLimpio,
+      telefono: emp.phone || emp.telefono || null,
+      foto: emp.photo || emp.foto || null,
+      fecha_nacimiento: emp.birthDate || emp.fecha_nacimiento || null,
+      fecha_ingreso: emp.joinDate || emp.fecha_ingreso || null,
+      turno_habitual: emp.usualShift || emp.turno_habitual || 'Turno Mañana',
+      dias_franco: Array.isArray(emp.workDays) ? emp.workDays : [],
+      rol_id: emp.roleId || emp.rol_id || null,
+      contrasena: passLimpio
+    };
+
     try {
       if (editingEmployee) {
-        setEmployees((prev) => prev.map((item) => (item.id === emp.id ? { ...item, ...emp } : item)));
-        toast.success(`Empleado ${emp.firstName} ${emp.lastName || ''} actualizado con éxito`);
-        try {
-          await empleadoService.actualizar(emp.id, emp);
-        } catch {
-          // Guardado localmente con éxito
+        // En edición no enviar contraseña si no se alteró
+        if (!emp.password || emp.password.length < 6) {
+          delete payloadBackend.contrasena;
         }
+
+        const res = await empleadoService.actualizar(emp.id, payloadBackend);
+        const updated =
+          res && typeof res === 'object' && res.nombre
+            ? res
+            : res?.data?.data || res?.data || payloadBackend;
+
+        setEmployees((prev) =>
+          prev.map((item) =>
+            item.id === emp.id
+              ? {
+                  ...item,
+                  ...emp,
+                  id: updated.id || emp.id,
+                  firstName: updated.nombre || nombreLimpio,
+                  lastName: updated.apellido || apellidoLimpio,
+                  displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
+                  email: updated.email || emailLimpio
+                }
+              : item
+          )
+        );
+        toast.success('Empleado actualizado con éxito');
+        setEditingEmployee(null);
+        setCurrentView('list');
       } else {
-        setEmployees((prev) => [...prev, emp]);
-        toast.success(`Empleado ${emp.firstName} agregado con éxito`);
-        try {
-          await empleadoService.crear(emp);
-        } catch {
-          // Guardado localmente con éxito
-        }
+        const res = await empleadoService.crear(payloadBackend);
+        const created =
+          res && typeof res === 'object' && res.nombre
+            ? res
+            : res?.data?.data || res?.data || payloadBackend;
+
+        const newEmpObj = {
+          ...emp,
+          id: created.id || emp.id || `emp-${Date.now()}`,
+          firstName: created.nombre || nombreLimpio,
+          lastName: created.apellido || apellidoLimpio,
+          displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
+          legajo: created.legajo || legajoLimpio,
+          email: created.email || emailLimpio,
+          roleId: created.rol_id || emp.roleId
+        };
+
+        setEmployees((prev) => [...prev, newEmpObj]);
+        toast.success('Empleado guardado con éxito');
+        setEditingEmployee(null);
+        setCurrentView('list');
       }
-    } finally {
-      setEditingEmployee(null);
-      setCurrentView('list');
+    } catch (err) {
+      console.error('Error al guardar en backend:', err);
+      const msg = err.response?.data?.message || err.message || 'Error al guardar el empleado';
+      toast.error(msg);
+      // NUNCA guardar en fallback local si falla el backend o hay duplicados.
+      // Se mantiene la vista del formulario abierta para que el usuario pueda corregir el email.
     }
   };
 
   const handleDeleteEmployee = async (id) => {
-    setEmployees((prev) => prev.filter((item) => item.id !== id));
-    toast.success('Empleado eliminado correctamente');
     try {
       await empleadoService.eliminar(id);
-    } catch {
-      // Eliminado localmente
+      setEmployees((prev) => prev.filter((item) => item.id !== id));
+      toast.success('Empleado eliminado con éxito');
+    } catch (err) {
+      console.error('Error al eliminar en backend:', err);
+      const msg = err.response?.data?.message || err.message || 'Error al eliminar el empleado';
+      toast.error(msg);
     }
   };
 
@@ -168,6 +296,7 @@ export function EmployeesPage() {
   };
 
   const handleUpdateShift = async (newShift) => {
+    // 1. Actualización optimista de estado
     setShifts((prev) => {
       const idx = prev.findIndex(
         (s) =>
@@ -182,14 +311,19 @@ export function EmployeesPage() {
       return [...prev, newShift];
     });
 
+    // 2. Persistencia en la tabla turnos_empleados de SQLite
     try {
+      const backendEstado = shiftToBackendStatus(newShift.status || newShift.estado);
+      const empId = newShift.employeeId || newShift.empleado_id;
+      const fecha = newShift.date || newShift.fecha;
+
       await turnoService.guardar({
-        empleado_id: newShift.employeeId || newShift.empleado_id,
-        fecha: newShift.date || newShift.fecha,
-        estado: newShift.status || newShift.estado
+        empleado_id: empId,
+        fecha: fecha,
+        estado: backendEstado
       });
-    } catch {
-      // Actualizado localmente
+    } catch (err) {
+      console.warn('Turno guardado localmente (fallback):', err.message);
     }
   };
 
@@ -217,9 +351,9 @@ export function EmployeesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F3E5DC]">
+    <div className="flex flex-col h-full bg-[#F3E5DC] w-full min-w-0 max-w-full overflow-hidden">
       {/* Header and Controls */}
-      <div className="flex items-center p-4 bg-[#EAD5C8] border-b border-[#D7BBA6] relative w-full h-[72px] z-30 shrink-0">
+      <div className="flex items-center p-4 bg-[#EAD5C8] border-b border-[#D7BBA6] relative w-full h-[72px] z-10 shrink-0">
         <div className="flex items-center gap-4 text-2xl font-bold text-[#4B2B1D] absolute left-1/2 -translate-x-1/2">
           <button
             type="button"
@@ -248,7 +382,7 @@ export function EmployeesPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-4 ml-auto relative z-40">
+        <div className="flex items-center gap-4 ml-auto relative z-20">
           <DropdownMenu>
             <DropdownMenuTrigger className="px-4 py-2 bg-[#9F4F2F] text-white rounded-md text-sm font-semibold hover:bg-[#8A4326] flex items-center gap-2 cursor-pointer shadow-xs transition-colors">
               <Settings className="w-4 h-4" />
@@ -284,7 +418,7 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 flex gap-4">
+      <div className="flex-1 overflow-auto p-4 flex gap-4 min-w-0 max-w-full">
         {currentView === 'grid' && (
           <>
             {/* Left Sidebar Mini Calendar */}
@@ -346,6 +480,7 @@ export function EmployeesPage() {
           <EmployeeForm
             roles={roles}
             initialData={editingEmployee}
+            existingEmployees={employees}
             onSave={handleSaveEmployee}
             onCancel={handleCancelEdit}
           />
@@ -356,4 +491,3 @@ export function EmployeesPage() {
 }
 
 export default EmployeesPage;
-

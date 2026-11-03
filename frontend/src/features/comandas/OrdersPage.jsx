@@ -277,9 +277,9 @@ export function OrdersPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 w-full max-w-full min-w-0 overflow-x-hidden">
       {/* Barra de Filtros y Búsqueda */}
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6 w-full max-w-full min-w-0">
         <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -324,33 +324,33 @@ export function OrdersPage() {
       </div>
 
       {/* Tabla Dinámica de Comandas */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-full">
+        <div className="overflow-x-auto w-full max-w-full">
           <table className="w-full border-collapse">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   ID del Pedido
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Cliente
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Artículos
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Fecha y Hora
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Total
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Estado
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Tipo Pedido
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Acciones
                 </th>
               </tr>
@@ -364,10 +364,10 @@ export function OrdersPage() {
 
                 return (
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
                       #{order.id}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                    <td className="px-6 py-4 text-sm text-gray-900 font-medium max-w-[180px] truncate" title={order.customer}>
                       {order.customer}
                     </td>
                     <td
@@ -376,14 +376,14 @@ export function OrdersPage() {
                     >
                       {itemsDesc}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       <div>{order.date || '-'}</div>
                       <div className="text-xs text-gray-400">{order.time || ''}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#4B2B1D]">
+                    <td className="px-6 py-4 text-sm font-bold text-[#4B2B1D] whitespace-nowrap">
                       {formatearPrecio(order.total)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <select
                         value={order.status}
                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
@@ -398,12 +398,12 @@ export function OrdersPage() {
                         <option value="Cancelado">Cancelado</option>
                       </select>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700">
                         {order.orderType || 'Salón'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(order.id)}
