@@ -138,3 +138,32 @@
     @apply font-sans;
     }
 }
+
+
+@media print {
+  body > #root {
+    display: none !important;
+  }
+
+  body > #print-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #print-area table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 10mm 15mm;
+  }
+}
