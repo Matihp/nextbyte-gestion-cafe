@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import Home from './features/dashboard/Home';
+import Productos from './features/menu/Productos';
 import Estadisticas from './features/reportes/Estadisticas';
 import { Toaster } from './components/ui/sonner';
 
@@ -18,7 +19,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/pedidos" element={<EmptyModule />} />
           <Route path="/comandas" element={<EmptyModule />} />
-          <Route path="/productos" element={<EmptyModule />} />
+          <Route path="/productos" element={<Productos />} />
           <Route path="/inventario" element={<EmptyModule />} />
           <Route path="/empleados" element={<EmptyModule />} />
           <Route path="/proveedores" element={<EmptyModule />} />
