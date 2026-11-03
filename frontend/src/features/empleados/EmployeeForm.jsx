@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
-export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel }) {
+export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -52,6 +54,20 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (name === 'email') {
+      const emailVal = value.trim().toLowerCase();
+      const isDup = existingEmployees.some(
+        (emp) =>
+          (emp.email || '').toLowerCase().trim() === emailVal &&
+          (!initialData || (emp.id !== initialData.id && emp.id !== initialData.empleado_id))
+      );
+      if (isDup && emailVal) {
+        setEmailError('Ya existe un empleado registrado con este email');
+      } else {
+        setEmailError('');
+      }
+    }
   };
 
   const handleDayShiftChange = (day, val) => {
@@ -78,6 +94,19 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.firstName || !formData.email) return;
+
+    const emailLimpio = formData.email.trim().toLowerCase();
+    const isDup = existingEmployees.some(
+      (emp) =>
+        (emp.email || '').toLowerCase().trim() === emailLimpio &&
+        (!initialData || (emp.id !== initialData.id && emp.id !== initialData.empleado_id))
+    );
+
+    if (isDup) {
+      setEmailError('Ya existe un empleado registrado con este email');
+      toast.error('Ya existe un empleado registrado con ese email.');
+      return;
+    }
 
     const nombreLimpio = formData.firstName.trim();
     const apellidoLimpio = (formData.lastName || '').trim() || nombreLimpio;
@@ -272,8 +301,11 @@ export function EmployeeForm({ roles = [], initialData = null, onSave, onCancel 
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    className="mt-1"
+                    className={`mt-1 ${emailError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                   />
+                  {emailError && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{emailError}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">

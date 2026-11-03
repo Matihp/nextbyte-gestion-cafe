@@ -188,6 +188,18 @@ export function EmployeesPage() {
     const emailLimpio = (emp.email || '').trim().toLowerCase();
     const passLimpio = emp.password && emp.password.length >= 6 ? emp.password : '123456';
 
+    // 1. Doble verificación de unicidad de email antes de enviar
+    const emailDuplicado = employees.find(
+      (e) =>
+        (e.email || '').toLowerCase().trim() === emailLimpio &&
+        (!editingEmployee || (e.id !== emp.id && e.id !== editingEmployee.id))
+    );
+
+    if (emailDuplicado) {
+      toast.error('Ya existe un empleado registrado con ese email.');
+      return;
+    }
+
     const payloadBackend = {
       nombre: nombreLimpio,
       apellido: apellidoLimpio,
@@ -225,12 +237,15 @@ export function EmployeesPage() {
                   id: updated.id || emp.id,
                   firstName: updated.nombre || nombreLimpio,
                   lastName: updated.apellido || apellidoLimpio,
-                  displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim()
+                  displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
+                  email: updated.email || emailLimpio
                 }
               : item
           )
         );
         toast.success('Empleado actualizado con éxito');
+        setEditingEmployee(null);
+        setCurrentView('list');
       } else {
         const res = await empleadoService.crear(payloadBackend);
         const created =
@@ -251,21 +266,15 @@ export function EmployeesPage() {
 
         setEmployees((prev) => [...prev, newEmpObj]);
         toast.success('Empleado guardado con éxito');
+        setEditingEmployee(null);
+        setCurrentView('list');
       }
     } catch (err) {
       console.error('Error al guardar en backend:', err);
-      const msg = err.response?.data?.message || err.message || 'Error desconocido';
-      toast.error(`Error al conectar con el servidor: ${msg}`);
-
-      // Fallback local para que el usuario no pierda lo cargado
-      if (editingEmployee) {
-        setEmployees((prev) => prev.map((item) => (item.id === emp.id ? { ...item, ...emp } : item)));
-      } else {
-        setEmployees((prev) => [...prev, { ...emp, id: emp.id || `emp-${Date.now()}` }]);
-      }
-    } finally {
-      setEditingEmployee(null);
-      setCurrentView('list');
+      const msg = err.response?.data?.message || err.message || 'Error al guardar el empleado';
+      toast.error(msg);
+      // NUNCA guardar en fallback local si falla el backend o hay duplicados.
+      // Se mantiene la vista del formulario abierta para que el usuario pueda corregir el email.
     }
   };
 
@@ -276,9 +285,8 @@ export function EmployeesPage() {
       toast.success('Empleado eliminado con éxito');
     } catch (err) {
       console.error('Error al eliminar en backend:', err);
-      const msg = err.response?.data?.message || err.message || 'Error de conexión';
-      setEmployees((prev) => prev.filter((item) => item.id !== id));
-      toast.info(`Empleado eliminado localmente (${msg})`);
+      const msg = err.response?.data?.message || err.message || 'Error al eliminar el empleado';
+      toast.error(msg);
     }
   };
 
@@ -472,6 +480,7 @@ export function EmployeesPage() {
           <EmployeeForm
             roles={roles}
             initialData={editingEmployee}
+            existingEmployees={employees}
             onSave={handleSaveEmployee}
             onCancel={handleCancelEdit}
           />
