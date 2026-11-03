@@ -6,6 +6,7 @@ import Productos from './features/menu/Productos';
 import Estadisticas from './features/reportes/Estadisticas';
 import EmployeesPage from './features/empleados/EmployeesPage';
 import OrdersPage from './features/comandas/OrdersPage';
+import CustomerViewerPage from './features/clientes/CustomerViewerPage';
 import { Toaster } from './components/ui/sonner';
 
 function EmptyModule() {
@@ -17,6 +18,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <Routes>
+        <Route path="/customerViewer" element={<CustomerViewerPage />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/pedidos" element={<EmptyModule />} />
@@ -28,8 +30,8 @@ function App() {
           <Route path="/proveedores" element={<EmptyModule />} />
           <Route path="/caja" element={<EmptyModule />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
-          <Route path="/pantalla-cliente" element={<EmptyModule />} />
-          <Route path="/clientes" element={<EmptyModule />} />
+          <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
+          <Route path="/clientes" element={<CustomerViewerPage />} />
         </Route>
       </Routes>
     </AuthProvider>

@@ -51,6 +51,7 @@ const pageTitles = {
   '/estadisticas': 'Estadísticas',
   '/pantalla-cliente': 'Pantalla Cliente',
   '/clientes': 'Pantalla Cliente',
+  '/customerViewer': 'Pantalla Cliente',
 };
 
 export default function DashboardLayout() {
