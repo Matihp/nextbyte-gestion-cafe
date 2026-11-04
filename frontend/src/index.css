@@ -224,6 +224,12 @@
     display: none !important;
   }
 
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-close"],
+  .print\:hidden {
+    display: none !important;
+  }
+
   body > #print-area {
     display: block !important;
     position: static !important;

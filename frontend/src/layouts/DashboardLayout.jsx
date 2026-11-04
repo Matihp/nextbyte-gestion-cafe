@@ -56,7 +56,7 @@ const pageTitles = {
 export default function DashboardLayout() {
   const location = useLocation();
   const currentTitle = pageTitles[location.pathname] || 'Panel';
-  const isPedidos = location.pathname === '/pedidos';
+  const isNoScroll = location.pathname === '/pedidos' || location.pathname === '/pantalla-cliente';
 
   return (
     <SidebarProvider>
@@ -131,12 +131,10 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          {/* Contenido de la Pantalla Actual:
-              En Pedidos: overflow-hidden y flex-col para que solo scrolleen el catálogo y el carrito de forma independiente.
-              En otras pantallas: overflow-y-auto estándar. */}
+          {/* Contenido de la Pantalla Actual */}
           <div className={`flex-1 min-h-0 min-w-0 max-w-full bg-background ${
-            isPedidos 
-              ? 'p-6 overflow-hidden flex flex-col' 
+            isNoScroll 
+              ? 'p-4 md:p-6 overflow-hidden flex flex-col' 
               : 'p-6 md:p-8 overflow-y-auto overflow-x-hidden'
           }`}>
             <Outlet />

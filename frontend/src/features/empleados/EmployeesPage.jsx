@@ -56,7 +56,7 @@ const backendToUiShiftStatus = (backendStatus, usualShift = 'Turno Mañana') => 
 
 export function EmployeesPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [showMetrics, setShowMetrics] = useState(true);
+  const [showMetrics, setShowMetrics] = useState(false);
   const [currentView, setCurrentView] = useState('grid');
   const [editingEmployee, setEditingEmployee] = useState(null);
 
@@ -351,7 +351,7 @@ export function EmployeesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F3E5DC] w-full min-w-0 max-w-full overflow-hidden">
+    <div className="flex flex-col min-h-full bg-[#F3E5DC] w-full min-w-0 max-w-full">
       {/* Header and Controls */}
       <div className="flex items-center p-4 bg-[#EAD5C8] border-b border-[#D7BBA6] relative w-full h-[72px] z-10 shrink-0">
         <div className="flex items-center gap-4 text-2xl font-bold text-[#4B2B1D] absolute left-1/2 -translate-x-1/2">
@@ -418,23 +418,26 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 flex gap-4 min-w-0 max-w-full">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col lg:flex-row gap-4 min-w-0 max-w-full">
         {currentView === 'grid' && (
           <>
             {/* Left Sidebar Mini Calendar */}
-            <div className="w-64 shrink-0 flex flex-col gap-4">
-              <MiniCalendar
-                currentDate={currentDate}
-                onDateSelect={(date) => {
-                  setCurrentDate(date);
-                  setCurrentView('grid');
-                }}
-              />
+            <div className="w-full lg:w-64 shrink-0 flex flex-col gap-4">
+              <div className="lg:sticky lg:top-0">
+                <MiniCalendar
+                  currentDate={currentDate}
+                  onDateSelect={(date) => {
+                    setCurrentDate(date);
+                    setCurrentView('grid');
+                  }}
+                />
+              </div>
             </div>
 
             {/* Main Area: Rotation Grid & Metrics */}
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-              <div className="flex-1 overflow-hidden rounded-xl shadow-xs border border-[#EAD5C8]">
+            <div className="flex-1 flex flex-col gap-6 min-w-0">
+              {/* Grilla de Rotación: SIEMPRE visible con 7 días, nunca se achica */}
+              <div className="w-full rounded-xl shadow-xs border border-[#EAD5C8] bg-white overflow-hidden shrink-0">
                 <RotationGrid
                   employees={activeEmployees}
                   shifts={shifts}
@@ -444,20 +447,23 @@ export function EmployeesPage() {
                 />
               </div>
 
-              {/* Metrics Panel */}
-              <div className="bg-white rounded-xl shadow-xs border border-[#EAD5C8] overflow-hidden mt-auto">
+              {/* Panel de Métricas: DEBAJO de la grilla, sin taparla jamás */}
+              <div className="w-full bg-white rounded-xl shadow-xs border border-[#EAD5C8] overflow-hidden shrink-0">
                 <div
-                  className="p-4 border-b border-[#EAD5C8] bg-[#F9F4F0] flex justify-between items-center cursor-pointer hover:bg-[#F3E5DC] transition-colors"
+                  className="p-4 border-b border-[#EAD5C8] bg-[#F9F4F0] flex justify-between items-center cursor-pointer hover:bg-[#F3E5DC] transition-colors select-none"
                   onClick={() => setShowMetrics(!showMetrics)}
+                  title={showMetrics ? 'Ocultar panel de métricas' : 'Mostrar panel de métricas'}
                 >
-                  <h2 className="font-semibold text-[#4B2B1D] uppercase text-sm">
+                  <h2 className="font-bold text-[#4B2B1D] uppercase text-sm tracking-wide">
                     Panel de Métricas y Análisis
                   </h2>
-                  {showMetrics ? (
-                    <ChevronDown className="w-5 h-5 text-[#70422B]" />
-                  ) : (
-                    <ChevronUp className="w-5 h-5 text-[#70422B]" />
-                  )}
+                  <div className="p-1 rounded-full hover:bg-[#EAD5C8] transition-colors">
+                    {showMetrics ? (
+                      <ChevronUp className="w-5 h-5 text-[#70422B]" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-[#70422B]" />
+                    )}
+                  </div>
                 </div>
 
                 {showMetrics && (

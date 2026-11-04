@@ -1,12 +1,16 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
 import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { normalizeOrderTypeDisplay } from './OrdersPage';
+import { formatDateDDMMAAAA } from './orderSequence';
 
 export function OrderPrintTicket({ order }) {
   if (!order) return null;
 
   const items = order.items || [];
-  const fechaStr = order.date ? `${order.date} ${order.time || ''}` : formatearFecha(order.created_at || new Date());
+  const fechaStr = order.date
+    ? `${formatDateDDMMAAAA(order.date)} ${order.time || ''}`.trim()
+    : formatearFecha(order.created_at || new Date());
 
   return (
     <PrintPortal id="print-area">
@@ -21,13 +25,13 @@ export function OrderPrintTicket({ order }) {
 
         <div className="mb-6 space-y-1 text-sm">
           <p>
-            <span className="font-bold">ID Pedido:</span> #{order.id}
+            <span className="font-bold">ID Pedido:</span> {order.displayId || `#${order.id}`}
           </p>
           <p>
             <span className="font-bold">Cliente:</span> {order.customer || 'Consumidor Final'}
           </p>
           <p>
-            <span className="font-bold">Tipo:</span> {order.orderType || 'Salón'}
+            <span className="font-bold">Tipo:</span> {normalizeOrderTypeDisplay(order.orderType)}
           </p>
           <p>
             <span className="font-bold">Medio de Pago:</span> {order.paymentMethod || 'Efectivo'}
@@ -82,4 +86,3 @@ export function OrderPrintTicket({ order }) {
 }
 
 export default OrderPrintTicket;
-

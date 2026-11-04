@@ -7,7 +7,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { formatearPrecio } from '@/utils/formatters';
+import { normalizeOrderTypeDisplay } from './OrdersPage';
+import { formatDateDDMMAAAA } from './orderSequence';
 
 export function OrderSummaryModal({
   open,
@@ -47,14 +49,14 @@ export function OrderSummaryModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden p-0 gap-0 border-0">
+      <DialogContent className="sm:max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden p-0 gap-0 border-0 print:shadow-none print:border print:border-gray-300">
         <DialogHeader className="px-6 py-5 border-b border-gray-100 flex flex-row justify-between items-center bg-gray-50 space-y-0">
           <DialogTitle className="text-2xl font-bold text-[#4B2B1D]">
-            Resumen del Pedido #{order.id}
+            Resumen del Pedido {order.displayId || `#${order.id}`}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-h-[65vh]">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-h-[65vh] print:max-h-none print:overflow-visible">
           {/* Tarjeta de información del cliente */}
           <div className="bg-[#F3E5DC]/50 rounded-xl p-4 border border-[#EAD5C8]">
             <p className="text-sm text-gray-700">
@@ -63,7 +65,7 @@ export function OrderSummaryModal({
             <p className="text-sm text-gray-700 mt-1">
               Fecha y Hora:{' '}
               <span className="font-semibold text-gray-900">
-                {order.date} {order.time}
+                {formatDateDDMMAAAA(order.date)} {order.time}
               </span>
             </p>
             <p className="text-sm text-gray-700 mt-1">
@@ -74,7 +76,7 @@ export function OrderSummaryModal({
             </p>
             {order.orderType && (
               <p className="text-sm text-gray-700 mt-1">
-                Tipo: <span className="font-semibold text-gray-900">{order.orderType}</span>
+                Tipo: <span className="font-semibold text-gray-900">{normalizeOrderTypeDisplay(order.orderType)}</span>
               </p>
             )}
             {order.paymentMethod && (
@@ -152,12 +154,12 @@ export function OrderSummaryModal({
           </div>
         </div>
 
-        {/* Botones de acción en el Footer */}
-        <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-2.5">
+        {/* Botones de acción en el Footer (ocultos al imprimir la comanda) */}
+        <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-2.5 print:hidden">
           <Button
             type="button"
             onClick={onPrint}
-            className="w-full py-3 bg-[#4B2B1D] text-white rounded-xl font-bold hover:bg-[#3a2216] transition-colors flex items-center justify-center gap-2 cursor-pointer h-12 text-base shadow-sm"
+            className="w-full py-3 bg-[#4B2B1D] text-white rounded-xl font-bold hover:bg-[#3a2216] transition-colors flex items-center justify-center gap-2 cursor-pointer h-12 text-base shadow-sm print:hidden"
           >
             <Printer className="w-5 h-5" /> Imprimir Comanda
           </Button>
@@ -167,7 +169,7 @@ export function OrderSummaryModal({
               type="button"
               variant="outline"
               onClick={() => onCancelOrder(order.id)}
-              className="w-full py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 cursor-pointer h-12 text-base"
+              className="w-full py-3 bg-red-50 text-red-600 border border-red-200 rounded-xl font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 cursor-pointer h-12 text-base print:hidden"
             >
               <XCircle className="w-5 h-5" /> Cancelar Pedido
             </Button>
@@ -179,4 +181,3 @@ export function OrderSummaryModal({
 }
 
 export default OrderSummaryModal;
-

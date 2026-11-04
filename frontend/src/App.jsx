@@ -22,7 +22,6 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <Routes>
-        <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/pedidos" element={<Pedidos />} />
@@ -33,6 +32,7 @@ function App() {
           <Route path="/caja" element={<ReporteCaja />} />
           <Route path="/proveedores" element={<SuppliersPage />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
+          <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
         </Route>
       </Routes>
     </AuthProvider>

@@ -249,16 +249,21 @@ export function RotationGrid({
   };
 
   useEffect(() => {
-    if (scrollContainerRef.current) {
-      const targetDay = currentDate.getDate();
-      const rowElement = scrollContainerRef.current.querySelector(`[data-day="${targetDay}"]`);
-      if (rowElement) {
+    const scrollToTargetDay = () => {
+      if (scrollContainerRef.current) {
+        const targetDay = currentDate.getDate();
+        const rowHeight = 48; // h-12 = 48px
+        const targetScrollTop = Math.max(0, (targetDay - 1) * rowHeight);
         scrollContainerRef.current.scrollTo({
-          top: Math.max(0, rowElement.offsetTop - 130),
+          top: targetScrollTop,
           behavior: 'smooth'
         });
       }
-    }
+    };
+
+    scrollToTargetDay();
+    const timer = setTimeout(scrollToTargetDay, 80);
+    return () => clearTimeout(timer);
   }, [currentDate]);
 
   const tableWidth = employees.length > 6 ? `calc(6rem + (100% - 6rem) * ${employees.length} / 6)` : '100%';
@@ -286,7 +291,7 @@ export function RotationGrid({
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-[#EAD5C8] overflow-hidden flex flex-col h-full">
+    <div className="bg-white rounded-xl shadow-sm border border-[#EAD5C8] overflow-hidden flex flex-col w-full">
       <div className="p-4 border-b border-[#EAD5C8] bg-[#F9F4F0] flex justify-between items-center">
         <h2 className="font-semibold text-[#4B2B1D]">
           Grilla de Rotación de Staff - {currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
@@ -331,7 +336,7 @@ export function RotationGrid({
       <div
         ref={scrollContainerRef}
         className="overflow-auto"
-        style={{ maxHeight: '480px' }}
+        style={{ height: '475px', minHeight: '475px', maxHeight: '475px' }}
         onScroll={() => {
           if (activeCell) setActiveCell(null);
         }}
