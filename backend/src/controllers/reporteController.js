@@ -36,6 +36,11 @@ const obtenerEstadisticas = async (req, res) => {
   return ok(res, data);
 };
 
+const obtenerReporteCaja = async (req, res) => {
+  const data = await reporteService.obtenerReporteCaja(req.query);
+  return ok(res, data);
+};
+
 module.exports = {
   obtenerVentasDia,
   obtenerVentasRango,
@@ -43,5 +48,6 @@ module.exports = {
   obtenerGanancias,
   obtenerMermas,
   obtenerResumen,
-  obtenerEstadisticas
+  obtenerEstadisticas,
+  obtenerReporteCaja
 };

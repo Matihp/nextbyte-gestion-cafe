@@ -5,6 +5,7 @@ import Home from './features/dashboard/Home';
 import Pedidos from './features/pedidos/Pedidos';
 import Productos from './features/menu/Productos';
 import Estadisticas from './features/reportes/Estadisticas';
+import ReporteCaja from './features/caja/ReporteCaja';
 import EmployeesPage from './features/empleados/EmployeesPage';
 import OrdersPage from './features/comandas/OrdersPage';
 import InventoryPage from './features/inventario/InventoryPage';
@@ -29,8 +30,8 @@ function App() {
           <Route path="/productos" element={<Productos />} />
           <Route path="/inventario" element={<InventoryPage />} />
           <Route path="/empleados" element={<EmployeesPage />} />
+          <Route path="/caja" element={<ReporteCaja />} />
           <Route path="/proveedores" element={<SuppliersPage />} />
-          <Route path="/caja" element={<EmptyModule />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
         </Route>
       </Routes>
