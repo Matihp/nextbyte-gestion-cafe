@@ -17,7 +17,9 @@ const armarUsuario = (empleado, rol) => {
     email: empleado.email,
     rol_id: empleado.rol_id,
     es_admin,
-    permisos
+    permisos,
+    es_empleado: Boolean(empleado.es_empleado),
+    tiene_usuario: Boolean(empleado.tiene_usuario)
   };
 
   const payload = {
@@ -41,6 +43,10 @@ const login = async (datos, contrasenaAlternativa) => {
   const empleado = await empleadoRepository.getByEmail(email);
   if (!empleado) {
     throw new AppError('Credenciales inválidas', 401, 'CREDENCIALES_INVALIDAS');
+  }
+
+  if (empleado.tiene_usuario === false || empleado.tiene_usuario === 0) {
+    throw new AppError('El usuario no tiene acceso habilitado al sistema', 401, 'CREDENCIALES_INVALIDAS');
   }
 
   const contrasenaValida = await bcrypt.compare(contrasena, empleado.contrasena);
@@ -82,4 +88,3 @@ module.exports = {
   login,
   me
 };
-
