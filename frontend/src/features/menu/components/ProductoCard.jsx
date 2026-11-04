@@ -4,14 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatearPrecio } from '@/utils/formatters';
 import { obtenerImagenProducto } from '../utils/imagenesCafe';
+import { obtenerRatingProducto } from '../utils/metricasProducto';
 import { Star, Pencil, FileText, Trash2, Coffee } from 'lucide-react';
 
 export default function ProductoCard({ producto, onEditar, onReceta, onEliminar }) {
   const [imagenError, setImagenError] = useState(false);
   const imagenUrl = obtenerImagenProducto(producto);
-
-  // Calificación estética de 1 a 5 estrellas
-  const ratingCalculado = ((producto.id * 3) % 3) + 3; // valor entre 3 y 5
+  const ratingCalculado = obtenerRatingProducto(producto);
 
   return (
     <Card className="overflow-hidden border border-primary/10 shadow-sm hover:shadow-md transition-all duration-200 bg-card rounded-2xl flex flex-col justify-between p-3 gap-3 group">
@@ -85,7 +84,7 @@ export default function ProductoCard({ producto, onEditar, onReceta, onEliminar 
           </Badge>
         </div>
 
-        {/* Estrellas de Calificación */}
+        {/* Estrellas de Calificación (Fiel al Mockup: doradas para activas, gris claro para inactivas) */}
         <div className="flex items-center gap-0.5 pt-0.5">
           {[1, 2, 3, 4, 5].map((estrella) => (
             <Star
@@ -102,4 +101,3 @@ export default function ProductoCard({ producto, onEditar, onReceta, onEliminar 
     </Card>
   );
 }
-
