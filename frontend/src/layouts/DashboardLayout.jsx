@@ -57,11 +57,12 @@ const pageTitles = {
 export default function DashboardLayout() {
   const location = useLocation();
   const currentTitle = pageTitles[location.pathname] || 'Panel';
+  const isPedidos = location.pathname === '/pedidos';
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
-        <Sidebar className="border-r border-sidebar-border/20 bg-sidebar text-sidebar-foreground z-40">
+      <div className="flex h-screen max-h-screen w-full bg-background overflow-hidden">
+        <Sidebar className="border-r border-sidebar-border/20 bg-sidebar text-sidebar-foreground">
           {/* Logo Andén */}
           <SidebarHeader className="p-6 pb-4 flex items-center justify-center">
             <img 
@@ -72,7 +73,7 @@ export default function DashboardLayout() {
           </SidebarHeader>
 
           {/* Menú de Navegación */}
-          <SidebarContent className="px-4 py-2">
+          <SidebarContent className="px-4 py-2 no-scrollbar">
             <SidebarGroup className="p-0">
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1.5">
@@ -109,10 +110,10 @@ export default function DashboardLayout() {
           </SidebarContent>
         </Sidebar>
 
-        {/* Contenedor Principal */}
-        <SidebarInset className="flex-1 flex flex-col min-h-screen bg-background min-w-0 max-w-full overflow-x-hidden">
-          {/* Header Superior */}
-          <header className="flex justify-between items-center px-8 py-5 border-b border-primary/10 bg-background relative z-10 w-full shrink-0">
+        {/* Contenedor Principal (Bloqueado a la altura de la pantalla, sin scroll global) */}
+        <SidebarInset className="flex-1 flex flex-col h-screen max-h-screen bg-background min-w-0 max-w-full overflow-hidden">
+          {/* Header Superior Fijo */}
+          <header className="flex justify-between items-center px-8 py-4 border-b border-primary/10 bg-background relative z-10 w-full shrink-0">
             <div>
               <h1 className="text-2xl font-bold text-primary tracking-tight">{currentTitle}</h1>
               <p className="text-sm text-secondary font-medium mt-0.5">Hola, Usuario</p>
@@ -131,8 +132,14 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          {/* Contenido de la Pantalla Actual (Lienzo limpio con fondo bg-background) */}
-          <div className="flex-1 p-6 md:p-8 overflow-y-auto overflow-x-hidden bg-background min-w-0 max-w-full">
+          {/* Contenido de la Pantalla Actual:
+              En Pedidos: overflow-hidden y flex-col para que solo scrolleen el catálogo y el carrito de forma independiente.
+              En otras pantallas: overflow-y-auto estándar. */}
+          <div className={`flex-1 min-h-0 min-w-0 max-w-full bg-background ${
+            isPedidos 
+              ? 'p-6 overflow-hidden flex flex-col' 
+              : 'p-6 md:p-8 overflow-y-auto overflow-x-hidden'
+          }`}>
             <Outlet />
           </div>
         </SidebarInset>

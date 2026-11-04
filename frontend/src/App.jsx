@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import Home from './features/dashboard/Home';
+import Pedidos from './features/pedidos/Pedidos';
 import Productos from './features/menu/Productos';
 import Estadisticas from './features/reportes/Estadisticas';
 import EmployeesPage from './features/empleados/EmployeesPage';
@@ -21,7 +22,7 @@ function App() {
         <Route path="/customerViewer" element={<CustomerViewerPage />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/pedidos" element={<EmptyModule />} />
+          <Route path="/pedidos" element={<Pedidos />} />
           <Route path="/comandas" element={<OrdersPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/productos" element={<Productos />} />
