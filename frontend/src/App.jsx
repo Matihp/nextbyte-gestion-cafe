@@ -26,10 +26,8 @@ function App() {
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/productos" element={<Productos />} />
           <Route path="/inventario" element={<InventoryPage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/empleados" element={<EmployeesPage />} />
           <Route path="/proveedores" element={<SuppliersPage />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/caja" element={<EmptyModule />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
           <Route path="/pantalla-cliente" element={<EmptyModule />} />
