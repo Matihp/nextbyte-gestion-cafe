@@ -183,73 +183,61 @@ export default function Productos() {
 
   return (
     <div className="space-y-6">
-      {/* Barra de Acciones Superiores (Fiel a Imagen 1) */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-primary tracking-tight">
-            Productos
-          </h2>
-          <p className="text-sm text-secondary font-medium mt-0.5">
-            Hola, Admin
-          </p>
-        </div>
+      {/* Barra de Acciones Superiores (Alineada a la derecha, sin duplicar título) */}
+      <div className="flex justify-end items-center gap-3 flex-wrap">
+        {/* Dropdown Productos (Imagen 1) */}
+        <DropdownMenu onOpenChange={setDropdownProductosAbierto}>
+          <DropdownMenuTrigger render={
+            <Button
+              variant="default"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold h-11 px-5 rounded-2xl gap-2 shadow-xs cursor-pointer"
+            />
+          }>
+            <LayoutGrid className="w-4 h-4" />
+            <span>Productos</span>
+            {dropdownProductosAbierto ? (
+              <ChevronUp className="w-4 h-4 ml-0.5" />
+            ) : (
+              <ChevronDown className="w-4 h-4 ml-0.5" />
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-card border border-primary/20 rounded-2xl shadow-xl p-1.5 mt-1">
+            <DropdownMenuItem
+              onClick={handleNuevoProducto}
+              className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
+            >
+              <Plus className="w-4 h-4 text-primary/80" />
+              <span>Agregar</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setModalEditarEliminarOpen(true)}
+              className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
+            >
+              <List className="w-4 h-4 text-primary/80" />
+              <span>Editar / Eliminar</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {/* Botones de acción principales */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Dropdown Productos (Imagen 1) */}
-          <DropdownMenu onOpenChange={setDropdownProductosAbierto}>
-            <DropdownMenuTrigger render={
-              <Button
-                variant="default"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold h-11 px-5 rounded-2xl gap-2 shadow-xs cursor-pointer"
-              />
-            }>
-              <LayoutGrid className="w-4 h-4" />
-              <span>Productos</span>
-              {dropdownProductosAbierto ? (
-                <ChevronUp className="w-4 h-4 ml-0.5" />
-              ) : (
-                <ChevronDown className="w-4 h-4 ml-0.5" />
-              )}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48 bg-card border border-primary/20 rounded-2xl shadow-xl p-1.5 mt-1">
-              <DropdownMenuItem
-                onClick={handleNuevoProducto}
-                className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
-              >
-                <Plus className="w-4 h-4 text-primary/80" />
-                <span>Agregar</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setModalEditarEliminarOpen(true)}
-                className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
-              >
-                <List className="w-4 h-4 text-primary/80" />
-                <span>Editar / Eliminar</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Botón Categorías (Imagen 1 y 4) */}
+        <Button
+          variant="outline"
+          onClick={() => setModalCategoriasOpen(true)}
+          className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
+        >
+          <Layers className="w-4 h-4 text-primary/80" />
+          <span>Categorías</span>
+        </Button>
 
-          {/* Botón Categorías (Imagen 1 y 4) */}
-          <Button
-            variant="outline"
-            onClick={() => setModalCategoriasOpen(true)}
-            className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
-          >
-            <Layers className="w-4 h-4 text-primary/80" />
-            <span>Categorías</span>
-          </Button>
-
-          {/* Botón Recetas (Imagen 1 y 5) */}
-          <Button
-            variant="outline"
-            onClick={() => setModalRecetasOpen(true)}
-            className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
-          >
-            <FileText className="w-4 h-4 text-primary/80" />
-            <span>Recetas</span>
-          </Button>
-        </div>
+        {/* Botón Recetas (Imagen 1 y 5) */}
+        <Button
+          variant="outline"
+          onClick={() => setModalRecetasOpen(true)}
+          className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
+        >
+          <FileText className="w-4 h-4 text-primary/80" />
+          <span>Recetas</span>
+        </Button>
       </div>
 
       {/* Barra de Filtros y Búsqueda */}
