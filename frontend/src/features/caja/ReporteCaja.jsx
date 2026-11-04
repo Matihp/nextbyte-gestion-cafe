@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
 import { formatearPrecio } from '@/utils/formatters';
 import { ReporteCajaPrint } from './ReporteCajaPrint';
+import { DetallePedidoModal } from './DetallePedidoModal';
 
 const getBadgeEstado = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
@@ -68,6 +69,24 @@ export default function ReporteCaja() {
   } = useReporteCaja();
 
   const [tituloImpresion, setTituloImpresion] = React.useState('Reporte de Cierre de Caja');
+  const [pedidoSeleccionado, setPedidoSeleccionado] = React.useState(null);
+  const [modalDetalleAbierto, setModalDetalleAbierto] = React.useState(false);
+  const [ticketPedidoImprimir, setTicketPedidoImprimir] = React.useState(null);
+
+  const handleAbrirDetalle = (pedido) => {
+    setPedidoSeleccionado(pedido);
+    setModalDetalleAbierto(true);
+  };
+
+  const handleImprimirTicket = (pedido) => {
+    setTicketPedidoImprimir(pedido);
+    setTimeout(() => {
+      imprimirReporte();
+      setTimeout(() => {
+        setTicketPedidoImprimir(null);
+      }, 500);
+    }, 60);
+  };
 
   const handleImprimir = (tipo) => {
     if (tipo === 'cierre-diario') {
@@ -337,9 +356,14 @@ export default function ReporteCaja() {
                                 className="py-3.5 pr-4 align-middle"
                               >
                                 <div className="space-y-0.5">
-                                  <span className="font-bold text-primary text-xs underline decoration-dotted">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAbrirDetalle(pedido)}
+                                    className="font-bold text-primary text-xs underline decoration-dotted hover:text-accent cursor-pointer text-left block transition-colors"
+                                    title="Ver detalle interno del pedido"
+                                  >
                                     #{pedido.id}
-                                  </span>
+                                  </button>
                                   <p className="text-[10px] text-muted-foreground whitespace-nowrap">
                                     {pedido.tipo_pedido} • {pedido.metodo_pago}
                                   </p>
@@ -443,6 +467,15 @@ export default function ReporteCaja() {
         periodo={getTituloTabla()}
         pedidos={pedidosFiltrados}
         totales={totales}
+        ticketPedido={ticketPedidoImprimir}
+      />
+
+      {/* Modal de Detalle Interno del Pedido */}
+      <DetallePedidoModal
+        pedido={pedidoSeleccionado}
+        abierto={modalDetalleAbierto}
+        alCerrar={() => setModalDetalleAbierto(false)}
+        alImprimir={handleImprimirTicket}
       />
 
     </div>

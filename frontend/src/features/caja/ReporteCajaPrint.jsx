@@ -1,13 +1,104 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha, formatearSoloFecha } from '@/utils/formatters';
+
+const formatEstadoNombre = (estado) => {
+  const s = String(estado || '').toLowerCase().trim();
+  if (s === 'en_empaque') return 'En empaque';
+  if (s === 'en_preparacion' || s === 'en preparacion') return 'En preparación';
+  if (s === 'completado') return 'Completado';
+  if (s === 'entregado') return 'Entregado';
+  if (s === 'cancelado') return 'Cancelado';
+  if (s === 'pendiente') return 'Pendiente';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
 export function ReporteCajaPrint({
   titulo = 'Reporte de Cierre de Caja',
   periodo = '',
   pedidos = [],
-  totales = { subtotalCosto: 0, totalVenta: 0 }
+  totales = { subtotalCosto: 0, totalVenta: 0 },
+  ticketPedido = null
 }) {
+  // CASO 1: Reimpresión de ticket individual de control interno (igual al PDF de muestra)
+  if (ticketPedido) {
+    const idStr = String(ticketPedido.id).startsWith('#') ? ticketPedido.id : `#${ticketPedido.id}`;
+    const items = ticketPedido.items && ticketPedido.items.length > 0 ? ticketPedido.items : [];
+    const fechaTexto = ticketPedido.fecha ? formatearSoloFecha(ticketPedido.fecha) : '';
+    const fechaHoraStr = `${fechaTexto} ${ticketPedido.hora || ''}`.trim() || '-';
+
+    return (
+      <PrintPortal id="print-area">
+        <div className="p-8 max-w-sm mx-auto bg-white text-black font-sans leading-normal">
+          {/* Encabezado */}
+          <div className="text-center mb-4">
+            <h1 className="text-2xl font-bold uppercase tracking-wider text-black">
+              ANDÉN
+            </h1>
+            <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase mt-1">
+              CONTROL INTERNO
+            </p>
+            <p className="text-xs text-gray-700 mt-1 font-medium">
+              {fechaHoraStr}
+            </p>
+          </div>
+
+          <div className="border-b-2 border-black mb-4" />
+
+          {/* Datos del pedido */}
+          <div className="space-y-1.5 text-xs text-black mb-5">
+            <p><span className="font-bold">ID Pedido:</span> {idStr}</p>
+            <p><span className="font-bold">Cliente:</span> {ticketPedido.cliente || 'Consumidor Final'}</p>
+            <p><span className="font-bold">Tipo:</span> {ticketPedido.tipo_pedido || 'Mostrador'}</p>
+            <p><span className="font-bold">Medio de Pago:</span> {ticketPedido.metodo_pago || 'Efectivo'}</p>
+            <p><span className="font-bold">Estado:</span> {formatEstadoNombre(ticketPedido.estado)}</p>
+          </div>
+
+          {/* Tabla de artículos */}
+          <table className="w-full text-left text-xs mb-4">
+            <thead>
+              <tr className="border-b border-black text-black font-bold">
+                <th className="py-2 text-left">Descripción</th>
+                <th className="py-2 text-center">Cant</th>
+                <th className="py-2 text-right">Costo</th>
+                <th className="py-2 text-right">Venta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={idx} className="border-b border-gray-200">
+                  <td className="py-2 font-medium">{it.nombre_producto}</td>
+                  <td className="py-2 text-center font-bold">{it.cantidad}</td>
+                  <td className="py-2 text-right text-gray-700">{formatearPrecio(it.costo_total)}</td>
+                  <td className="py-2 text-right font-bold">{formatearPrecio(it.venta_total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="border-b-2 border-black mb-4" />
+
+          {/* Totales del ticket */}
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between font-bold text-gray-800">
+              <span>TOTAL COSTOS</span>
+              <span>{formatearPrecio(ticketPedido.total_costo)}</span>
+            </div>
+            <div className="flex justify-between font-extrabold text-base text-black pt-1">
+              <span>TOTAL VENTA</span>
+              <span>{formatearPrecio(ticketPedido.total_venta)}</span>
+            </div>
+          </div>
+
+          <div className="mt-8 text-center text-[10px] text-gray-500 italic">
+            Documento de uso interno - No válido como factura
+          </div>
+        </div>
+      </PrintPortal>
+    );
+  }
+
+  // CASO 2: Impresión del Reporte General de Caja
   const gananciaBruta = (totales.totalVenta || 0) - (totales.subtotalCosto || 0);
   const ticketPromedio = pedidos.length > 0 ? (totales.totalVenta || 0) / pedidos.length : 0;
   const fechaEmision = formatearFecha(new Date());
@@ -178,4 +269,3 @@ export function ReporteCajaPrint({
 }
 
 export default ReporteCajaPrint;
-

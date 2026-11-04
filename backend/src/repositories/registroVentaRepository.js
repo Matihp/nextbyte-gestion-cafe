@@ -181,6 +181,7 @@ async function obtenerTransaccionesCaja(filtros = {}) {
     .join('detalles_pedidos as dp', 'p.id', 'dp.pedido_id')
     .select(
       'p.id as pedido_id',
+      'p.cliente',
       'p.fecha',
       'p.hora',
       'p.tipo_pedido',

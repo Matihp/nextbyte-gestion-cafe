@@ -212,6 +212,7 @@ async function obtenerReporteCaja(filtros = {}) {
     if (!pedidosMap.has(pedidoId)) {
       pedidosMap.set(pedidoId, {
         id: pedidoId,
+        cliente: fila.cliente || 'Consumidor Final',
         fecha: fila.fecha,
         hora: fila.hora ? fila.hora.slice(0, 5) : '',
         tipo_pedido: fila.tipo_pedido || 'Mostrador',
