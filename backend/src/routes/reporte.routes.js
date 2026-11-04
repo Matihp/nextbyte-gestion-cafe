@@ -13,5 +13,6 @@ router.get('/ganancias', reporteController.obtenerGanancias);
 router.get('/mermas', reporteController.obtenerMermas);
 router.get('/resumen', reporteController.obtenerResumen);
 router.get('/estadisticas', reporteController.obtenerEstadisticas);
+router.get('/caja', reporteController.obtenerReporteCaja);
 
 module.exports = router;

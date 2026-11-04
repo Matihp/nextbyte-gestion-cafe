@@ -182,6 +182,71 @@ async function obtenerDatosDashboard(desde, hasta) {
   };
 }
 
+async function obtenerReporteCaja(filtros = {}) {
+  let fechaFiltro = filtros.fecha;
+  let desdeFiltro = filtros.desde;
+  let hastaFiltro = filtros.hasta;
+
+  if (!fechaFiltro && !desdeFiltro && !hastaFiltro) {
+    fechaFiltro = hoy();
+  }
+
+  const filas = await registroVentaRepository.obtenerTransaccionesCaja({
+    fecha: fechaFiltro,
+    desde: desdeFiltro,
+    hasta: hastaFiltro
+  });
+
+  const pedidosMap = new Map();
+  let totalCostoGeneral = 0;
+  let totalVentaGeneral = 0;
+
+  for (const fila of filas) {
+    const pedidoId = fila.pedido_id;
+    const costoItem = Number(fila.costo_total) || 0;
+    const ventaItem = Number(fila.venta_total) || 0;
+
+    totalCostoGeneral += costoItem;
+    totalVentaGeneral += ventaItem;
+
+    if (!pedidosMap.has(pedidoId)) {
+      pedidosMap.set(pedidoId, {
+        id: pedidoId,
+        fecha: fila.fecha,
+        hora: fila.hora ? fila.hora.slice(0, 5) : '',
+        tipo_pedido: fila.tipo_pedido || 'Mostrador',
+        metodo_pago: fila.metodo_pago || 'Efectivo',
+        estado: fila.estado || 'completado',
+        total_costo: 0,
+        total_venta: 0,
+        items: []
+      });
+    }
+
+    const pedido = pedidosMap.get(pedidoId);
+    pedido.total_costo = Math.round((pedido.total_costo + costoItem) * 100) / 100;
+    pedido.total_venta = Math.round((pedido.total_venta + ventaItem) * 100) / 100;
+
+    pedido.items.push({
+      detalle_id: fila.detalle_id,
+      producto_id: fila.producto_id,
+      nombre_producto: fila.nombre_producto,
+      cantidad: Number(fila.cantidad) || 0,
+      precio_costo: Number(fila.precio_costo) || 0,
+      precio_venta: Number(fila.precio_venta) || 0,
+      costo_total: costoItem,
+      venta_total: ventaItem
+    });
+  }
+
+  return {
+    fecha: fechaFiltro || `${desdeFiltro} a ${hastaFiltro}`,
+    total_costo: Math.round(totalCostoGeneral * 100) / 100,
+    total_venta: Math.round(totalVentaGeneral * 100) / 100,
+    pedidos: Array.from(pedidosMap.values())
+  };
+}
+
 module.exports = {
   calcularGanancia,
   rangoMesActual,
@@ -191,5 +256,6 @@ module.exports = {
   obtenerGanancias,
   obtenerMermas,
   obtenerResumen,
-  obtenerDatosDashboard
+  obtenerDatosDashboard,
+  obtenerReporteCaja
 };

@@ -4,6 +4,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Home from './features/dashboard/Home';
 import Productos from './features/menu/Productos';
 import Estadisticas from './features/reportes/Estadisticas';
+import ReporteCaja from './features/caja/ReporteCaja';
 import EmployeesPage from './features/empleados/EmployeesPage';
 import OrdersPage from './features/comandas/OrdersPage';
 import { Toaster } from './components/ui/sonner';
@@ -26,7 +27,8 @@ function App() {
           <Route path="/inventario" element={<EmptyModule />} />
           <Route path="/empleados" element={<EmployeesPage />} />
           <Route path="/proveedores" element={<EmptyModule />} />
-          <Route path="/caja" element={<EmptyModule />} />
+          <Route path="/caja" element={<ReporteCaja />} />
+          <Route path="/salesReport" element={<ReporteCaja />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
           <Route path="/pantalla-cliente" element={<EmptyModule />} />
           <Route path="/clientes" element={<EmptyModule />} />

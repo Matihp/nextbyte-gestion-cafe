@@ -176,6 +176,42 @@ async function obtenerVentasPorCategoria() {
     .orderBy('cantidadVendida', 'desc');
 }
 
+async function obtenerTransaccionesCaja(filtros = {}) {
+  let query = dbLocal('pedidos as p')
+    .join('detalles_pedidos as dp', 'p.id', 'dp.pedido_id')
+    .select(
+      'p.id as pedido_id',
+      'p.fecha',
+      'p.hora',
+      'p.tipo_pedido',
+      'p.metodo_pago',
+      'p.estado',
+      'dp.id as detalle_id',
+      'dp.producto_id',
+      'dp.nombre_producto',
+      'dp.cantidad',
+      'dp.precio_costo',
+      'dp.precio_venta',
+      dbLocal.raw('ROUND(dp.cantidad * dp.precio_costo, 2) as costo_total'),
+      dbLocal.raw('ROUND(dp.cantidad * dp.precio_venta, 2) as venta_total')
+    );
+
+  if (filtros.fecha) {
+    query = query.where('p.fecha', filtros.fecha);
+  } else if (filtros.desde && filtros.hasta) {
+    query = query.whereBetween('p.fecha', [filtros.desde, filtros.hasta]);
+  } else if (filtros.desde) {
+    query = query.where('p.fecha', '>=', filtros.desde);
+  } else if (filtros.hasta) {
+    query = query.where('p.fecha', '<=', filtros.hasta);
+  }
+
+  return await query
+    .orderBy('p.fecha', 'desc')
+    .orderBy('p.hora', 'asc')
+    .orderBy('p.id', 'asc');
+}
+
 module.exports = {
   guardar,
   buscarPorId,
@@ -189,5 +225,6 @@ module.exports = {
   contarPedidosActivos,
   contarInsumosEnAlerta,
   obtenerVentasPorFranjaHoraria,
-  obtenerVentasPorCategoria
+  obtenerVentasPorCategoria,
+  obtenerTransaccionesCaja
 };

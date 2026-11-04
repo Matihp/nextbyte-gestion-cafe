@@ -48,6 +48,7 @@ const pageTitles = {
   '/empleados': 'Empleados',
   '/proveedores': 'Proveedores',
   '/caja': 'Caja',
+  '/salesReport': 'Caja',
   '/estadisticas': 'Estadísticas',
   '/pantalla-cliente': 'Pantalla Cliente',
   '/clientes': 'Pantalla Cliente',
