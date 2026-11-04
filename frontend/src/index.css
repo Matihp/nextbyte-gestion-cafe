@@ -130,11 +130,125 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
+}
+
+/* ==========================================================
+   BARRAS DE SCROLL MODERNAS (Paleta Corporativa de Café)
+   ========================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(166, 124, 82, 0.45) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(166, 124, 82, 0.4);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(75, 43, 29, 0.75);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Clase utility .custom-scrollbar para listas y paneles principales */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(166, 124, 82, 0.5) rgba(75, 43, 29, 0.04);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(75, 43, 29, 0.04);
+  border-radius: 9999px;
+  margin: 4px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(166, 124, 82, 0.5);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4B2B1D; /* Marrón Chocolate */
+}
+
+/* Ocultar barra de scroll en el Sidebar de navegación y elementos con .no-scrollbar */
+.no-scrollbar::-webkit-scrollbar,
+[data-sidebar] ::-webkit-scrollbar,
+[data-slot="sidebar-content"]::-webkit-scrollbar,
+[data-slot="sidebar-inner"]::-webkit-scrollbar,
+[data-slot="sidebar-container"]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar,
+[data-sidebar],
+[data-sidebar] *,
+[data-slot="sidebar-content"],
+[data-slot="sidebar-inner"],
+[data-slot="sidebar-container"] {
+  -ms-overflow-style: none !important; /* IE y Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+@media print {
+  body > #root {
+    display: none !important;
+  }
+
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-close"],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  body > #print-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #print-area table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 10mm 15mm;
+  }
 }

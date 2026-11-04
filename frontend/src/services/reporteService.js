@@ -7,9 +7,13 @@ export const reporteService = {
   obtenerTopProductos: (params = {}) => api.get('/reportes/top-productos', { params }),
   obtenerGanancias: (params = {}) => api.get('/reportes/ganancias', { params }),
   obtenerMermas: (params = {}) => api.get('/reportes/mermas', { params }),
+  obtenerEstadisticas: (params = {}) => api.get('/reportes/estadisticas', { params }),
+  obtenerReporteCaja: (params = {}) => api.get('/reportes/caja', { params }),
 
   getResumen: () => api.get('/reportes/resumen'),
-  getVentasDia: () => api.get('/reportes/ventas-dia')
+  getVentasDia: () => api.get('/reportes/ventas-dia'),
+  getEstadisticas: (params = {}) => api.get('/reportes/estadisticas', { params }),
+  getReporteCaja: (params = {}) => api.get('/reportes/caja', { params })
 };
 
 export default reporteService;

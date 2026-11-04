@@ -466,4 +466,14 @@ describe('Pruebas de integracion - API /api/reportes', () => {
     expect(Array.isArray(res.body.data.historialMermas)).toBe(true);
     expect(Array.isArray(res.body.data.ventasPorDia)).toBe(true);
   });
+
+  it('GET /api/reportes/caja devuelve transacciones y totales de ventas del dia', async () => {
+    const res = await request(app).get('/api/reportes/caja?fecha=2026-10-10');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.fecha).toBe('2026-10-10');
+    expect(typeof res.body.data.total_costo).toBe('number');
+    expect(typeof res.body.data.total_venta).toBe('number');
+    expect(Array.isArray(res.body.data.pedidos)).toBe(true);
+  });
 });
