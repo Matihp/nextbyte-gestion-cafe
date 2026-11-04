@@ -2,9 +2,10 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock } from 'lucide-react';
-import { getStatusColor } from '@/features/comandas/OrdersPage';
+import { getStatusColor, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
+import { formatCustomerName, getOrderTypeColor } from './CustomerViewerPage';
 
-export function RecentOrders({ orders = [], onSelectOrder }) {
+export function RecentOrders({ orders = [] }) {
   const filteredOrders = orders.filter(
     (order) =>
       order.status !== 'Completado' &&
@@ -12,65 +13,92 @@ export function RecentOrders({ orders = [], onSelectOrder }) {
       order.status !== 'Cancelado'
   );
 
+  const isMultiColumn = filteredOrders.length > 10;
+  const col1Orders = filteredOrders.slice(0, 10);
+  const col2Orders = isMultiColumn ? filteredOrders.slice(10) : [];
+
+  const renderOrderItem = (order) => (
+    <div
+      key={order.id}
+      className={`flex items-center justify-between gap-2.5 bg-[#FAF6F3] rounded-xl border border-[#EAD5C8]/70 transition-all ${
+        isMultiColumn
+          ? 'px-3 py-1.5'
+          : 'px-3.5 py-1.5 md:px-4 md:py-2'
+      }`}
+    >
+      {/* 1. Nombre y primera inicial del apellido */}
+      <span
+        className={`font-black text-[#4B2B1D] truncate flex-1 min-w-0 tracking-wide ${
+          isMultiColumn
+            ? 'text-sm md:text-base'
+            : 'text-lg md:text-xl lg:text-2xl'
+        }`}
+      >
+        {formatCustomerName(order.customer)}
+      </span>
+
+      {/* 2. Estado + 3. Tipo de pedido */}
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className={`rounded-full font-bold whitespace-nowrap shadow-2xs ${getStatusColor(
+            order.status
+          )} ${
+            isMultiColumn
+              ? 'text-[11px] md:text-xs px-2 py-0.5'
+              : 'text-xs md:text-sm px-3 py-0.5 md:py-1'
+          }`}
+        >
+          {order.status}
+        </span>
+        <span
+          className={`font-black tracking-wider rounded-lg border whitespace-nowrap shadow-2xs ${getOrderTypeColor(
+            order.orderType
+          )} ${
+            isMultiColumn
+              ? 'text-[11px] md:text-xs px-2 py-0.5'
+              : 'text-xs md:text-sm px-3 py-0.5 md:py-1'
+          }`}
+        >
+          {normalizeOrderTypeDisplay(order.orderType)}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
-    <Card className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
-        <h2 className="text-xl font-bold text-[#4B2B1D] flex items-center gap-2">
+    <Card className="bg-white rounded-2xl shadow-sm p-3.5 md:p-4 lg:p-5 border border-[#D7BBA6]/50 h-full flex flex-col min-h-0 overflow-hidden">
+      {/* Cabecera de la card con menor separación hacia la lista */}
+      <div className="flex items-center justify-between mb-2 md:mb-2.5 border-b border-gray-100 pb-2 shrink-0">
+        <h2 className="text-xl md:text-2xl lg:text-3xl font-extrabold text-[#4B2B1D] flex items-center gap-2 tracking-tight">
           <span>Pedidos Recientes</span>
         </h2>
         <Badge
           variant="outline"
-          className="text-xs font-semibold text-[#70422B] bg-[#F3E5DC]/60 border-[#D7BBA6]"
+          className="text-xs md:text-sm font-bold text-[#70422B] bg-[#F3E5DC]/80 border-[#D7BBA6] px-3 py-0.5 rounded-full"
         >
           {filteredOrders.length} en preparación
         </Badge>
       </div>
 
-      <div className="space-y-4 overflow-y-auto max-h-[62vh] pr-1">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {filteredOrders.length === 0 ? (
-          <div className="text-center py-12 flex flex-col items-center justify-center gap-2">
-            <Clock className="w-10 h-10 text-gray-300 stroke-[1.5]" />
-            <p className="text-gray-500 font-medium">No hay pedidos recientes.</p>
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-center py-8">
+            <Clock className="w-12 h-12 text-gray-300 stroke-[1.5]" />
+            <p className="text-gray-500 font-semibold text-base md:text-lg">No hay pedidos recientes.</p>
+          </div>
+        ) : isMultiColumn ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 md:gap-2 items-start">
+            <div className="flex flex-col gap-1.5 md:gap-2">
+              {col1Orders.map(renderOrderItem)}
+            </div>
+            <div className="flex flex-col gap-1.5 md:gap-2">
+              {col2Orders.map(renderOrderItem)}
+            </div>
           </div>
         ) : (
-          filteredOrders.map((order) => {
-            const itemsDesc =
-              order.items && order.items.length > 0
-                ? order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')
-                : 'Sin artículos';
-
-            return (
-              <div
-                key={order.id}
-                onClick={() => onSelectOrder && onSelectOrder(order)}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100/90 transition-all cursor-pointer border border-transparent hover:border-gray-200"
-              >
-                <div className="flex-1 min-w-0 pr-4">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="font-bold text-gray-900 text-base">#{order.id}</span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(
-                        order.status
-                      )}`}
-                    >
-                      {order.status}
-                    </span>
-                    {order.orderType && (
-                      <span className="font-black text-xs tracking-wider text-[#8B0000] ml-2 uppercase">
-                        {order.orderType}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mb-1 font-semibold text-gray-800 truncate text-base">
-                    {order.customer}
-                  </p>
-                  <p className="text-sm text-gray-600 truncate max-w-[280px] lg:max-w-[340px]" title={itemsDesc}>
-                    {itemsDesc}
-                  </p>
-                </div>
-              </div>
-            );
-          })
+          <div className="flex flex-col gap-1.5 md:gap-2">
+            {col1Orders.map(renderOrderItem)}
+          </div>
         )}
       </div>
     </Card>
@@ -78,4 +106,3 @@ export function RecentOrders({ orders = [], onSelectOrder }) {
 }
 
 export default RecentOrders;
-

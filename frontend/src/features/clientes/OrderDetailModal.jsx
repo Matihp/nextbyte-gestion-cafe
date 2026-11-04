@@ -10,7 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { getStatusColor } from '@/features/comandas/OrdersPage';
+import { getStatusColor, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
 import { formatearPrecio } from '@/utils/formatters';
 
 export function OrderDetailModal({ order, open, onClose }) {
@@ -45,8 +45,8 @@ export function OrderDetailModal({ order, open, onClose }) {
             </div>
             <div>
               <p className="text-xs text-gray-400 font-medium">Tipo de Pedido</p>
-              <p className="font-bold text-[#8B0000] uppercase tracking-wider text-xs">
-                {order.orderType || 'Salón'}
+              <p className="font-bold text-[#8B0000] tracking-wider text-xs">
+                {normalizeOrderTypeDisplay(order.orderType)}
               </p>
             </div>
             {order.time && (

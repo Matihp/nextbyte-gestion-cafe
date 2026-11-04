@@ -21,7 +21,6 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors />
       <Routes>
-        <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/pedidos" element={<Pedidos />} />
@@ -32,6 +31,7 @@ function App() {
           <Route path="/proveedores" element={<SuppliersPage />} />
           <Route path="/caja" element={<EmptyModule />} />
           <Route path="/estadisticas" element={<Estadisticas />} />
+          <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
         </Route>
       </Routes>
     </AuthProvider>
