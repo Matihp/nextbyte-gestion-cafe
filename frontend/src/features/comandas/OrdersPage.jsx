@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Eye, UtensilsCrossed, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,13 @@ import { OrderPrintTicket } from './OrderPrintTicket';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
-import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { formatearPrecio } from '@/utils/formatters';
+import {
+  formatDateDDMMAAAA,
+  isOrderFromToday,
+  isCompletedOrderExpired,
+  assignDailyOrderNumbers
+} from './orderSequence';
 
 export const getStatusColor = (status) => {
   const s = String(status || '').toLowerCase().trim();
@@ -77,13 +83,28 @@ export function OrdersPage() {
   const [orders, setOrders] = useState(() => {
     try {
       const saved = localStorage.getItem('nextbyte_orders');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      return assignDailyOrderNumbers(parsed);
     } catch {
       return [];
     }
   });
 
   const [loading, setLoading] = useState(false);
+  const [completedTimes, setCompletedTimes] = useState(() => {
+    try {
+      const s = localStorage.getItem('nextbyte_completed_order_times');
+      return s ? JSON.parse(s) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
@@ -101,7 +122,6 @@ export function OrdersPage() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      // Intentamos traer activas y pedidos generales
       const [activasRes, todosRes] = await Promise.allSettled([
         comandaService.obtenerActivas(),
         pedidoService.obtenerTodos()
@@ -134,7 +154,7 @@ export function OrdersPage() {
 
       if (backendOrders !== null) {
         const mapped = backendOrders.map((o) => {
-          const prevOrder = orders.find((p) => String(p.id) === String(o.id));
+          const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
           const itemsRaw = (o.detalles && o.detalles.length > 0)
             ? o.detalles
             : (o.items && o.items.length > 0)
@@ -164,12 +184,16 @@ export function OrdersPage() {
             phone: o.telefono || o.phone || '',
             date: dateStr,
             time: timeStr,
+            created_at: o.created_at,
+            updated_at: o.updated_at,
             items
           };
         });
 
-        setOrders(mapped);
-        localStorage.setItem('nextbyte_orders', JSON.stringify(mapped));
+        // Asignación de números secuenciales diarios (#0001 a #1000)
+        const sequenced = assignDailyOrderNumbers(mapped);
+        setOrders(sequenced);
+        localStorage.setItem('nextbyte_orders', JSON.stringify(sequenced));
       }
     } catch {
       // Si el backend no tiene pedidos o está offline, se conservan los datos de localStorage
@@ -180,7 +204,11 @@ export function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 5000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchOrders();
+      }
+    }, 8000);
     const onFocus = () => fetchOrders();
     window.addEventListener('focus', onFocus);
     return () => {
@@ -189,7 +217,7 @@ export function OrdersPage() {
     };
   }, []);
 
-  // Si se abre un pedido sin ítems cargados (ej. pedido histórico de todos), cargar sus detalles
+  // Si se abre un pedido sin ítems cargados, cargar sus detalles
   useEffect(() => {
     if (!selectedOrderId) return;
     const curr = orders.find((o) => o.id === selectedOrderId);
@@ -226,27 +254,36 @@ export function OrdersPage() {
     [orders, selectedOrderId]
   );
 
-  // Filtrado dinámico
+  // Filtrado dinámico con reglas de negocio:
+  // 1. Desaparecen pedidos de días anteriores (reinicio a las 00:00 hs)
+  // 2. Pedidos en estado "Completado" desaparecen luego de 1 hora
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return orders.filter((order) => {
+      // REGLA 1: Solo pedidos del día actual
+      if (!isOrderFromToday(order)) return false;
+
+      // REGLA 2: Completados desaparecen tras 1 hora
+      if (isCompletedOrderExpired(order, completedTimes)) return false;
+
+      // Búsqueda por número (#0001), ID backend (PED-...) o nombre de cliente
       const idMatch = String(order.id).toLowerCase().includes(term);
+      const numberMatch = String(order.orderNumber || order.displayId || '').toLowerCase().includes(term);
       const customerMatch = String(order.customer || '').toLowerCase().includes(term);
-      const matchesSearch = !term || idMatch || customerMatch;
+      const matchesSearch = !term || idMatch || numberMatch || customerMatch;
 
       let matchesStatus = true;
       if (statusFilter !== 'Todos') {
         matchesStatus = order.status === statusFilter;
       } else {
-        // En "Todos" se muestran todos excepto los cancelados para mantener la vista limpia
         matchesStatus = order.status !== 'Cancelado';
       }
 
       return matchesSearch && matchesStatus;
     });
-  }, [orders, searchTerm, statusFilter]);
+  }, [orders, searchTerm, statusFilter, completedTimes]);
 
-  // Cambio de estado con soporte para transiciones directas del frontend
+  // Cambio de estado
   const handleStatusChange = async (orderId, newStatusDisplay) => {
     const prevOrder = orders.find((o) => o.id === orderId);
     if (!prevOrder) return;
@@ -257,6 +294,20 @@ export function OrdersPage() {
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
     );
 
+    // Si se pasa a Completado, registrar la hora para la expiración de 1 hora
+    if (newStatusDisplay === 'Completado') {
+      const now = Date.now();
+      setCompletedTimes((prev) => {
+        const next = { ...prev, [String(orderId)]: now };
+        try {
+          localStorage.setItem('nextbyte_completed_order_times', JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+
     const backendTarget = toBackendStatus(newStatusDisplay);
     const backendCurrent = toBackendStatus(prevOrder.status);
 
@@ -264,7 +315,6 @@ export function OrdersPage() {
       if (backendTarget === 'cancelado') {
         await pedidoService.cancelar(orderId);
       } else if (backendTarget === 'completado') {
-        // En el backend, para completar es necesario pasar secuencialmente por en_preparacion -> en_empaque -> completar
         if (backendCurrent === 'pendiente') {
           await comandaService.cambiarEstado(orderId, 'en_preparacion');
           await comandaService.cambiarEstado(orderId, 'en_empaque');
@@ -272,78 +322,73 @@ export function OrdersPage() {
           await comandaService.cambiarEstado(orderId, 'en_empaque');
         }
         await comandaService.completar(orderId);
-      } else if (backendTarget === 'en_empaque') {
-        if (backendCurrent === 'pendiente') {
-          await comandaService.cambiarEstado(orderId, 'en_preparacion');
-        }
-        await comandaService.cambiarEstado(orderId, 'en_empaque');
-      } else if (backendTarget === 'en_preparacion') {
-        await comandaService.cambiarEstado(orderId, 'en_preparacion');
+      } else {
+        await comandaService.cambiarEstado(orderId, backendTarget);
       }
-
-      toast.success(`Pedido #${orderId} actualizado a "${newStatusDisplay}"`);
-      await fetchOrders();
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message;
-      toast.error(`Error al actualizar estado: ${msg}`);
-      // Revertir optimismo si el backend rechazó la operación
+      toast.success(`Pedido #${prevOrder.displayId || prevOrder.id} actualizado a "${newStatusDisplay}"`);
+    } catch {
+      // Revertir en error
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: prevOrder.status } : o))
       );
+      toast.error('No se pudo actualizar el estado del pedido en el servidor');
     }
   };
 
-  // Cancelar pedido completo
+  // Cancelar pedido completo desde el modal
   const handleCancelOrder = async (orderId) => {
     try {
       await pedidoService.cancelar(orderId);
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
       );
-      toast.success(`Pedido #${orderId} cancelado`);
       setSelectedOrderId(null);
+      toast.success('Pedido cancelado exitosamente');
     } catch {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
-      );
-      toast.success(`Pedido #${orderId} cancelado`);
-      setSelectedOrderId(null);
+      toast.error('Error al cancelar el pedido');
     }
   };
 
   // Cancelar ítem específico de un pedido
   const handleCancelOrderItem = async (orderId, itemId, itemName) => {
     try {
-      await pedidoService.eliminarItem(orderId, itemId);
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) return;
+
+      const updatedItems = order.items.filter((item) => item.id !== itemId);
+      const newTotal = updatedItems.reduce(
+        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+        0
+      );
+
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, items: updatedItems, total: newTotal } : o))
+      );
+
+      toast.success(`Artículo "${itemName}" cancelado del pedido`);
     } catch {
-      // Se descuenta localmente si falla
+      toast.error('No se pudo cancelar el artículo del pedido');
     }
-
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const newItems = o.items.filter((it) => it.id !== itemId);
-        const newTotal = newItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
-        return {
-          ...o,
-          items: newItems,
-          total: newTotal
-        };
-      })
-    );
-
-    toast.success(`Ítem "${itemName}" eliminado del pedido #${orderId}`);
   };
 
-  // Abrir modal de receta
+  // Ver receta de un producto
   const handleViewRecipe = async (item) => {
     try {
-      if (item.productId) {
-        const res = await productoService.obtenerReceta(item.productId);
+      let productId = item.productId;
+      if (!productId) {
+        const prodRes = await productoService.obtenerTodos();
+        const prods = prodRes?.data?.data || prodRes?.data || prodRes || [];
+        const match = prods.find((p) => p.nombre.toLowerCase() === item.name.toLowerCase());
+        if (match) productId = match.id;
+      }
+
+      if (productId) {
+        const res = await productoService.obtenerReceta(productId);
         const recipeData = res?.data?.data || res?.data || res;
-        if (recipeData && (recipeData.ingredientes?.length > 0 || recipeData.nombre)) {
+        if (recipeData && recipeData.nombre) {
           setViewingRecipe({
-            name: recipeData.nombre || item.name,
+            name: recipeData.nombre,
+            steps: recipeData.pasos || '',
             ingredients: recipeData.ingredientes || []
           });
           return;
@@ -355,37 +400,34 @@ export function OrdersPage() {
     }
   };
 
-  // Imprimir ticket de comanda
-  const handlePrint = (order) => {
-    setPrintingOrder(order);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  // Imprimir comanda (modal de resumen de pedido)
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
-    <div className="p-8 w-full max-w-full min-w-0 overflow-x-hidden">
+    <div className="p-4 md:p-6 w-full max-w-full min-w-0">
       {/* Barra de Filtros y Búsqueda */}
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6 w-full max-w-full min-w-0">
-        <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+      <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 border border-gray-100 mb-5 w-full max-w-full min-w-0">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-center justify-between">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               type="text"
-              placeholder="Buscar por ID de pedido o cliente..."
+              placeholder="Buscar por #pedido o cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border-gray-300 rounded-lg focus-visible:ring-[#A67C52] bg-white text-sm"
+              className="w-full pl-9 pr-4 py-2 border-gray-300 rounded-lg focus-visible:ring-[#A67C52] bg-white text-sm"
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto items-center pb-1 md:pb-0">
+          <div className="flex gap-1.5 md:gap-2 overflow-x-auto items-center pb-1 md:pb-0">
             {statuses.map((status) => (
               <button
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                className={`px-3 py-1.5 md:px-3.5 md:py-2 rounded-lg text-xs md:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
                   statusFilter === status
                     ? 'bg-[#4B2B1D] text-white shadow-xs'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -402,7 +444,7 @@ export function OrdersPage() {
               onClick={fetchOrders}
               disabled={loading}
               title="Actualizar pedidos"
-              className="ml-1 text-gray-600 hover:text-[#4B2B1D] hover:bg-gray-100 cursor-pointer"
+              className="ml-1 text-gray-600 hover:text-[#4B2B1D] hover:bg-gray-100 cursor-pointer h-9 w-9"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#9F4F2F]' : ''}`} />
             </Button>
@@ -410,34 +452,34 @@ export function OrdersPage() {
         </div>
       </div>
 
-      {/* Tabla Dinámica de Comandas */}
+      {/* Tabla Dinámica de Comandas: Sin espacios excesivos ni scroll lateral */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-full">
         <div className="overflow-x-auto w-full max-w-full">
-          <table className="w-full border-collapse">
+          <table className="w-full text-left border-collapse table-auto text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
-                  ID del Pedido
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-20">
+                  ID Pedido
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">
                   Cliente
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                   Artículos
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-28">
                   Fecha y Hora
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-24">
                   Total
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-36">
                   Estado
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-28">
                   Tipo Pedido
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-2.5 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-14">
                   Acciones
                 </th>
               </tr>
@@ -450,31 +492,45 @@ export function OrdersPage() {
                     : 'Sin artículos';
 
                 return (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900 whitespace-nowrap">
-                      #{order.id}
+                  <tr key={order.id} className="hover:bg-gray-50/80 transition-colors">
+                    {/* 1. ID Pedido (#0001 a #1000) */}
+                    <td className="px-3.5 py-2.5 font-black text-gray-900 whitespace-nowrap">
+                      {order.displayId || order.orderNumber || `#${order.id}`}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 font-medium max-w-[180px] truncate" title={order.customer}>
+
+                    {/* 2. Cliente */}
+                    <td
+                      className="px-3.5 py-2.5 text-gray-900 font-semibold max-w-[130px] md:max-w-[160px] truncate"
+                      title={order.customer}
+                    >
                       {order.customer}
                     </td>
+
+                    {/* 3. Artículos */}
                     <td
-                      className="px-6 py-4 text-sm text-gray-600 max-w-[220px] truncate"
+                      className="px-3.5 py-2.5 text-gray-600 max-w-[160px] md:max-w-[220px] truncate"
                       title={itemsDesc}
                     >
                       {itemsDesc}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                      <div>{order.date || '-'}</div>
+
+                    {/* 4. Fecha y Hora en formato DD/MM/AAAA */}
+                    <td className="px-3.5 py-2.5 text-gray-600 whitespace-nowrap">
+                      <div className="font-medium text-gray-800">{formatDateDDMMAAAA(order.date)}</div>
                       <div className="text-xs text-gray-400">{order.time || ''}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#4B2B1D] whitespace-nowrap">
+
+                    {/* 5. Total */}
+                    <td className="px-3.5 py-2.5 font-bold text-[#4B2B1D] whitespace-nowrap">
                       {formatearPrecio(order.total)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+
+                    {/* 6. Estado */}
+                    <td className="px-3.5 py-2.5 whitespace-nowrap">
                       <select
                         value={order.status}
                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer border-0 outline-none transition-colors ${getStatusColor(
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer border-0 outline-none transition-colors ${getStatusColor(
                           order.status
                         )}`}
                       >
@@ -485,16 +541,20 @@ export function OrdersPage() {
                         <option value="Cancelado">Cancelado</option>
                       </select>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
-                      <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700">
+
+                    {/* 7. Tipo Pedido */}
+                    <td className="px-3.5 py-2.5 text-gray-600 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-700">
                         {normalizeOrderTypeDisplay(order.orderType)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+
+                    {/* 8. Acciones */}
+                    <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(order.id)}
-                        className="p-2 hover:bg-[#F3E5DC]/60 text-gray-600 hover:text-[#4B2B1D] rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 hover:bg-[#F3E5DC]/60 text-gray-600 hover:text-[#4B2B1D] rounded-lg transition-colors cursor-pointer"
                         title="Ver detalles del pedido"
                       >
                         <Eye className="w-4 h-4" />
@@ -506,19 +566,19 @@ export function OrdersPage() {
 
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center text-gray-500">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#70422B]">
-                        <UtensilsCrossed className="w-6 h-6 opacity-60" />
+                  <td colSpan={8} className="px-6 py-14 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center gap-2.5">
+                      <div className="w-11 h-11 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#70422B]">
+                        <UtensilsCrossed className="w-5 h-5 opacity-60" />
                       </div>
                       <h3 className="font-semibold text-[#4B2B1D] text-base">
                         {orders.length === 0
                           ? 'No hay comandas registradas'
                           : 'No se encontraron pedidos con el filtro actual'}
                       </h3>
-                      <p className="text-sm text-gray-400 max-w-sm">
+                      <p className="text-xs text-gray-400 max-w-sm">
                         {orders.length === 0
-                          ? 'Los pedidos ingresados aparecerán aquí automáticamente para su preparación y seguimiento en vivo.'
+                          ? 'Los pedidos ingresados hoy aparecerán aquí automáticamente para su preparación y seguimiento en vivo.'
                           : 'Probá seleccionando "Todos" o cambiando los términos de búsqueda.'}
                       </p>
                     </div>
@@ -565,4 +625,3 @@ export function OrdersPage() {
 }
 
 export default OrdersPage;
-
