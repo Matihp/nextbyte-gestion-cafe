@@ -17,6 +17,8 @@ const deserialize = (row) => {
   if (!row) return row;
   return {
     ...row,
+    es_empleado: Boolean(row.es_empleado !== 0 && row.es_empleado !== false),
+    tiene_usuario: Boolean(row.tiene_usuario !== 0 && row.tiene_usuario !== false),
     dias_franco: parseJson(row.dias_franco, []),
     permisos: parseJson(row.permisos, [])
   };
@@ -30,6 +32,12 @@ const serialize = (data) => {
   if (copy.permisos !== undefined && typeof copy.permisos === 'object') {
     copy.permisos = JSON.stringify(copy.permisos);
   }
+  if (copy.es_empleado !== undefined) {
+    copy.es_empleado = copy.es_empleado ? 1 : 0;
+  }
+  if (copy.tiene_usuario !== undefined) {
+    copy.tiene_usuario = copy.tiene_usuario ? 1 : 0;
+  }
   return copy;
 };
 
@@ -39,6 +47,12 @@ module.exports = {
 
     if (filters.rol_id) {
       query = query.where('rol_id', filters.rol_id);
+    }
+    if (filters.es_empleado !== undefined) {
+      query = query.where('es_empleado', filters.es_empleado ? 1 : 0);
+    }
+    if (filters.tiene_usuario !== undefined) {
+      query = query.where('tiene_usuario', filters.tiene_usuario ? 1 : 0);
     }
     if (filters.search) {
       const term = `%${filters.search}%`;
@@ -89,7 +103,9 @@ module.exports = {
       fecha_ingreso: data.fecha_ingreso || data.fechaIngreso || null,
       turno_habitual: data.turno_habitual || data.turnoHabitual || null,
       dias_franco: data.dias_franco || data.diasFranco || [],
-      permisos: data.permisos || []
+      permisos: data.permisos || [],
+      es_empleado: data.es_empleado !== undefined ? (data.es_empleado ? 1 : 0) : 1,
+      tiene_usuario: data.tiene_usuario !== undefined ? (data.tiene_usuario ? 1 : 0) : 1
     });
 
     await dbLocal(TABLE).insert(payload);
