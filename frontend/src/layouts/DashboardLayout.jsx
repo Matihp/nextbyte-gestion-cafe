@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   SidebarProvider, 
   Sidebar, 
@@ -11,6 +11,14 @@ import {
   SidebarMenuButton,
   SidebarInset
 } from '@/components/ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -22,7 +30,7 @@ import {
   Calculator, 
   BarChart3, 
   MonitorPlay,
-  User 
+  User
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 
@@ -51,12 +59,26 @@ const pageTitles = {
   '/salesReport': 'Caja',
   '/estadisticas': 'Estadísticas',
   '/pantalla-cliente': 'Pantalla Cliente',
+  '/configuracion': 'Configuración',
+  '/settings': 'Configuración',
 };
 
 export default function DashboardLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const currentTitle = pageTitles[location.pathname] || 'Panel';
   const isNoScroll = location.pathname === '/pedidos' || location.pathname === '/pantalla-cliente';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const nombreMostrado = user?.nombre
+    ? `${user.nombre} ${user.apellido || ''}`.trim()
+    : 'Usuario';
+  const rolMostrado = user?.es_admin ? 'Admin' : 'Personal';
 
   return (
     <SidebarProvider>
@@ -115,19 +137,50 @@ export default function DashboardLayout() {
           <header className="flex justify-between items-center px-8 py-4 border-b border-primary/10 bg-background relative z-10 w-full shrink-0">
             <div>
               <h1 className="text-2xl font-bold text-primary tracking-tight">{currentTitle}</h1>
-              <p className="text-sm text-secondary font-medium mt-0.5">Hola, Usuario</p>
+              <p className="text-sm text-secondary font-medium mt-0.5">Hola, {user?.nombre || 'Usuario'}</p>
             </div>
 
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-primary">Usuario</p>
-                <p className="text-xs text-accent font-semibold">Usuario</p>
+                <p className="text-sm font-semibold text-primary">{nombreMostrado}</p>
+                <p className="text-xs text-accent font-semibold">{user?.email || rolMostrado}</p>
               </div>
-              <div className="relative group cursor-pointer">
-                <div className="w-11 h-11 rounded-full border border-primary/20 shadow-sm bg-accent text-accent-foreground flex items-center justify-center">
-                  <User className="w-6 h-6" />
-                </div>
-              </div>
+
+              {/* Menú de Usuario desplegable al hacer clic en el avatar */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-12 h-12 rounded-full bg-[#9F4F2F] text-[#F3E5DC] flex items-center justify-center hover:bg-[#4B2B1D] transition-colors shadow-sm overflow-hidden border border-[#4B2B1D]/10 cursor-pointer focus:outline-none"
+                    title="Menú de usuario"
+                  >
+                    {user?.foto ? (
+                      <img src={user.foto} alt={nombreMostrado} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-6 h-6" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-48 bg-white rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-[#4B2B1D]/10 p-0 overflow-hidden z-50"
+                >
+                  <DropdownMenuItem
+                    onClick={() => navigate('/configuracion')}
+                    className="w-full text-left px-4 py-3 text-sm font-medium text-[#4B2B1D] hover:bg-[#F3E5DC] cursor-pointer rounded-t-xl transition-colors focus:bg-[#F3E5DC] focus:text-[#4B2B1D]"
+                  >
+                    Configuración
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="m-0 border-t border-[#4B2B1D]/10" />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 cursor-pointer rounded-b-xl transition-colors focus:bg-red-50 focus:text-red-600"
+                  >
+                    Cerrar sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
 
