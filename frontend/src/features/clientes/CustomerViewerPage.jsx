@@ -7,7 +7,7 @@ import { CompletedOrders } from './CompletedOrders';
 import { OrderDetailModal } from './OrderDetailModal';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
-import { normalizeStatusDisplay } from '@/features/comandas/OrdersPage';
+import { normalizeStatusDisplay, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
 
 export function CustomerViewerPage() {
   const navigate = useNavigate();
@@ -24,16 +24,41 @@ export function CustomerViewerPage() {
         pedidoService.obtenerTodos()
       ]);
 
-      let backendOrders = [];
-      if (todosRes.status === 'fulfilled' && todosRes.value?.data?.data) {
-        backendOrders = todosRes.value.data.data;
-      } else if (activasRes.status === 'fulfilled' && activasRes.value?.data?.data) {
-        backendOrders = activasRes.value.data.data;
+      const extractData = (res) => {
+        if (!res || res.status !== 'fulfilled') return null;
+        const val = res.value;
+        if (Array.isArray(val)) return val;
+        if (Array.isArray(val?.data)) return val.data;
+        if (Array.isArray(val?.data?.data)) return val.data.data;
+        return null;
+      };
+
+      const activas = extractData(activasRes);
+      const todos = extractData(todosRes);
+
+      let backendOrders = null;
+      if (todos !== null && activas !== null) {
+        const activasMap = new Map(activas.map((a) => [String(a.id), a]));
+        backendOrders = todos.map((t) => {
+          const act = activasMap.get(String(t.id));
+          return act ? { ...t, ...act } : t;
+        });
+      } else if (todos !== null) {
+        backendOrders = todos;
+      } else if (activas !== null) {
+        backendOrders = activas;
       }
 
-      if (Array.isArray(backendOrders) && backendOrders.length > 0) {
+      if (backendOrders !== null) {
         const mapped = backendOrders.map((o) => {
-          const items = (o.detalles || o.items || []).map((det) => ({
+          const prevOrder = orders.find((p) => String(p.id) === String(o.id));
+          const itemsRaw = (o.detalles && o.detalles.length > 0)
+            ? o.detalles
+            : (o.items && o.items.length > 0)
+            ? o.items
+            : (prevOrder?.items || []);
+
+          const items = itemsRaw.map((det) => ({
             id: det.id,
             productId: det.producto_id ?? det.productId,
             name: det.nombre_producto || det.name || 'Producto',
@@ -56,7 +81,7 @@ export function CustomerViewerPage() {
             customer: o.cliente || o.customer || 'Consumidor Final',
             total: Number(o.total || 0),
             status: normalizeStatusDisplay(o.estado || o.status),
-            orderType: o.tipo_pedido || o.orderType || 'Salón',
+            orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
             time: timeStr,
             date: dateStr,
             items
@@ -65,7 +90,7 @@ export function CustomerViewerPage() {
 
         setOrders(mapped);
       } else {
-        // Fallback a localStorage si el backend no tiene pedidos o está desconectado
+        // Fallback a localStorage si el backend no respondió
         const saved = localStorage.getItem('nextbyte_orders');
         if (saved) {
           try {
@@ -95,6 +120,30 @@ export function CustomerViewerPage() {
     const interval = setInterval(fetchOrders, 6000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
+
+  // Si se abre el modal de un pedido sin ítems cargados, traer sus detalles del backend
+  useEffect(() => {
+    if (selectedOrder && (!selectedOrder.items || selectedOrder.items.length === 0)) {
+      pedidoService
+        .obtenerPorId(selectedOrder.id)
+        .then((res) => {
+          const full = res?.data?.data || res?.data || res;
+          if (full && (full.detalles || full.items)) {
+            const items = (full.detalles || full.items || []).map((det) => ({
+              id: det.id,
+              productId: det.producto_id ?? det.productId,
+              name: det.nombre_producto || det.name || 'Producto',
+              quantity: Number(det.cantidad ?? det.quantity ?? 1),
+              price: Number(det.precio_venta ?? det.price ?? 0)
+            }));
+            setSelectedOrder((prev) =>
+              prev && prev.id === selectedOrder.id ? { ...prev, items } : prev
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedOrder?.id]);
 
   // Manejo de pantalla completa
   const toggleFullscreen = async () => {

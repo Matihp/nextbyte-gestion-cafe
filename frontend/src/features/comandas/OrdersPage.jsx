@@ -46,6 +46,14 @@ export const normalizeStatusDisplay = (status) => {
   return status || 'Pendiente';
 };
 
+export const normalizeOrderTypeDisplay = (type) => {
+  const t = String(type || '').toLowerCase().trim();
+  if (t === 'take_away' || t === 'takeaway' || t === 'take away') return 'Take Away';
+  if (t === 'delivery') return 'Delivery';
+  if (t === 'mostrador' || t === 'salon' || t === 'salón') return 'Mostrador';
+  return 'Mostrador';
+};
+
 export const toBackendStatus = (statusDisplay) => {
   switch (statusDisplay) {
     case 'En preparación':
@@ -99,17 +107,41 @@ export function OrdersPage() {
         pedidoService.obtenerTodos()
       ]);
 
-      let backendOrders = [];
+      const extractData = (res) => {
+        if (!res || res.status !== 'fulfilled') return null;
+        const val = res.value;
+        if (Array.isArray(val)) return val;
+        if (Array.isArray(val?.data)) return val.data;
+        if (Array.isArray(val?.data?.data)) return val.data.data;
+        return null;
+      };
 
-      if (todosRes.status === 'fulfilled' && todosRes.value?.data?.data) {
-        backendOrders = todosRes.value.data.data;
-      } else if (activasRes.status === 'fulfilled' && activasRes.value?.data?.data) {
-        backendOrders = activasRes.value.data.data;
+      const activas = extractData(activasRes);
+      const todos = extractData(todosRes);
+
+      let backendOrders = null;
+      if (todos !== null && activas !== null) {
+        const activasMap = new Map(activas.map((a) => [String(a.id), a]));
+        backendOrders = todos.map((t) => {
+          const act = activasMap.get(String(t.id));
+          return act ? { ...t, ...act } : t;
+        });
+      } else if (todos !== null) {
+        backendOrders = todos;
+      } else if (activas !== null) {
+        backendOrders = activas;
       }
 
-      if (Array.isArray(backendOrders) && backendOrders.length > 0) {
+      if (backendOrders !== null) {
         const mapped = backendOrders.map((o) => {
-          const items = (o.detalles || o.items || []).map((det) => ({
+          const prevOrder = orders.find((p) => String(p.id) === String(o.id));
+          const itemsRaw = (o.detalles && o.detalles.length > 0)
+            ? o.detalles
+            : (o.items && o.items.length > 0)
+            ? o.items
+            : (prevOrder?.items || []);
+
+          const items = itemsRaw.map((det) => ({
             id: det.id,
             productId: det.producto_id ?? det.productId,
             name: det.nombre_producto || det.name || 'Producto',
@@ -126,7 +158,7 @@ export function OrdersPage() {
             customer: o.cliente || o.customer || 'Consumidor Final',
             total: Number(o.total || 0),
             status: normalizeStatusDisplay(o.estado || o.status),
-            orderType: o.tipo_pedido || o.orderType || 'Salón',
+            orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
             paymentMethod: o.metodo_pago || o.paymentMethod || 'Efectivo',
             address: o.direccion || o.address || '',
             phone: o.telefono || o.phone || '',
@@ -148,7 +180,41 @@ export function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    const interval = setInterval(fetchOrders, 5000);
+    const onFocus = () => fetchOrders();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
+
+  // Si se abre un pedido sin ítems cargados (ej. pedido histórico de todos), cargar sus detalles
+  useEffect(() => {
+    if (!selectedOrderId) return;
+    const curr = orders.find((o) => o.id === selectedOrderId);
+    if (curr && (!curr.items || curr.items.length === 0)) {
+      pedidoService
+        .obtenerPorId(selectedOrderId)
+        .then((res) => {
+          const full = res?.data?.data || res?.data || res;
+          if (full && (full.detalles || full.items)) {
+            const items = (full.detalles || full.items || []).map((det) => ({
+              id: det.id,
+              productId: det.producto_id ?? det.productId,
+              name: det.nombre_producto || det.name || 'Producto',
+              quantity: Number(det.cantidad ?? det.quantity ?? 1),
+              price: Number(det.precio_venta ?? det.price ?? 0),
+              costPrice: Number(det.precio_costo ?? det.costPrice ?? 0)
+            }));
+            setOrders((prev) =>
+              prev.map((o) => (o.id === selectedOrderId ? { ...o, items } : o))
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedOrderId, orders]);
 
   // Guardar en localStorage cuando cambian las comandas
   useEffect(() => {
@@ -180,29 +246,50 @@ export function OrdersPage() {
     });
   }, [orders, searchTerm, statusFilter]);
 
-  // Cambio de estado
+  // Cambio de estado con soporte para transiciones directas del frontend
   const handleStatusChange = async (orderId, newStatusDisplay) => {
     const prevOrder = orders.find((o) => o.id === orderId);
     if (!prevOrder) return;
+    if (prevOrder.status === newStatusDisplay) return;
 
     // Actualización optimista
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
     );
 
-    const backendStatus = toBackendStatus(newStatusDisplay);
+    const backendTarget = toBackendStatus(newStatusDisplay);
+    const backendCurrent = toBackendStatus(prevOrder.status);
 
     try {
-      if (backendStatus === 'completado') {
+      if (backendTarget === 'cancelado') {
+        await pedidoService.cancelar(orderId);
+      } else if (backendTarget === 'completado') {
+        // En el backend, para completar es necesario pasar secuencialmente por en_preparacion -> en_empaque -> completar
+        if (backendCurrent === 'pendiente') {
+          await comandaService.cambiarEstado(orderId, 'en_preparacion');
+          await comandaService.cambiarEstado(orderId, 'en_empaque');
+        } else if (backendCurrent === 'en_preparacion') {
+          await comandaService.cambiarEstado(orderId, 'en_empaque');
+        }
         await comandaService.completar(orderId);
-      } else {
-        await comandaService.cambiarEstado(orderId, backendStatus);
+      } else if (backendTarget === 'en_empaque') {
+        if (backendCurrent === 'pendiente') {
+          await comandaService.cambiarEstado(orderId, 'en_preparacion');
+        }
+        await comandaService.cambiarEstado(orderId, 'en_empaque');
+      } else if (backendTarget === 'en_preparacion') {
+        await comandaService.cambiarEstado(orderId, 'en_preparacion');
       }
+
       toast.success(`Pedido #${orderId} actualizado a "${newStatusDisplay}"`);
+      await fetchOrders();
     } catch (err) {
-      // Si la API falla o está desconectada, mantenemos el cambio local y avisamos
       const msg = err.response?.data?.message || err.message;
-      toast.info(`Estado actualizado localmente: "${newStatusDisplay}"`);
+      toast.error(`Error al actualizar estado: ${msg}`);
+      // Revertir optimismo si el backend rechazó la operación
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: prevOrder.status } : o))
+      );
     }
   };
 
@@ -400,7 +487,7 @@ export function OrdersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700">
-                        {order.orderType || 'Salón'}
+                        {normalizeOrderTypeDisplay(order.orderType)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
