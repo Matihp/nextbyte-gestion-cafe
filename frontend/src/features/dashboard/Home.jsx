@@ -165,7 +165,7 @@ export default function Home() {
               await inventarioService.crearMerma({
                 producto_id: prodId,
                 cantidad,
-                motivo: `Cancelación de pedido #${pedido.id}`
+                motivo: 'Cancelación'
               });
             } catch (errMerma) {
               console.warn('No se pudo registrar la merma del ítem:', it, errMerma);
@@ -204,7 +204,7 @@ export default function Home() {
           await inventarioService.crearMerma({
             producto_id: prodId,
             cantidad,
-            motivo: `Cancelación de ítem en comanda #${pedido.id}`
+            motivo: 'Cancelación'
           });
         } catch (errMerma) {
           console.warn('No se pudo registrar la merma del ítem:', errMerma);
