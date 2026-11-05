@@ -24,7 +24,7 @@ export function DetallePedidoModal({ pedido, abierto, alCerrar, alImprimir }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-border/30 flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md sm:max-w-lg overflow-hidden border border-border/30 flex flex-col max-h-[90vh]">
         {/* Barra superior con título y botón cerrar */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-border/20">
           <h3 className="font-bold text-primary text-base">
@@ -77,31 +77,34 @@ export function DetallePedidoModal({ pedido, abierto, alCerrar, alImprimir }) {
             <div className="border-t border-dashed border-border/40 my-3" />
 
             {/* Tabla de Artículos */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 text-[10px] font-bold text-muted-foreground uppercase tracking-wider pb-1">
-                <span className="col-span-6">Artículo</span>
-                <span className="col-span-2 text-center">Cant</span>
-                <span className="col-span-2 text-right">Costo</span>
-                <span className="col-span-2 text-right">Venta</span>
-              </div>
-
-              {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 text-xs py-1 items-center">
-                  <span className="col-span-6 font-medium text-primary truncate pr-1">
-                    {item.nombre_producto}
-                  </span>
-                  <span className="col-span-2 text-center text-primary font-medium">
-                    {item.cantidad}
-                  </span>
-                  <span className="col-span-2 text-right text-red-500 font-semibold">
-                    {formatearPrecio(item.costo_total)}
-                  </span>
-                  <span className="col-span-2 text-right text-emerald-600 font-bold">
-                    {formatearPrecio(item.venta_total)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/20">
+                  <th className="text-left pb-1 font-bold">Artículo</th>
+                  <th className="text-center pb-1 font-bold px-2 w-12">Cant</th>
+                  <th className="text-right pb-1 font-bold px-2 whitespace-nowrap">Costo</th>
+                  <th className="text-right pb-1 font-bold pl-2 whitespace-nowrap">Venta</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/10">
+                {items.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="py-1.5 font-medium text-primary pr-2">
+                      {item.nombre_producto}
+                    </td>
+                    <td className="py-1.5 text-center text-primary font-medium px-2">
+                      {item.cantidad}
+                    </td>
+                    <td className="py-1.5 text-right text-red-500 font-semibold px-2 whitespace-nowrap">
+                      {formatearPrecio(item.costo_total)}
+                    </td>
+                    <td className="py-1.5 text-right text-emerald-600 font-bold pl-2 whitespace-nowrap">
+                      {formatearPrecio(item.venta_total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
             {/* Separador punteado */}
             <div className="border-t border-dashed border-border/40 my-3" />
