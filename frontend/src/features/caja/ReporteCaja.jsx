@@ -65,7 +65,8 @@ export default function ReporteCaja() {
     pedidosFiltrados,
     totales,
     exportarAExcel,
-    imprimirReporte
+    imprimirReporte,
+    getHoyIso
   } = useReporteCaja();
 
   const [tituloImpresion, setTituloImpresion] = React.useState('Reporte de Cierre de Caja');
@@ -137,7 +138,10 @@ export default function ReporteCaja() {
           {/* Botones Rápidos: Hoy y Mes Actual */}
           <div className="space-y-2.5">
             <button
-              onClick={() => setModoFiltro('hoy')}
+              onClick={() => {
+                setModoFiltro('hoy');
+                setFechaEspecifica(getHoyIso());
+              }}
               className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors ${
                 modoFiltro === 'hoy'
                   ? 'bg-primary text-primary-foreground shadow-sm'

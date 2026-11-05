@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import productoService from '@/services/productoService';
+import reporteService from '@/services/reporteService';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +37,7 @@ import CategoriasModal from './components/CategoriasModal';
 import RecetasModal from './components/RecetasModal';
 import RecetaEditorModal from './components/RecetaEditorModal';
 import ProductosModalEditarEliminar from './components/ProductosModalEditarEliminar';
+import { obtenerVentasProducto } from './utils/metricasProducto';
 
 export default function Productos() {
   const [productos, setProductos] = useState([]);
@@ -46,10 +48,10 @@ export default function Productos() {
   // Control del dropdown superior de Productos (chevron arriba / abajo)
   const [dropdownProductosAbierto, setDropdownProductosAbierto] = useState(false);
 
-  // Estados de filtros y búsqueda
+  // Estados de filtros y búsqueda (Fieles a Imágenes 1, 2 y 3)
   const [busqueda, setBusqueda] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
-  const [orden, setOrden] = useState('nombre-asc');
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
+  const [filtroVentas, setFiltroVentas] = useState('filtro');
 
   // Modales
   const [modalProductoOpen, setModalProductoOpen] = useState(false);
@@ -70,12 +72,21 @@ export default function Productos() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [prodsRes, catsRes] = await Promise.all([
+      const [prodsRes, catsRes, topProdsRes] = await Promise.all([
         productoService.obtenerProductos(),
-        productoService.obtenerCategorias()
+        productoService.obtenerCategorias(),
+        reporteService.obtenerTopProductos().catch(() => [])
       ]);
 
-      const prodsList = Array.isArray(prodsRes) ? prodsRes : [];
+      const topProdsMap = new Map(
+        (Array.isArray(topProdsRes) ? topProdsRes : []).map((t) => [t.producto_id, t.unidades])
+      );
+
+      const prodsList = (Array.isArray(prodsRes) ? prodsRes : []).map((p) => ({
+        ...p,
+        ventas_reales: topProdsMap.get(p.id) || undefined
+      }));
+
       setProductos(prodsList);
       setCategorias(Array.isArray(catsRes) ? catsRes : []);
 
@@ -108,10 +119,16 @@ export default function Productos() {
   const productosFiltrados = useMemo(() => {
     let resultado = [...productos];
 
-    if (categoriaSeleccionada !== null) {
-      resultado = resultado.filter((p) => p.categoria_id === categoriaSeleccionada);
+    // 1. Filtro por categoría seleccionada
+    if (categoriaSeleccionada) {
+      resultado = resultado.filter(
+        (p) =>
+          (p.categoria_nombre || '').toUpperCase() === categoriaSeleccionada.toUpperCase() ||
+          String(p.categoria_id) === String(categoriaSeleccionada)
+      );
     }
 
+    // 2. Filtro por búsqueda de texto
     if (busqueda.trim() !== '') {
       const termino = busqueda.toLowerCase().trim();
       resultado = resultado.filter(
@@ -121,22 +138,18 @@ export default function Productos() {
       );
     }
 
-    resultado.sort((a, b) => {
-      switch (orden) {
-        case 'nombre-desc':
-          return (b.nombre || '').localeCompare(a.nombre || '');
-        case 'precio-asc':
-          return Number(a.precio_venta) - Number(b.precio_venta);
-        case 'precio-desc':
-          return Number(b.precio_venta) - Number(a.precio_venta);
-        case 'nombre-asc':
-        default:
-          return (a.nombre || '').localeCompare(b.nombre || '');
-      }
-    });
+    // 3. Ordenamiento por Filtro (+Vendidos / -Vendidos / Filtro por defecto)
+    if (filtroVentas === '+vendidos') {
+      resultado.sort((a, b) => obtenerVentasProducto(b) - obtenerVentasProducto(a));
+    } else if (filtroVentas === '-vendidos') {
+      resultado.sort((a, b) => obtenerVentasProducto(a) - obtenerVentasProducto(b));
+    } else {
+      // Orden por defecto: id o orden original del menú
+      resultado.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+    }
 
     return resultado;
-  }, [productos, categoriaSeleccionada, busqueda, orden]);
+  }, [productos, categoriaSeleccionada, busqueda, filtroVentas]);
 
   // Handlers
   const handleNuevoProducto = () => {
@@ -183,7 +196,7 @@ export default function Productos() {
 
   return (
     <div className="space-y-6">
-      {/* Barra de Acciones Superiores (Alineada a la derecha, sin duplicar título) */}
+      {/* Barra de Acciones Superiores (Alineada a la derecha, sin título duplicado) */}
       <div className="flex justify-end items-center gap-3 flex-wrap">
         {/* Dropdown Productos (Imagen 1) */}
         <DropdownMenu onOpenChange={setDropdownProductosAbierto}>
@@ -240,14 +253,14 @@ export default function Productos() {
         </Button>
       </div>
 
-      {/* Barra de Filtros y Búsqueda */}
+      {/* Barra de Filtros y Búsqueda (Fiel a Imágenes 1, 2 y 3) */}
       <ProductoFiltros
         busqueda={busqueda}
         setBusqueda={setBusqueda}
+        filtroVentas={filtroVentas}
+        setFiltroVentas={setFiltroVentas}
         categoriaSeleccionada={categoriaSeleccionada}
         setCategoriaSeleccionada={setCategoriaSeleccionada}
-        orden={orden}
-        setOrden={setOrden}
         categorias={categorias}
       />
 
@@ -275,7 +288,7 @@ export default function Productos() {
           </div>
           <h3 className="text-lg font-bold text-primary">No se encontraron productos</h3>
           <p className="text-sm text-primary/60 max-w-sm">
-            {busqueda || categoriaSeleccionada !== null
+            {busqueda || categoriaSeleccionada
               ? 'Intentá cambiar los filtros o el término de búsqueda.'
               : 'Todavía no hay productos registrados en el menú.'}
           </p>

@@ -190,6 +190,7 @@ export default function Estadisticas() {
                 tickLine={false}
               />
               <YAxis
+                allowDecimals={false}
                 stroke="var(--muted-foreground)"
                 fontSize={11}
                 tickLine={false}
