@@ -306,7 +306,7 @@ export default function Pedidos() {
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-2 pb-2 custom-scrollbar">
           {cargandoDatos ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-gray-100">
                   <Skeleton className="w-full aspect-[4/3] rounded-xl" />
@@ -330,7 +330,7 @@ export default function Pedidos() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
               {filteredProducts.map((product) => (
                 <ProductCard
                   key={product.id}
