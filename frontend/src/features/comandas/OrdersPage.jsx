@@ -10,6 +10,7 @@ import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
 import { formatearPrecio } from '@/utils/formatters';
+import { useAuth } from '@/hooks/useAuth';
 import {
   formatDateDDMMAAAA,
   isOrderFromToday,
@@ -78,6 +79,22 @@ export const toBackendStatus = (statusDisplay) => {
 };
 
 export function OrdersPage() {
+  const { user, isAdmin } = useAuth();
+  const canCancelOrder = useMemo(() => {
+    if (isAdmin) return true;
+    if (!user) return true;
+    let perms = [];
+    if (Array.isArray(user.permisos)) {
+      perms = user.permisos;
+    } else if (typeof user.permisos === 'string') {
+      try {
+        perms = JSON.parse(user.permisos);
+      } catch {
+        perms = [];
+      }
+    }
+    return perms.includes('all') || perms.includes('cancelOrder');
+  }, [user, isAdmin]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [orders, setOrders] = useState(() => {
@@ -601,8 +618,8 @@ export function OrdersPage() {
           onClose={() => setSelectedOrderId(null)}
           onViewRecipe={handleViewRecipe}
           onPrint={() => handlePrint(selectedOrder)}
-          onCancelOrder={handleCancelOrder}
-          onCancelItem={handleCancelOrderItem}
+          onCancelOrder={canCancelOrder ? handleCancelOrder : undefined}
+          onCancelItem={canCancelOrder ? handleCancelOrderItem : undefined}
         />
       )}
 

@@ -3,6 +3,33 @@ const AppError = require('../utils/AppError');
 const rolRepository = require('../repositories/rolRepository');
 const empleadoRepository = require('../repositories/empleadoRepository');
 
+// Roles con permisos e identidad inalterables (nadie puede cambiarles permisos)
+const isImmutableRole = (rol) => {
+  if (!rol) return false;
+  if (rol.es_admin) return true;
+  const name = String(rol.nombre || '').trim().toLowerCase();
+  return (
+    name === 'admin' ||
+    name === 'administrador' ||
+    name === 'rol pantalla cliente' ||
+    name === 'caja-contingencia (cortes internet)'
+  );
+};
+
+// Roles fijos que no pueden ser eliminados por nadie en el sistema
+const isNonDeletableRole = (rol) => {
+  if (!rol) return false;
+  if (rol.es_admin) return true;
+  const name = String(rol.nombre || '').trim().toLowerCase();
+  return (
+    name === 'admin' ||
+    name === 'administrador' ||
+    name === 'rol pantalla cliente' ||
+    name === 'caja-contingencia (cortes internet)' ||
+    name.includes('caja diaria')
+  );
+};
+
 const getAll = async () => {
   return rolRepository.getAll();
 };
@@ -36,6 +63,18 @@ const update = async (id, datos) => {
   const rol = await rolRepository.getById(id);
   if (!rol) {
     throw new AppError('Rol no encontrado', 404, 'NO_ENCONTRADO');
+  }
+
+  // Si es un rol inalterable, sus permisos y su nombre están congelados
+  if (isImmutableRole(rol)) {
+    if (datos.permisos !== undefined || (datos.nombre !== undefined && datos.nombre !== rol.nombre)) {
+      throw new AppError('No se pueden modificar los permisos ni el nombre de un rol inalterable del sistema', 400, 'ROL_FIJO_NO_MODIFICABLE');
+    }
+  }
+
+  // Si es Caja Diaria u otro rol fijo, su nombre no se puede desvirtuar
+  if (isNonDeletableRole(rol) && datos.nombre !== undefined && datos.nombre.trim().toLowerCase() !== rol.nombre.trim().toLowerCase()) {
+    throw new AppError('No se puede cambiar el nombre de un rol fijo del sistema', 400, 'ROL_NOMBRE_FIJO');
   }
 
   const payload = {};
@@ -85,6 +124,10 @@ const remove = async (id) => {
   const empleados = await empleadoRepository.getByRol(id);
   if (empleados && empleados.length > 0) {
     throw new AppError('No se puede eliminar: el rol tiene empleados asignados', 409, 'RELACION');
+  }
+
+  if (isNonDeletableRole(rol)) {
+    throw new AppError('No se pueden eliminar los roles fijos del sistema (Admin, Rol Pantalla Cliente, Caja-Contingencia, Caja Diaria)', 400, 'ROL_FIJO_NO_ELIMINABLE');
   }
 
   await rolRepository.delete(id);

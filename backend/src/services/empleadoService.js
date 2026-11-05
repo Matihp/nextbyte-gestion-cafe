@@ -6,7 +6,11 @@ const empleadoRepository = require('../repositories/empleadoRepository');
 const rolRepository = require('../repositories/rolRepository');
 
 const obtenerTodos = async (filtros = {}) => {
-  const empleados = await empleadoRepository.getAll(filtros);
+  const queryFiltros = { ...filtros };
+  if (queryFiltros.es_empleado === undefined) {
+    queryFiltros.es_empleado = true;
+  }
+  const empleados = await empleadoRepository.getAll(queryFiltros);
   return quitarContrasena(empleados);
 };
 
@@ -60,7 +64,9 @@ const crear = async (datos) => {
     fecha_ingreso: datos.fecha_ingreso || null,
     turno_habitual: datos.turno_habitual || null,
     dias_franco: Array.isArray(datos.dias_franco) ? datos.dias_franco : [],
-    permisos: Array.isArray(datos.permisos) ? datos.permisos : []
+    permisos: Array.isArray(datos.permisos) ? datos.permisos : [],
+    es_empleado: true,
+    tiene_usuario: true
   };
 
   const nuevoEmpleado = await empleadoRepository.create(payload);
@@ -139,7 +145,7 @@ const eliminar = async (id, usuario) => {
   }
 
   await empleadoRepository.delete(id);
-  return { id };
+  return { id, mensaje: 'Empleado y su usuario eliminados correctamente' };
 };
 
 module.exports = {
@@ -149,4 +155,3 @@ module.exports = {
   actualizar,
   eliminar
 };
-

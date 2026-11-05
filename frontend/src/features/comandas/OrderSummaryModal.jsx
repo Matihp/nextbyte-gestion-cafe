@@ -36,12 +36,10 @@ export function OrderSummaryModal({
   const canModify = !isCanceled && !isCompleted;
 
   const handleItemCancelClick = async (itemId, itemName) => {
-    if (!canModify) return;
+    if (!canModify || !onCancelItem) return;
     setCancellingItemId(itemId);
     try {
-      if (onCancelItem) {
-        await onCancelItem(order.id, itemId, itemName);
-      }
+      await onCancelItem(order.id, itemId, itemName);
     } finally {
       setCancellingItemId(null);
     }
@@ -127,8 +125,8 @@ export function OrderSummaryModal({
                       <span>Ver receta</span>
                     </button>
 
-                    {/* Botón Cancelar ítem específico */}
-                    {canModify && items.length > 1 && (
+                    {/* Botón Cancelar ítem específico (requiere permiso de cancelación) */}
+                    {canModify && Boolean(onCancelItem) && items.length > 1 && (
                       <button
                         type="button"
                         disabled={cancellingItemId === item.id}
@@ -164,7 +162,7 @@ export function OrderSummaryModal({
             <Printer className="w-5 h-5" /> Imprimir Comanda
           </Button>
 
-          {canModify && onCancelOrder && (
+          {canModify && Boolean(onCancelOrder) && (
             <Button
               type="button"
               variant="outline"

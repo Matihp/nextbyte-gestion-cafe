@@ -26,9 +26,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const INITIAL_ROLES = [
-  { id: 'role-admin', name: 'Administrador', isAdmin: true },
-  { id: 'role-cashier', name: 'Cajero', isAdmin: false },
-  { id: 'role-kitchen', name: 'Cocina', isAdmin: false }
+  { id: 'role-admin', name: 'Admin', isAdmin: true },
+  { id: 'role-customer', name: 'Rol Pantalla Cliente', isAdmin: false },
+  { id: 'role-caja-contingencia', name: 'Caja-Contingencia (cortes internet)', isAdmin: false },
+  { id: 'role-caja-diaria', name: 'Caja Diaria (se bloquea en corte de internet)', isAdmin: false },
+  { id: 'role-cocina-cancela', name: 'Cocina/Cancela Pedido', isAdmin: false },
+  { id: 'role-cocina-no-cancela', name: 'Cocina/No Cancela Pedido', isAdmin: false },
+  { id: 'role-administracion', name: 'Administracion', isAdmin: false }
 ];
 
 const INITIAL_EMPLOYEES = [];
