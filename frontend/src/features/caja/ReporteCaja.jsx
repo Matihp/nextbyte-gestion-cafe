@@ -51,6 +51,16 @@ const formatEstadoNombre = (estado) => {
   return estado || 'Pendiente';
 };
 
+const formatearFechaDDMMAAAA = (fechaStr) => {
+  if (!fechaStr) return '-';
+  const soloFecha = String(fechaStr).split('T')[0];
+  const partes = soloFecha.split('-');
+  if (partes.length === 3) {
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`;
+  }
+  return fechaStr;
+};
+
 export default function ReporteCaja() {
   const {
     modoFiltro,
@@ -412,6 +422,7 @@ export default function ReporteCaja() {
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-border/20 text-muted-foreground font-semibold text-[11px]">
+                          <th className="pb-3 pr-4 font-semibold">Fecha</th>
                           <th className="pb-3 pr-4 font-semibold">Hora</th>
                           <th className="pb-3 pr-4 font-semibold">Nº Pedido</th>
                           <th className="pb-3 pr-4 font-semibold">Producto</th>
@@ -447,11 +458,21 @@ export default function ReporteCaja() {
 
                               return (
                                 <tr key={`${pedido.id}-${item.detalle_id || index}`}>
+                                  {/* Fecha (centrado verticalmente con rowSpan) */}
+                                  {esPrimerItem && (
+                                    <td
+                                      rowSpan={items.length}
+                                      className="py-3.5 pr-4 text-primary font-medium align-middle whitespace-nowrap"
+                                    >
+                                      {formatearFechaDDMMAAAA(pedido.fecha)}
+                                    </td>
+                                  )}
+
                                   {/* Hora (centrado verticalmente con rowSpan) */}
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 pr-4 text-muted-foreground font-medium align-middle"
+                                      className="py-3.5 pr-4 text-muted-foreground font-medium align-middle whitespace-nowrap"
                                     >
                                       {pedido.hora || '-'}
                                     </td>

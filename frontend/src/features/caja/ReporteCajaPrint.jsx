@@ -147,10 +147,11 @@ export function ReporteCajaPrint({
           </div>
         </div>
 
-        {/* Tabla de Detalle de Transacciones */}
+        {/* Tabla de Detalle de Transacciones con Fecha y Hora */}
         <table className="w-full text-left text-xs border-collapse mb-6">
           <thead>
             <tr className="border-b-2 border-black text-[11px] font-bold text-black uppercase bg-gray-100">
+              <th className="py-2 px-2">Fecha</th>
               <th className="py-2 px-2">Hora</th>
               <th className="py-2 px-2">Nº Pedido</th>
               <th className="py-2 px-2">Producto</th>
@@ -165,7 +166,7 @@ export function ReporteCajaPrint({
           {pedidos.length === 0 ? (
             <tbody>
               <tr>
-                <td colSpan={9} className="py-8 text-center text-gray-500 italic">
+                <td colSpan={10} className="py-8 text-center text-gray-500 italic">
                   No se registraron transacciones para este período.
                 </td>
               </tr>
@@ -191,7 +192,12 @@ export function ReporteCajaPrint({
                     return (
                       <tr key={`print-row-${pedido.id}-${idx}`}>
                         {esPrimer && (
-                          <td rowSpan={items.length} className="py-2 px-2 font-medium text-gray-700 align-top">
+                          <td rowSpan={items.length} className="py-2 px-2 font-medium text-black align-top whitespace-nowrap">
+                            {pedido.fecha ? formatearSoloFecha(pedido.fecha) : '-'}
+                          </td>
+                        )}
+                        {esPrimer && (
+                          <td rowSpan={items.length} className="py-2 px-2 font-medium text-gray-700 align-top whitespace-nowrap">
                             {pedido.hora || '-'}
                           </td>
                         )}
