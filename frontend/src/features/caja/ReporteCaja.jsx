@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
+import reporteService from '@/services/reporteService';
 import { formatearPrecio } from '@/utils/formatters';
 import { ReporteCajaPrint } from './ReporteCajaPrint';
 import { DetallePedidoModal } from './DetallePedidoModal';
@@ -90,6 +91,7 @@ export default function ReporteCaja() {
   const [periodoOtrasPestanas, setPeriodoOtrasPestanas] = useState('actual');
 
   const [tituloImpresion, setTituloImpresion] = useState('Reporte de CAJA DIARIA');
+  const [datosImpresion, setDatosImpresion] = useState(null);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
   const [ticketPedidoImprimir, setTicketPedidoImprimir] = useState(null);
@@ -109,18 +111,191 @@ export default function ReporteCaja() {
     }, 60);
   };
 
-  const handleImprimir = (tipo) => {
-    if (tipo === 'cierre-diario') {
-      setTituloImpresion('Reporte de CAJA DIARIA');
-    } else if (tipo === 'cierre-mes') {
-      setTituloImpresion('Reporte de CAJA MES');
-    } else {
-      setTituloImpresion(getTituloTabla());
+  const handleImprimir = async (tipo) => {
+    try {
+      if (tipo === 'cierre-diario') {
+        const fechaTarget = modoFiltro === 'fecha' && fechaEspecifica ? fechaEspecifica : getHoyIso();
+        const data = await reporteService.obtenerReporteCaja({ fecha: fechaTarget });
+        const pedidosCierre = data?.pedidos || [];
+        setDatosImpresion({
+          titulo: 'Reporte de CAJA DIARIA',
+          periodo: `Cierre Diario - ${formatearFechaDDMMAAAA(fechaTarget)}`,
+          pedidos: pedidosCierre,
+          totales: {
+            subtotalCosto: data?.total_costo || 0,
+            totalVenta: data?.total_venta || 0
+          }
+        });
+      } else if (tipo === 'cierre-mes') {
+        let desdeTarget = '';
+        let hastaTarget = '';
+        let mesTexto = '';
+
+        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado) {
+          const [anioStr, mesStr] = mesSeleccionado.split('-');
+          const anio = parseInt(anioStr, 10);
+          const mes = parseInt(mesStr, 10);
+          const ultimoDia = new Date(anio, mes, 0).getDate();
+          desdeTarget = `${anioStr}-${String(mes).padStart(2, '0')}-01`;
+          hastaTarget = `${anioStr}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+          const dRef = new Date(anio, mes - 1, 1);
+          const mNom = dRef.toLocaleString('es-ES', { month: 'long' });
+          mesTexto = `${mNom.charAt(0).toUpperCase() + mNom.slice(1)} ${anio}`;
+        } else {
+          const ahora = new Date();
+          const anio = ahora.getFullYear();
+          const mes = ahora.getMonth() + 1;
+          const ultimoDia = new Date(anio, mes, 0).getDate();
+          desdeTarget = `${anio}-${String(mes).padStart(2, '0')}-01`;
+          hastaTarget = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+          const mNom = ahora.toLocaleString('es-ES', { month: 'long' });
+          mesTexto = `${mNom.charAt(0).toUpperCase() + mNom.slice(1)} ${anio}`;
+        }
+
+        const data = await reporteService.obtenerReporteCaja({ desde: desdeTarget, hasta: hastaTarget });
+        const pedidosCierre = data?.pedidos || [];
+        setDatosImpresion({
+          titulo: 'Reporte de CAJA MES',
+          periodo: `Cierre Mensual - ${mesTexto} (${desdeTarget} a ${hastaTarget})`,
+          pedidos: pedidosCierre,
+          totales: {
+            subtotalCosto: data?.total_costo || 0,
+            totalVenta: data?.total_venta || 0
+          }
+        });
+      } else {
+        setDatosImpresion({
+          titulo: getTituloTabla(),
+          periodo: getTituloTabla(),
+          pedidos: pedidosFiltrados,
+          totales: totales
+        });
+      }
+
+      // Esperar brevemente a que React monte la información en el DOM de PrintPortal
+      setTimeout(() => {
+        imprimirReporte();
+      }, 150);
+    } catch (err) {
+      console.error('Error al preparar impresión:', err);
+      toast.error('No se pudieron obtener las transacciones para imprimir.');
+    }
+  };
+
+  const descargarCsv = (pedidosAExportar, totalesAExportar, nombreArchivo) => {
+    const filas = [];
+    filas.push([
+      'Fecha',
+      'Hora',
+      'N° Pedido',
+      'Tipo',
+      'Medio de Pago',
+      'Producto',
+      'Cantidad',
+      'Costo Unit.',
+      'Venta Unit.',
+      'Total Costo',
+      'Total Venta',
+      'Estado'
+    ]);
+
+    for (const p of pedidosAExportar) {
+      const items = p.items && p.items.length > 0
+        ? p.items
+        : [{
+            nombre_producto: 'Venta Consolidada',
+            cantidad: 1,
+            precio_costo: p.total_costo,
+            precio_venta: p.total_venta,
+            costo_total: p.total_costo,
+            venta_total: p.total_venta
+          }];
+
+      const pedidoIdFormateado = String(p.id).startsWith('#') ? p.id : `#${p.id}`;
+      const fechaPedido = p.fecha || '-';
+
+      for (const item of items) {
+        filas.push([
+          fechaPedido,
+          p.hora || '',
+          pedidoIdFormateado,
+          p.tipo_pedido || 'Mostrador',
+          p.metodo_pago || 'Efectivo',
+          `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
+          item.cantidad,
+          item.precio_costo,
+          item.precio_venta,
+          item.costo_total,
+          item.venta_total,
+          formatEstadoNombre(p.estado)
+        ]);
+      }
     }
 
-    setTimeout(() => {
-      imprimirReporte();
-    }, 50);
+    filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+    filas.push(['SUBTOTAL (Costos)', '', '', '', '', '', '', '', '', totalesAExportar.subtotalCosto, '', '']);
+    filas.push(['TOTAL VENTAS', '', '', '', '', '', '', '', '', '', totalesAExportar.totalVenta, '']);
+    filas.push(['DIFERENCIA (Ventas - Costos)', '', '', '', '', '', '', '', '', '', (totalesAExportar.totalVenta || 0) - (totalesAExportar.subtotalCosto || 0), '']);
+
+    const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');
+    const blob = new Blob([contenidoCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', nombreArchivo);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportar = async (tipo) => {
+    try {
+      if (tipo === 'cierre-diario') {
+        const fechaTarget = modoFiltro === 'fecha' && fechaEspecifica ? fechaEspecifica : getHoyIso();
+        const data = await reporteService.obtenerReporteCaja({ fecha: fechaTarget });
+        const pedidosExp = data?.pedidos || [];
+        const totExp = {
+          subtotalCosto: data?.total_costo || 0,
+          totalVenta: data?.total_venta || 0
+        };
+        descargarCsv(pedidosExp, totExp, `Cierre_Diario_${fechaTarget}.csv`);
+        toast.success(`Exportado Cierre Diario (${pedidosExp.length} ventas)`);
+      } else if (tipo === 'cierre-mes') {
+        let desdeTarget = '';
+        let hastaTarget = '';
+        let mesTag = '';
+        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado) {
+          const [anioStr, mesStr] = mesSeleccionado.split('-');
+          const anio = parseInt(anioStr, 10);
+          const mes = parseInt(mesStr, 10);
+          const ultimoDia = new Date(anio, mes, 0).getDate();
+          desdeTarget = `${anioStr}-${String(mes).padStart(2, '0')}-01`;
+          hastaTarget = `${anioStr}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+          mesTag = mesSeleccionado;
+        } else {
+          const ahora = new Date();
+          const anio = ahora.getFullYear();
+          const mes = ahora.getMonth() + 1;
+          const ultimoDia = new Date(anio, mes, 0).getDate();
+          desdeTarget = `${anio}-${String(mes).padStart(2, '0')}-01`;
+          hastaTarget = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+          mesTag = `${anio}-${String(mes).padStart(2, '0')}`;
+        }
+        const data = await reporteService.obtenerReporteCaja({ desde: desdeTarget, hasta: hastaTarget });
+        const pedidosExp = data?.pedidos || [];
+        const totExp = {
+          subtotalCosto: data?.total_costo || 0,
+          totalVenta: data?.total_venta || 0
+        };
+        descargarCsv(pedidosExp, totExp, `Cierre_Mes_${mesTag}.csv`);
+        toast.success(`Exportado Cierre Mensual (${pedidosExp.length} ventas)`);
+      } else {
+        exportarAExcel(tipo);
+      }
+    } catch (err) {
+      console.error('Error al exportar a Excel:', err);
+      toast.error('No se pudo generar la exportación a Excel.');
+    }
   };
 
   const handleGenerarFactura = (pedidoId) => {
@@ -275,7 +450,7 @@ export default function ReporteCaja() {
                 <span>Imprimir</span>
               </button>
               <button
-                onClick={() => exportarAExcel('cierre-diario')}
+                onClick={() => handleExportar('cierre-diario')}
                 className="flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-medium transition-colors cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -299,7 +474,7 @@ export default function ReporteCaja() {
                 <span>Imprimir</span>
               </button>
               <button
-                onClick={() => exportarAExcel('cierre-mes')}
+                onClick={() => handleExportar('cierre-mes')}
                 className="flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-medium transition-colors cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -771,10 +946,10 @@ export default function ReporteCaja() {
 
       {/* Plantilla de Impresión nativa mediante PrintPortal */}
       <ReporteCajaPrint
-        titulo={tituloImpresion}
-        periodo={getTituloTabla()}
-        pedidos={pedidosFiltrados}
-        totales={totales}
+        titulo={datosImpresion?.titulo || tituloImpresion}
+        periodo={datosImpresion?.periodo || getTituloTabla()}
+        pedidos={datosImpresion ? datosImpresion.pedidos : pedidosFiltrados}
+        totales={datosImpresion ? datosImpresion.totales : totales}
         ticketPedido={ticketPedidoImprimir}
       />
 

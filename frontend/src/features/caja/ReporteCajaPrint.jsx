@@ -1,6 +1,16 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha, formatearSoloFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+
+const formatearFechaDDMMAAAA = (fechaStr) => {
+  if (!fechaStr) return '-';
+  const soloFecha = String(fechaStr).split('T')[0];
+  const partes = soloFecha.split('-');
+  if (partes.length === 3) {
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`;
+  }
+  return fechaStr;
+};
 
 const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
@@ -24,7 +34,7 @@ export function ReporteCajaPrint({
   if (ticketPedido) {
     const idStr = String(ticketPedido.id).startsWith('#') ? ticketPedido.id : `#${ticketPedido.id}`;
     const items = ticketPedido.items && ticketPedido.items.length > 0 ? ticketPedido.items : [];
-    const fechaTexto = ticketPedido.fecha ? formatearSoloFecha(ticketPedido.fecha) : '';
+    const fechaTexto = ticketPedido.fecha ? formatearFechaDDMMAAAA(ticketPedido.fecha) : '';
     const fechaHoraStr = `${fechaTexto} ${ticketPedido.hora || ''}`.trim() || '-';
 
     return (
@@ -193,7 +203,7 @@ export function ReporteCajaPrint({
                       <tr key={`print-row-${pedido.id}-${idx}`}>
                         {esPrimer && (
                           <td rowSpan={items.length} className="py-2 px-2 font-medium text-black align-top whitespace-nowrap">
-                            {pedido.fecha ? formatearSoloFecha(pedido.fecha) : '-'}
+                            {pedido.fecha ? formatearFechaDDMMAAAA(pedido.fecha) : '-'}
                           </td>
                         )}
                         {esPrimer && (
@@ -203,7 +213,7 @@ export function ReporteCajaPrint({
                         )}
                         {esPrimer && (
                           <td rowSpan={items.length} className="py-2 px-2 font-bold text-black align-top">
-                            #{pedido.id}
+                            {String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`}
                             <div className="text-[10px] font-normal text-gray-600">
                               {pedido.tipo_pedido} • {pedido.metodo_pago}
                             </div>
