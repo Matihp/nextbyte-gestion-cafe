@@ -138,7 +138,7 @@ export function ReporteCajaPrint({
             <span className="text-sm font-bold text-black">{formatearPrecio(totales.totalVenta)}</span>
           </div>
           <div className="border border-gray-300 p-2.5 rounded text-left">
-            <span className="text-[10px] uppercase font-bold text-gray-500 block">Ganancia Bruta</span>
+            <span className="text-[10px] uppercase font-bold text-gray-500 block">Diferencia (Ventas - Costos)</span>
             <span className="text-sm font-bold text-emerald-800">{formatearPrecio(gananciaBruta)}</span>
           </div>
           <div className="border border-gray-300 p-2.5 rounded text-left">
