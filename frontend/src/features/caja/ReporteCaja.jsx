@@ -189,11 +189,11 @@ export default function ReporteCaja() {
       {/* COLUMNA IZQUIERDA: Filtros y Cierres */}
       <div className="xl:col-span-1 space-y-6">
 
-        {/* Tarjeta 1: Filtros por Fecha de Transacción */}
+        {/* Tarjeta 1: Filtrar Transacciones */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-border/30 space-y-5">
           <div className="flex items-center gap-2 text-primary font-semibold text-base">
             <CalendarIcon className="w-5 h-5 text-primary" />
-            <span>Filtros por Fecha de Transacción</span>
+            <span>Filtrar Transacciones</span>
           </div>
 
           {/* Botones Rápidos: Hoy y Mes Actual */}
