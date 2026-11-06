@@ -29,12 +29,17 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const mensaje = error.response?.data?.message || error.message || 'Error en la solicitud';
 
-    if (status === 401 && !error.config.url?.includes('/auth/login')) {
+    if (status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('token');
       localStorage.removeItem('usuario');
     }
 
-    return Promise.reject(new Error(mensaje));
+    const err = new Error(mensaje);
+    err.status = status;
+    err.response = error.response;
+    err.code = error.code;
+    err.isNetworkError = !error.response;
+    return Promise.reject(err);
   }
 );
 

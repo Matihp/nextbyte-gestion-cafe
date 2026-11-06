@@ -1,41 +1,19 @@
 import api from './api';
 
 export const usuarioService = {
-  getAll: async () => {
-    const res = await api.get('/usuarios');
-    return res.data?.data || res.data || [];
-  },
+  getAll: () => api.get('/usuarios'),
 
-  getById: async (id) => {
-    const res = await api.get(`/usuarios/${id}`);
-    return res.data?.data || res.data;
-  },
+  getById: (id) => api.get(`/usuarios/${id}`),
 
-  create: async (datos) => {
-    const res = await api.post('/usuarios', datos);
-    return res.data?.data || res.data;
-  },
+  create: (datos) => api.post('/usuarios', datos),
 
-  update: async (id, datos) => {
-    const res = await api.put(`/usuarios/${id}`, datos);
-    return res.data?.data || res.data;
-  },
+  update: (id, datos) => api.put(`/usuarios/${id}`, datos),
 
-  delete: async (id) => {
-    const res = await api.delete(`/usuarios/${id}`);
-    return res.data?.data || res.data;
-  },
+  delete: (id) => api.delete(`/usuarios/${id}`),
 
-  cambiarRol: async (id, rolId) => {
-    const res = await api.patch(`/usuarios/${id}/rol`, { rol_id: rolId });
-    return res.data?.data || res.data;
-  },
+  cambiarRol: (id, rolId) => api.patch(`/usuarios/${id}/rol`, { rol_id: rolId }),
 
-  cambiarPermisos: async (id, permisos) => {
-    const res = await api.patch(`/usuarios/${id}/permisos`, { permisos });
-    return res.data?.data || res.data;
-  }
+  cambiarPermisos: (id, permisos) => api.patch(`/usuarios/${id}/permisos`, { permisos })
 };
 
 export default usuarioService;
-
