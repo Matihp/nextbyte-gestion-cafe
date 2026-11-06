@@ -1,32 +1,32 @@
 /**
  * Seeder de Roles del Sistema
- * Define los roles fijos inalterables (Admin, Rol Pantalla Cliente, Caja-Contingencia),
- * el rol fijo no eliminable pero modificable (Caja Diaria)
- * y los roles operativos/administrativos modificables y eliminables (Cocina, Administración).
+
  */
+const { ROLES_SISTEMA } = require('../../constants/roles');
+
 exports.seed = async function (knex) {
   const roles = [
     {
-      id: '48575788-681d-47dc-b0ed-11cd402ca182',
+      id: ROLES_SISTEMA.ADMIN,
       nombre: 'Admin',
       es_admin: true,
       permisos: JSON.stringify(['all'])
     },
     {
-      id: 'e21a7447-d538-40c2-baf6-68a4b9b98ded',
+      id: ROLES_SISTEMA.PANTALLA_CLIENTE,
       nombre: 'Rol Pantalla Cliente',
       es_admin: false,
       permisos: JSON.stringify(['customerViewer'])
     },
     {
-      id: '877890f1-ffc8-488b-a5c4-b1caff520383',
-      nombre: 'Caja-Contingencia (cortes internet)',
+      id: ROLES_SISTEMA.CAJERO_PRINCIPAL,
+      nombre: 'Cajero Diario / Principal (opera sin internet)',
       es_admin: false,
       permisos: JSON.stringify(['dashboard', 'orderTaking', 'orders', 'salesReport'])
     },
     {
-      id: 'e87f673d-3f35-436f-b49c-409de2476560',
-      nombre: 'Caja Diaria (se bloquea en corte de internet)',
+      id: ROLES_SISTEMA.CAJERO_SECUNDARIO,
+      nombre: 'Cajero Secundario (se bloquea en corte de internet)',
       es_admin: false,
       permisos: JSON.stringify(['dashboard', 'orderTaking', 'orders', 'products', 'inventory', 'salesReport'])
     },
