@@ -582,21 +582,21 @@ export default function ReporteCaja() {
                       Registro de Ingresos y Retiros de Caja - {mesesInfo.seleccionado}
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Control de movimientos de efectivo y salidas de caja chica
+                      Control de entradas y salidas de caja chica
                     </p>
                   </div>
 
-                  {/* Arriba a la derecha: Botones de Mes Anterior / Mes Actual + Imprimir / Excel */}
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Arriba a la derecha: Botones de Mes Anterior / Mes Actual + Imprimir / Exportar */}
+                  <div className="flex items-center gap-2 shrink-0 flex-nowrap">
                     {/* Selector de Mes */}
-                    <div className="flex items-center gap-1 bg-[#FAF7F5] p-1 rounded-xl border border-border/40 shadow-2xs">
+                    <div className="flex items-center gap-1 bg-[#FAF7F5] p-1 rounded-xl border border-border/40 shadow-2xs shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           setPeriodoOtrasPestanas('anterior');
                           toast.info(`Viendo período: ${mesesInfo.anterior}`);
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           periodoOtrasPestanas === 'anterior'
                             ? 'bg-primary text-primary-foreground shadow-xs'
                             : 'bg-transparent text-primary hover:bg-muted/50'
@@ -612,7 +612,7 @@ export default function ReporteCaja() {
                           setPeriodoOtrasPestanas('actual');
                           toast.info(`Viendo período: ${mesesInfo.actual}`);
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           periodoOtrasPestanas === 'actual'
                             ? 'bg-primary text-primary-foreground shadow-xs'
                             : 'bg-transparent text-primary hover:bg-muted/50'
@@ -625,18 +625,20 @@ export default function ReporteCaja() {
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#8C6D58]/60 text-white rounded-xl text-xs font-medium cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8C6D58]/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
+                      title="Imprimir"
                     >
                       <Printer className="w-3.5 h-3.5" />
-                      <span>Imprimir Lista</span>
+                      <span>Imprimir</span>
                     </button>
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600/60 text-white rounded-xl text-xs font-medium cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
+                      title="Exportar"
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
-                      <span>Exportar Excel</span>
+                      <span>Exportar</span>
                     </button>
                   </div>
                 </div>
@@ -670,17 +672,17 @@ export default function ReporteCaja() {
                     </p>
                   </div>
 
-                  {/* Arriba a la derecha: Botones de Mes Anterior / Mes Actual + Imprimir / Excel */}
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Arriba a la derecha: Botones de Mes Anterior / Mes Actual + Imprimir / Exportar */}
+                  <div className="flex items-center gap-2 shrink-0 flex-nowrap">
                     {/* Selector de Mes */}
-                    <div className="flex items-center gap-1 bg-[#FAF7F5] p-1 rounded-xl border border-border/40 shadow-2xs">
+                    <div className="flex items-center gap-1 bg-[#FAF7F5] p-1 rounded-xl border border-border/40 shadow-2xs shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           setPeriodoOtrasPestanas('anterior');
                           toast.info(`Viendo período: ${mesesInfo.anterior}`);
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           periodoOtrasPestanas === 'anterior'
                             ? 'bg-primary text-primary-foreground shadow-xs'
                             : 'bg-transparent text-primary hover:bg-muted/50'
@@ -696,7 +698,7 @@ export default function ReporteCaja() {
                           setPeriodoOtrasPestanas('actual');
                           toast.info(`Viendo período: ${mesesInfo.actual}`);
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           periodoOtrasPestanas === 'actual'
                             ? 'bg-primary text-primary-foreground shadow-xs'
                             : 'bg-transparent text-primary hover:bg-muted/50'
@@ -709,18 +711,20 @@ export default function ReporteCaja() {
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#8C6D58]/60 text-white rounded-xl text-xs font-medium cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8C6D58]/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
+                      title="Imprimir"
                     >
                       <Printer className="w-3.5 h-3.5" />
-                      <span>Imprimir Lista</span>
+                      <span>Imprimir</span>
                     </button>
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600/60 text-white rounded-xl text-xs font-medium cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
+                      title="Exportar"
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
-                      <span>Exportar Excel</span>
+                      <span>Exportar</span>
                     </button>
                   </div>
                 </div>
