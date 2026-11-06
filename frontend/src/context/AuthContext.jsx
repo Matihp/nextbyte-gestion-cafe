@@ -23,10 +23,25 @@ export function AuthProvider({ children }) {
           const usuarioData = await authService.getMe();
           setUser(usuarioData);
           localStorage.setItem('usuario', JSON.stringify(usuarioData));
-        } catch {
-          authService.logout();
-          setUser(null);
-          setToken(null);
+        } catch (err) {
+          const status = err?.status ?? err?.response?.status;
+          const isExplicit401 = status === 401;
+
+          if (isExplicit401) {
+            authService.logout();
+            setUser(null);
+            setToken(null);
+          } else {
+            // Error de red / offline: preservar la sesión activa de localStorage
+            const guardado = localStorage.getItem('usuario');
+            if (guardado) {
+              try {
+                setUser(JSON.parse(guardado));
+              } catch {
+                // mantener usuario actual
+              }
+            }
+          }
         }
       } else {
         setUser(null);

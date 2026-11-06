@@ -59,7 +59,6 @@ function App() {
           <Route path="/estadisticas" element={<Estadisticas />} />
           <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
           <Route path="/configuracion" element={<Configuracion />} />
-          <Route path="/settings" element={<Configuracion />} />
         </Route>
       </Routes>
     </AuthProvider>

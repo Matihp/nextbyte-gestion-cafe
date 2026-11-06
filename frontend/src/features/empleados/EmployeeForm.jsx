@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { ROLES_SISTEMA } from '@/constants/roles';
 
 export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -24,6 +25,26 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     roleId: '',
     password: '123456'
   });
+
+  const isCajaContingenciaRole = (role) => {
+    if (!role) return false;
+    return role.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || role.id === 'role-caja-contingencia';
+  };
+
+  const isContingenciaYaAsignado = (role) => {
+    if (!isCajaContingenciaRole(role)) return false;
+    return existingEmployees.some((emp) => {
+      if (initialData && (emp.id === initialData.id || emp.id === initialData.empleado_id)) {
+        return false;
+      }
+      if (emp.tiene_usuario === false || emp.tiene_usuario === 0) {
+        return false;
+      }
+      const empRoleId = emp.roleId || emp.rol_id;
+      const empRole = roles.find((r) => r.id === empRoleId);
+      return empRoleId === role.id || isCajaContingenciaRole(empRole) || empRoleId === '877890f1-ffc8-488b-a5c4-b1caff520383';
+    });
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -46,7 +67,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     } else {
       setFormData((prev) => ({
         ...prev,
-        roleId: roles.find((r) => !r.isAdmin && !r.es_admin)?.id || roles[0]?.id || ''
+        roleId: roles.find((r) => !r.isAdmin && !r.es_admin && !isContingenciaYaAsignado(r))?.id || roles[0]?.id || ''
       }));
     }
   }, [initialData, roles]);
@@ -226,11 +247,14 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                     onChange={handleChange}
                     className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-xs focus:border-[#9F4F2F] focus:outline-none focus:ring-1 focus:ring-[#9F4F2F]"
                   >
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.nombre || role.name}
-                      </option>
-                    ))}
+                    {roles.map((role) => {
+                      const yaAsignado = isContingenciaYaAsignado(role);
+                      return (
+                        <option key={role.id} value={role.id} disabled={yaAsignado}>
+                          {role.nombre || role.name} {yaAsignado ? '(Ya asignado a otro usuario)' : ''}
+                        </option>
+                      );
+                    })}
                     {roles.length === 0 && (
                       <>
                         <option value="">Sin rol asignado</option>

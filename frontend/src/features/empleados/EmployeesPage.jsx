@@ -18,6 +18,7 @@ import { MetricsPanel } from './MetricsPanel';
 import { empleadoService } from '@/services/empleadoService';
 import { turnoService } from '@/services/turnoService';
 import { rolService } from '@/services/rolService';
+import { usuarioService } from '@/services/usuarioService';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -28,8 +29,8 @@ import {
 const INITIAL_ROLES = [
   { id: 'role-admin', name: 'Admin', isAdmin: true },
   { id: 'role-customer', name: 'Rol Pantalla Cliente', isAdmin: false },
-  { id: 'role-caja-contingencia', name: 'Caja-Contingencia (cortes internet)', isAdmin: false },
-  { id: 'role-caja-diaria', name: 'Caja Diaria (se bloquea en corte de internet)', isAdmin: false },
+  { id: 'role-caja-contingencia', name: 'Cajero Diario / Principal (opera sin internet)', isAdmin: false },
+  { id: 'role-caja-diaria', name: 'Cajero Secundario (se bloquea en corte de internet)', isAdmin: false },
   { id: 'role-cocina-cancela', name: 'Cocina/Cancela Pedido', isAdmin: false },
   { id: 'role-cocina-no-cancela', name: 'Cocina/No Cancela Pedido', isAdmin: false },
   { id: 'role-administracion', name: 'Administracion', isAdmin: false }
@@ -63,6 +64,7 @@ export function EmployeesPage() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [currentView, setCurrentView] = useState('grid');
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [allSystemUsers, setAllSystemUsers] = useState([]);
 
   const [roles, setRoles] = useState(() => {
     try {
@@ -104,11 +106,22 @@ export function EmployeesPage() {
   useEffect(() => {
     const loadBackendData = async () => {
       try {
-        const [empRes, rolRes, turnoRes] = await Promise.allSettled([
+        const [empRes, rolRes, turnoRes, userRes] = await Promise.allSettled([
           empleadoService.obtenerTodos(),
           rolService.obtenerTodos(),
-          turnoService.obtenerTodos()
+          turnoService.obtenerTodos(),
+          usuarioService.getAll().catch(() => [])
         ]);
+
+        if (userRes && userRes.status === 'fulfilled') {
+          const rawUsers = userRes.value;
+          const loadedUsers = Array.isArray(rawUsers)
+            ? rawUsers
+            : rawUsers?.data?.data || rawUsers?.data || [];
+          if (Array.isArray(loadedUsers)) {
+            setAllSystemUsers(loadedUsers);
+          }
+        }
 
         if (rolRes.status === 'fulfilled') {
           const rawRoles = rolRes.value;
@@ -490,7 +503,7 @@ export function EmployeesPage() {
           <EmployeeForm
             roles={roles}
             initialData={editingEmployee}
-            existingEmployees={employees}
+            existingEmployees={[...employees, ...allSystemUsers]}
             onSave={handleSaveEmployee}
             onCancel={handleCancelEdit}
           />

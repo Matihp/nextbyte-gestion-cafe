@@ -93,41 +93,27 @@ const emptyEmpForm = {
   permissions: { ...emptyPermissions },
 };
 
+import { ROLES_SISTEMA } from '@/constants/roles';
+
 // ── Identificadores de Roles ──
 export const isAdminRole = (role) => {
   if (!role) return false;
-  if (role.es_admin || role.isAdmin) return true;
-  const name = String(role.nombre || role.name || '').trim().toLowerCase();
-  return name === 'admin' || name === 'administrador';
+  return Boolean(role.es_admin || role.isAdmin || role.id === ROLES_SISTEMA.ADMIN || role.id === 'role-admin');
 };
 
 export const isCustomerRole = (role) => {
   if (!role) return false;
-  const id = String(role.id || '').toLowerCase();
-  const name = String(role.nombre || role.name || '').trim().toLowerCase();
-  return (
-    id === 'role-customer' ||
-    name === 'rol cliente' ||
-    name === 'cliente' ||
-    name === 'rol pantalla cliente' ||
-    name === 'pantalla cliente'
-  );
+  return role.id === ROLES_SISTEMA.PANTALLA_CLIENTE || role.id === 'role-customer';
 };
 
 export const isCajaContingenciaRole = (role) => {
   if (!role) return false;
-  const name = String(role.nombre || role.name || '').trim().toLowerCase();
-  return (
-    name.includes('caja-contingencia') ||
-    name.includes('caja contingencia') ||
-    name.includes('cortes internet')
-  );
+  return role.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || role.id === 'role-caja-contingencia';
 };
 
 export const isCajaDiariaRole = (role) => {
   if (!role) return false;
-  const name = String(role.nombre || role.name || '').trim().toLowerCase();
-  return name.includes('caja diaria');
+  return role.id === ROLES_SISTEMA.CAJERO_SECUNDARIO || role.id === 'role-caja-diaria';
 };
 
 export const isAdministracionRole = (role) => {
@@ -158,8 +144,8 @@ export const getRoleDisplayName = (role) => {
   if (!role) return 'Sin rol';
   if (isAdminRole(role)) return 'Admin';
   if (isCustomerRole(role)) return 'Rol Pantalla Cliente';
-  if (isCajaContingenciaRole(role)) return 'Caja-Contingencia (cortes internet)';
-  if (isCajaDiariaRole(role)) return 'Caja Diaria (se bloquea en corte de internet)';
+  if (isCajaContingenciaRole(role)) return 'Cajero Diario / Principal (opera sin internet)';
+  if (isCajaDiariaRole(role)) return 'Cajero Secundario (se bloquea en corte de internet)';
   if (isAdministracionRole(role)) return 'Administración';
   return role.nombre || role.name || 'Sin rol';
 };
@@ -246,10 +232,13 @@ export function Configuracion() {
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRolePermissions, setNewRolePermissions] = useState({ ...emptyPermissions, dashboard: true });
+  const [creatingRole, setCreatingRole] = useState(false);
 
   // Formulario nuevo usuario
   const [showAddForm, setShowAddForm] = useState(false);
   const [empForm, setEmpForm] = useState(emptyEmpForm);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [savingEmpId, setSavingEmpId] = useState(null);
 
   // Lista editar usuarios
   const [showEditList, setShowEditList] = useState(false);
@@ -310,6 +299,7 @@ export function Configuracion() {
   }, [user]);
 
   const canManageEmployees = isAdmin || Boolean(user?.permisos?.includes('canCreateRoles') || user?.permisos?.includes('all'));
+  const canManageRoles = isAdmin || Boolean(user?.es_admin || user?.permisos?.includes('canCreateRoles') || user?.permisos?.includes('all'));
 
   const currentRole = roles.find((r) => r.id === user?.rol_id) || {
     id: 'default',
@@ -319,7 +309,7 @@ export function Configuracion() {
   };
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
-  const displayRole = isAdmin ? selectedRole : currentRole;
+  const displayRole = canManageRoles ? (selectedRole || currentRole) : currentRole;
 
   // Roles asignables: no-admin no puede asignar el rol Admin
   const assignableRoles = isAdmin ? roles : roles.filter((r) => !isAdminRole(r));
@@ -358,23 +348,35 @@ export function Configuracion() {
       return;
     }
 
+    setCreatingRole(true);
     try {
-      const nuevo = await rolService.create({
+      const permsArray = permissionsToArray(newRolePermissions);
+      const payload = {
         nombre: name,
-        name,
         es_admin: false,
-        isAdmin: false,
-        permisos: permissionsToArray(newRolePermissions)
-      });
+        permisos: permsArray
+      };
+
+      const nuevo = await rolService.create(payload);
       toast.success(`Rol "${name}" creado con éxito`);
       setNewRoleName('');
       setNewRolePermissions({ ...emptyPermissions, dashboard: true });
       setShowRoleForm(false);
+
+      if (nuevo && nuevo.id) {
+        setRoles((prev) => {
+          const yaExiste = prev.some((r) => r.id === nuevo.id);
+          return yaExiste ? prev : [...prev, nuevo];
+        });
+        setSelectedRoleId(nuevo.id);
+      }
+
       await cargarDatos();
-      if (nuevo?.id) setSelectedRoleId(nuevo.id);
     } catch (err) {
       console.error('Error al crear rol:', err);
-      toast.error('Error al crear el rol');
+      toast.error(err.message || 'Error al crear el rol');
+    } finally {
+      setCreatingRole(false);
     }
   };
 
@@ -410,10 +412,20 @@ export function Configuracion() {
     }
   };
 
-  // Formulario agregar usuario (crea un usuario del sistema que no figura como empleado del comercio)
   const openAddForm = () => {
     setShowEditList(false);
-    const defaultRole = assignableRoles.find((r) => !hasFixedPermissionsRole(r)) ?? assignableRoles[0];
+    const isContingenciaOcupado = users.some((u) => {
+      if (u.tiene_usuario === false || u.tiene_usuario === 0) return false;
+      const ur = roles.find((ro) => ro.id === (u.rol_id || u.roleId));
+      return isCajaContingenciaRole(ur) || (u.rol_id || u.roleId) === '877890f1-ffc8-488b-a5c4-b1caff520383';
+    });
+
+    const defaultRole = assignableRoles.find((r) => {
+      if (hasFixedPermissionsRole(r)) return false;
+      if (isCajaContingenciaRole(r) && isContingenciaOcupado) return false;
+      return true;
+    }) ?? assignableRoles.find((r) => !(isCajaContingenciaRole(r) && isContingenciaOcupado)) ?? assignableRoles[0];
+
     const fixedPerms = getFixedPermissionsForRole(defaultRole);
     const defaultPerms = fixedPerms || (defaultRole ? normalizePermissions(defaultRole.permisos) : { ...emptyPermissions });
 
@@ -452,6 +464,7 @@ export function Configuracion() {
     const fixedPerms = getFixedPermissionsForRole(role);
     const finalPermissions = fixedPerms ? permissionsToArray(fixedPerms) : permissionsToArray(empForm.permissions);
 
+    setCreatingUser(true);
     try {
       await usuarioService.create({
         nombre: empForm.firstName,
@@ -467,7 +480,9 @@ export function Configuracion() {
       await cargarDatos();
     } catch (err) {
       console.error('Error al crear usuario:', err);
-      toast.error(err.response?.data?.message || 'Ocurrió un error al guardar el usuario');
+      toast.error(err.message || 'Ocurrió un error al guardar el usuario');
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -544,11 +559,11 @@ export function Configuracion() {
     const fixedPerms = getFixedPermissionsForRole(assignedRole);
     const finalPermissions = fixedPerms ? permissionsToArray(fixedPerms) : permissionsToArray(edit.permissions);
 
+    setSavingEmpId(userId);
     try {
       await usuarioService.update(userId, {
         nombre: edit.firstName,
         apellido: edit.lastName,
-        nombre_distintivo: edit.displayName,
         email: edit.email,
         rol_id: edit.roleId,
         permisos: finalPermissions,
@@ -569,7 +584,9 @@ export function Configuracion() {
       }, 1000);
     } catch (err) {
       console.error('Error al actualizar usuario:', err);
-      toast.error('No se pudo guardar el usuario');
+      toast.error(err.message || 'No se pudo guardar el usuario');
+    } finally {
+      setSavingEmpId(null);
     }
   };
 
@@ -682,28 +699,30 @@ export function Configuracion() {
                     <p className="text-xs text-gray-400 mt-1">El identificador de inicio de sesión no puede modificarse.</p>
                   </div>
 
-                  <div>
-                    <Label className="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</Label>
-                    <div className="relative">
-                      <Input
-                        type={showProfilePassword ? "text" : "password"}
-                        placeholder="Dejar en blanco para mantener la actual"
-                        value={profile.password}
-                        onChange={(e) => setProfile((p) => ({ ...p, password: e.target.value }))}
-                        className="w-full !h-auto px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowProfilePassword((prev) => !prev)}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 !h-8 !w-8 hover:bg-transparent text-gray-500 hover:text-gray-700"
-                        tabIndex={-1}
-                      >
-                        {showProfilePassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </Button>
+                  {isAdmin && (
+                    <div>
+                      <Label className="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</Label>
+                      <div className="relative">
+                        <Input
+                          type={showProfilePassword ? "text" : "password"}
+                          placeholder="Dejar en blanco para mantener la actual"
+                          value={profile.password}
+                          onChange={(e) => setProfile((p) => ({ ...p, password: e.target.value }))}
+                          className="w-full !h-auto px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white pr-10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setShowProfilePassword((prev) => !prev)}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 !h-8 !w-8 hover:bg-transparent text-gray-500 hover:text-gray-700"
+                          tabIndex={-1}
+                        >
+                          {showProfilePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div>
                     <Label className="block text-sm font-medium text-gray-700 mb-1">Rol actual</Label>
@@ -801,11 +820,19 @@ export function Configuracion() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800"
                           >
                             <option value="">Seleccionar un rol...</option>
-                            {assignableRoles.map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {getRoleDisplayName(r)}
-                              </option>
-                            ))}
+                            {assignableRoles.map((r) => {
+                              const isContingencia = isCajaContingenciaRole(r);
+                              const yaAsignadoAOtro = isContingencia && users.some((u) => {
+                                if (u.tiene_usuario === false || u.tiene_usuario === 0) return false;
+                                const userRole = roles.find((ro) => ro.id === (u.rol_id || u.roleId));
+                                return isCajaContingenciaRole(userRole) || (u.rol_id || u.roleId) === '877890f1-ffc8-488b-a5c4-b1caff520383';
+                              });
+                              return (
+                                <option key={r.id} value={r.id} disabled={yaAsignadoAOtro}>
+                                  {getRoleDisplayName(r)} {yaAsignadoAOtro ? '(Ya asignado a otro usuario)' : ''}
+                                </option>
+                              );
+                            })}
                           </select>
                           {!isAdmin && (
                             <p className="text-xs text-gray-400 mt-1">Solo el Admin puede asignar el rol Admin.</p>
@@ -865,10 +892,16 @@ export function Configuracion() {
                       <div className="flex gap-2 mt-4">
                         <Button
                           onClick={handleSaveAdd}
-                          className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer"
+                          disabled={creatingUser}
+                          className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer disabled:opacity-60"
                           style={{ backgroundColor: '#9F4F2F' }}
                         >
-                          <Check className="w-3.5 h-3.5" /> Guardar
+                          {creatingUser ? (
+                            <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          {creatingUser ? 'Guardando...' : 'Guardar'}
                         </Button>
                         <Button
                           variant="outline"
@@ -1018,11 +1051,20 @@ export function Configuracion() {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800"
                                           >
                                             <option value="">Seleccionar un rol...</option>
-                                            {assignableRoles.map((r) => (
-                                              <option key={r.id} value={r.id}>
-                                                {getRoleDisplayName(r)}
-                                              </option>
-                                            ))}
+                                            {assignableRoles.map((r) => {
+                                              const isContingencia = isCajaContingenciaRole(r);
+                                              const yaAsignadoAOtro = isContingencia && users.some((other) => {
+                                                if (other.id === u.id) return false;
+                                                if (other.tiene_usuario === false || other.tiene_usuario === 0) return false;
+                                                const otherRole = roles.find((ro) => ro.id === (other.rol_id || other.roleId));
+                                                return isCajaContingenciaRole(otherRole) || (other.rol_id || other.roleId) === '877890f1-ffc8-488b-a5c4-b1caff520383';
+                                              });
+                                              return (
+                                                <option key={r.id} value={r.id} disabled={yaAsignadoAOtro}>
+                                                  {getRoleDisplayName(r)} {yaAsignadoAOtro ? '(Ya asignado a otro usuario)' : ''}
+                                                </option>
+                                              );
+                                            })}
                                           </select>
                                           {!isAdmin && (
                                             <p className="text-xs text-gray-400 mt-1">Solo el Admin puede asignar el rol Admin.</p>
@@ -1077,11 +1119,16 @@ export function Configuracion() {
                                     <div className="flex gap-2">
                                       <Button
                                         onClick={() => saveEmpEdit(u.id)}
-                                        className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer"
+                                        disabled={savingEmpId === u.id}
+                                        className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer disabled:opacity-60"
                                         style={{ backgroundColor: '#9F4F2F' }}
                                       >
-                                        <Check className="w-3.5 h-3.5" />
-                                        {isSaved ? 'Guardado' : 'Guardar Cambios'}
+                                        {savingEmpId === u.id ? (
+                                          <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                        ) : (
+                                          <Check className="w-3.5 h-3.5" />
+                                        )}
+                                        {isSaved ? 'Guardado' : savingEmpId === u.id ? 'Guardando...' : 'Guardar Cambios'}
                                       </Button>
                                       <Button
                                         variant="outline"
@@ -1113,7 +1160,7 @@ export function Configuracion() {
           )}
 
           {/* ── Tab: Gestión Roles de Usuarios ── */}
-          {activeTab === 'notifications' && isAdmin && (
+          {(activeTab === 'roles' || activeTab === 'notifications') && canManageRoles && (
             <div className="space-y-6">
               {/* Gestión de Roles */}
               <Card className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 ring-0">
@@ -1143,15 +1190,44 @@ export function Configuracion() {
                         type="text"
                         value={newRoleName}
                         onChange={(e) => setNewRoleName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCreateRole();
+                          }
+                        }}
                         placeholder="ej. Supervisor, Encargado, Gerente..."
                         className="w-full !h-auto px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
                       />
                     </div>
 
                     <div className="border-t border-stone-300/40 pt-4">
-                      <p className="text-xs font-bold text-[#4B2B1D] uppercase tracking-wide mb-3">
-                        Asignar Permisos:
-                      </p>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-bold text-[#4B2B1D] uppercase tracking-wide">
+                          Asignar Permisos:
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const todos = {};
+                              PERMISSION_LABELS.forEach(({ key }) => { todos[key] = true; });
+                              setNewRolePermissions(todos);
+                            }}
+                            className="text-xs text-[#9F4F2F] hover:underline font-medium cursor-pointer"
+                          >
+                            Marcar todos
+                          </button>
+                          <span className="text-xs text-gray-300">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setNewRolePermissions({ ...emptyPermissions })}
+                            className="text-xs text-gray-500 hover:underline font-medium cursor-pointer"
+                          >
+                            Desmarcar todos
+                          </button>
+                        </div>
+                      </div>
                       <div className="space-y-3">
                         {PERMISSION_LABELS.map(({ key, label, desc }) => (
                           <div key={key} className="flex items-center justify-between gap-4">
@@ -1171,13 +1247,24 @@ export function Configuracion() {
                     <div className="flex gap-2 mt-6">
                       <Button
                         onClick={handleCreateRole}
+                        disabled={creatingRole}
                         className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer"
                         style={{ backgroundColor: '#9F4F2F' }}
                       >
-                        <Check className="w-3.5 h-3.5" /> Guardar
+                        {creatingRole ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Guardando...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" /> Guardar
+                          </>
+                        )}
                       </Button>
                       <Button
                         variant="outline"
+                        disabled={creatingRole}
                         onClick={() => {
                           setShowRoleForm(false);
                           setNewRoleName('');
@@ -1208,7 +1295,7 @@ export function Configuracion() {
                       let hoverIsRed = false;
 
                       if (isCajaDia) {
-                        hoverMessage = 'En caso de cortes de internet este rol y todos los demas roles se bloquearan. Solo se podra ingresar con el rol Caja-Contingencia (cortes internet)';
+                        hoverMessage = 'En caso de cortes de internet este rol y todos los demas roles se bloquearan. Solo se podra ingresar con el rol Cajero Diario / Principal (opera sin internet)';
                         hoverIsRed = true;
                       } else if (isCajaCont) {
                         hoverMessage = 'En caso de cortes de internet SOLO se podra ingresar con este rol';
@@ -1218,8 +1305,10 @@ export function Configuracion() {
                       return (
                         <div key={role.id} className="relative group/role">
                           <div
+                            onClick={() => setSelectedRoleId(role.id)}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium shadow-sm transition-all",
+                              "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium shadow-sm transition-all cursor-pointer",
+                              selectedRoleId === role.id && "ring-2 ring-[#9F4F2F] border-[#9F4F2F] shadow-md scale-[1.02]",
                               isAdm
                                 ? "bg-[#A67C52] text-white border-[#A67C52]"
                                 : isCust || isCajaCont || isCajaDia
@@ -1339,7 +1428,7 @@ export function Configuracion() {
                     <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-semibold text-red-800">
-                        En caso de cortes de internet este rol y todos los demas roles se bloquearan. Solo se podra ingresar con el rol Caja-Contingencia (cortes internet).
+                        En caso de cortes de internet este rol y todos los demas roles se bloquearan. Solo se podra ingresar con el rol Cajero Diario / Principal (opera sin internet).
                       </p>
                       <p className="text-red-700 mt-1 font-normal">
                         Este rol es fijo en el sistema (no puede eliminarse), pero sus permisos para las pantallas son 100% configurables.
@@ -1386,18 +1475,18 @@ export function Configuracion() {
                 <User className="w-4 h-4" /> Cuenta
               </button>
 
-              {isAdmin && (
+              {canManageRoles && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab('notifications')}
+                  onClick={() => setActiveTab('roles')}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer",
-                    activeTab === 'notifications'
+                    (activeTab === 'roles' || activeTab === 'notifications')
                       ? "text-[#9F4F2F] bg-[#F3E5DC]"
                       : "text-gray-600 hover:bg-gray-50"
                   )}
                 >
-                  <Bell className="w-4 h-4" /> Gestión Roles de Usuarios
+                  <Shield className="w-4 h-4" /> Gestión Roles de Usuarios
                 </button>
               )}
             </div>

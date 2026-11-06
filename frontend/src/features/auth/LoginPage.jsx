@@ -71,23 +71,6 @@ export function LoginPage() {
     }
   };
 
-  const handleDemoLogin = () => {
-    const usuarioDev = {
-      id: 'dev',
-      nombre: 'Admin',
-      apellido: 'Demo',
-      email: 'admin@demo.com',
-      es_admin: true,
-      permisos: ['all']
-    };
-    const tokenDev = 'demo-token-dev';
-
-    localStorage.setItem('token', tokenDev);
-    localStorage.setItem('usuario', JSON.stringify(usuarioDev));
-    toast.success('Ingresando en Modo Demo (Devs)');
-    window.location.href = '/';
-  };
-
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6 md:p-12"
@@ -225,20 +208,6 @@ export function LoginPage() {
               )}
             </Button>
 
-            <Button
-              type="button"
-              onClick={handleDemoLogin}
-              className="w-full !h-auto text-black font-bold rounded-xl py-3 text-xs transition-all border-0 mt-3 cursor-pointer shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-[0.98]"
-              style={{ backgroundColor: '#eff5ff', color: '#000000' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#d8bcae';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#eff5ff';
-              }}
-            >
-              Ingreso Admin — Modo Demo (Devs)
-            </Button>
           </form>
         </Card>
       </div>
