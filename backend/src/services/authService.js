@@ -3,12 +3,17 @@ const jwt = require('jsonwebtoken');
 const AppError = require('../utils/AppError');
 const empleadoRepository = require('../repositories/empleadoRepository');
 const rolRepository = require('../repositories/rolRepository');
+const { ROLES_SISTEMA } = require('../constants/roles');
 
 const armarUsuario = (empleado, rol) => {
   const permisosEmpleado = Array.isArray(empleado?.permisos) ? empleado.permisos : [];
   const permisosRol = rol && Array.isArray(rol.permisos) ? rol.permisos : [];
   const permisos = Array.from(new Set([...permisosEmpleado, ...permisosRol]));
   const es_admin = Boolean(rol && rol.es_admin);
+  const es_contingencia = Boolean(
+    (empleado && empleado.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL) ||
+    (rol && rol.id === ROLES_SISTEMA.CAJERO_PRINCIPAL)
+  );
 
   const usuario = {
     id: empleado.id,
@@ -17,15 +22,18 @@ const armarUsuario = (empleado, rol) => {
     email: empleado.email,
     rol_id: empleado.rol_id,
     es_admin,
+    es_contingencia,
     permisos,
     es_empleado: Boolean(empleado.es_empleado),
-    tiene_usuario: Boolean(empleado.tiene_usuario)
+    tiene_usuario: Boolean(empleado.tiene_usuario),
+    foto: empleado.foto || null
   };
 
   const payload = {
     id: empleado.id,
     rol_id: empleado.rol_id,
     es_admin,
+    es_contingencia,
     permisos
   };
 
@@ -74,6 +82,7 @@ const me = async (user) => {
       id: user.id,
       rol_id: user.rol_id || null,
       es_admin: Boolean(user.es_admin),
+      es_contingencia: Boolean(user.es_contingencia || user.rol_id === ROL_CONTINGENCIA_ID),
       permisos: Array.isArray(user.permisos) ? user.permisos : []
     };
   }

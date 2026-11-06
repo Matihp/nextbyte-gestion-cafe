@@ -169,4 +169,105 @@ describe('Distinción estricta entre Empleados del Comercio y Usuarios del Siste
     const enBd = await dbLocal('empleados').where({ id: usuarioExterno.id }).first();
     expect(enBd).toBeUndefined();
   });
+
+  it('5. Regla de negocio: Máximo 1 usuario con el rol Caja-Contingencia (error 409 LIMITE_ROL_CONTINGENCIA)', async () => {
+    // Asegurar aislamiento del test eliminando usuarios previos con rol de contingencia
+    await dbLocal('empleados').where('rol_id', '877890f1-ffc8-488b-a5c4-b1caff520383').del();
+
+    // Asegurar que el rol de contingencia exista
+    await dbLocal('roles').insert({
+      id: '877890f1-ffc8-488b-a5c4-b1caff520383',
+      nombre: 'Caja-Contingencia (cortes internet)',
+      es_admin: 0,
+      permisos: JSON.stringify(['dashboard', 'orderTaking', 'orders', 'salesReport'])
+    }).onConflict('id').ignore();
+
+    // Crear el primer usuario con rol Caja-Contingencia
+    const resPrimerCajero = await request(app)
+      .post('/api/usuarios')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        nombre: 'Primer',
+        apellido: 'Cajero',
+        email: 'cajero1@test.com',
+        contrasena: 'password123',
+        rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383'
+      });
+
+    expect(resPrimerCajero.status).toBe(201);
+    const primerCajeroId = resPrimerCajero.body.data.id;
+
+    // Intentar crear un segundo usuario con el rol Caja-Contingencia debe ser rechazado con 409 LIMITE_ROL_CONTINGENCIA
+    const resSegundoUsuario = await request(app)
+      .post('/api/usuarios')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        nombre: 'Segundo',
+        apellido: 'Cajero',
+        email: 'cajero2@test.com',
+        contrasena: 'password123',
+        rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383'
+      });
+
+    expect(resSegundoUsuario.status).toBe(409);
+    expect(resSegundoUsuario.body.error).toBe('LIMITE_ROL_CONTINGENCIA');
+
+    // Intentar crear un empleado con el rol Caja-Contingencia también debe ser rechazado con 409
+    const resSegundoEmpleado = await request(app)
+      .post('/api/empleados')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        nombre: 'Tercer',
+        apellido: 'Empleado',
+        legajo: 'EMP-CONT-03',
+        email: 'cajero3@test.com',
+        contrasena: 'password123',
+        rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383'
+      });
+
+    expect(resSegundoEmpleado.status).toBe(409);
+    expect(resSegundoEmpleado.body.error).toBe('LIMITE_ROL_CONTINGENCIA');
+
+    // Intentar reasignar rol vía PATCH /usuarios/:id/rol a un usuario existente debe ser rechazado con 409
+    const resUsuarioNormal = await request(app)
+      .post('/api/usuarios')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        nombre: 'Cuarto',
+        apellido: 'Normal',
+        email: 'cajero4@test.com',
+        contrasena: 'password123',
+        rol_id: 'ROL-CAJA-TEST'
+      });
+    expect(resUsuarioNormal.status).toBe(201);
+    const normalUserId = resUsuarioNormal.body.data.id;
+
+    const resPatchRol = await request(app)
+      .patch(`/api/usuarios/${normalUserId}/rol`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383' });
+
+    expect(resPatchRol.status).toBe(409);
+    expect(resPatchRol.body.error).toBe('LIMITE_ROL_CONTINGENCIA');
+
+    // Actualizar el mismo usuario existente que ya tiene el rol NO debe fallar
+    const resUpdateMismo = await request(app)
+      .put(`/api/usuarios/${primerCajeroId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        nombre: 'Primer Modificado',
+        rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383'
+      });
+
+    expect(resUpdateMismo.status).toBe(200);
+
+    // Limpieza
+    await dbLocal('empleados').whereIn('email', [
+      'cajero1@test.com',
+      'cajero2@test.com',
+      'cajero3@test.com',
+      'cajero4@test.com'
+    ]).del();
+    await dbLocal('empleados').where('rol_id', '877890f1-ffc8-488b-a5c4-b1caff520383').del();
+  });
 });

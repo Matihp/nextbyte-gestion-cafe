@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { ROLES_SISTEMA } = require('../constants/roles');
 
 const rutasExentas = ['/api/health', '/api/auth/login'];
 
@@ -6,7 +7,7 @@ const obtenerUsuario = (req) => {
   if (req.user) return req.user;
 
   if (process.env.AUTH_ENABLED !== 'true') {
-    return { id: 'dev', es_admin: true, permisos: ['all'] };
+    return { id: 'dev', es_admin: true, es_contingencia: false, permisos: ['all'] };
   }
 
   const cabecera = req.headers && req.headers.authorization;
@@ -41,11 +42,17 @@ const checkRoleOffline = (req, res, next) => {
   }
 
   const usuario = obtenerUsuario(req);
-  if (!usuario || !usuario.es_admin) {
+  const esAutorizado = usuario && (
+    usuario.es_admin ||
+    usuario.es_contingencia ||
+    usuario.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL
+  );
+
+  if (!esAutorizado) {
     return res.status(403).json({
       success: false,
       error: 'SIN_CONEXION',
-      message: 'Sin conexión a internet. Solo el rol Administrador puede realizar operaciones sin conexión.'
+      message: 'Sin conexión a internet. Solo el rol Administrador o Cajero Principal puede realizar operaciones sin conexión.'
     });
   }
 

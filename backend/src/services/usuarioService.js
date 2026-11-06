@@ -4,6 +4,30 @@ const AppError = require('../utils/AppError');
 const empleadoRepository = require('../repositories/empleadoRepository');
 const rolRepository = require('../repositories/rolRepository');
 const { esEmailValido, quitarContrasena } = require('../dtos/empleado.dto');
+const { ROLES_SISTEMA } = require('../constants/roles');
+
+const esRolCajaContingencia = async (rolId) => {
+  return rolId === ROLES_SISTEMA.CAJERO_PRINCIPAL;
+};
+
+const validarLimiteRolContingencia = async (rolId, excludeUsuarioId = null) => {
+  if (rolId !== ROLES_SISTEMA.CAJERO_PRINCIPAL) return;
+
+  const todos = await empleadoRepository.getAll();
+  const yaAsignado = todos.find((u) => {
+    if (excludeUsuarioId && u.id === excludeUsuarioId) return false;
+    if (!u.tiene_usuario) return false;
+    return u.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL;
+  });
+
+  if (yaAsignado) {
+    throw new AppError(
+      'Solo puede existir un usuario activo con el rol de Cajero Principal (Contingencia)',
+      409,
+      'LIMITE_ROL_CONTINGENCIA'
+    );
+  }
+};
 
 const obtenerTodos = async () => {
   // Retorna únicamente a quienes tienen usuario habilitado en el sistema
@@ -48,6 +72,7 @@ const crear = async (datos) => {
   if (existenteEmail) {
     // Si ya existe como empleado pero sin usuario, le habilitamos el usuario
     if (existenteEmail.es_empleado && !existenteEmail.tiene_usuario) {
+      await validarLimiteRolContingencia(rol_id, existenteEmail.id);
       const contrasenaHash = bcrypt.hashSync(contrasena, 10);
       const reactivado = await empleadoRepository.update(existenteEmail.id, {
         tiene_usuario: true,
@@ -59,6 +84,8 @@ const crear = async (datos) => {
     }
     throw new AppError('Ya existe un usuario o empleado con ese email', 409, 'DUPLICADO');
   }
+
+  await validarLimiteRolContingencia(rol_id);
 
   const contrasenaHash = bcrypt.hashSync(contrasena, 10);
 
@@ -88,7 +115,6 @@ const actualizar = async (id, datos, currentUser) => {
   const payload = {};
   if (datos.nombre !== undefined) payload.nombre = datos.nombre.trim();
   if (datos.apellido !== undefined) payload.apellido = datos.apellido.trim();
-  if (datos.nombre_distintivo !== undefined) payload.nombre_distintivo = datos.nombre_distintivo;
   if (datos.email !== undefined && datos.email.trim() !== usuario.email) {
     const emailLimpio = datos.email.trim();
     if (!esEmailValido(emailLimpio)) throw new AppError('Email inválido', 400, 'VALIDACION');
@@ -103,8 +129,11 @@ const actualizar = async (id, datos, currentUser) => {
     payload.contrasena = bcrypt.hashSync(datos.contrasena, 10);
   }
   if (datos.rol_id !== undefined) {
-    const rol = await rolRepository.getById(datos.rol_id);
-    if (!rol) throw new AppError('El rol especificado no existe', 404, 'NO_ENCONTRADO');
+    if (datos.rol_id !== null) {
+      const rol = await rolRepository.getById(datos.rol_id);
+      if (!rol) throw new AppError('El rol especificado no existe', 404, 'NO_ENCONTRADO');
+      await validarLimiteRolContingencia(datos.rol_id, id);
+    }
     payload.rol_id = datos.rol_id;
   }
   if (datos.permisos !== undefined) {
@@ -171,6 +200,8 @@ const cambiarRol = async (empleadoId, rolId) => {
   if (!rol) {
     throw new AppError('Rol no encontrado', 404, 'NO_ENCONTRADO');
   }
+
+  await validarLimiteRolContingencia(rolId, empleadoId);
 
   const actualizado = await empleadoRepository.update(empleadoId, { rol_id: rolId });
   return quitarContrasena(actualizado);

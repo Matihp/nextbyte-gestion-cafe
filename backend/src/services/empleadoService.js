@@ -4,6 +4,30 @@ const AppError = require('../utils/AppError');
 const { quitarContrasena, validarEmpleado } = require('../dtos/empleado.dto');
 const empleadoRepository = require('../repositories/empleadoRepository');
 const rolRepository = require('../repositories/rolRepository');
+const { ROLES_SISTEMA } = require('../constants/roles');
+
+const esRolCajaContingencia = async (rolId) => {
+  return rolId === ROLES_SISTEMA.CAJERO_PRINCIPAL;
+};
+
+const validarLimiteRolContingencia = async (rolId, excludeUsuarioId = null) => {
+  if (rolId !== ROLES_SISTEMA.CAJERO_PRINCIPAL) return;
+
+  const todos = await empleadoRepository.getAll();
+  const yaAsignado = todos.find((u) => {
+    if (excludeUsuarioId && u.id === excludeUsuarioId) return false;
+    if (!u.tiene_usuario) return false;
+    return u.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL;
+  });
+
+  if (yaAsignado) {
+    throw new AppError(
+      'Solo puede existir un usuario activo con el rol de Cajero Principal (Contingencia)',
+      409,
+      'LIMITE_ROL_CONTINGENCIA'
+    );
+  }
+};
 
 const obtenerTodos = async (filtros = {}) => {
   const queryFiltros = { ...filtros };
@@ -33,6 +57,7 @@ const crear = async (datos) => {
     if (!rol) {
       throw new AppError('El rol especificado no existe', 404, 'NO_ENCONTRADO');
     }
+    await validarLimiteRolContingencia(datos.rol_id);
   }
 
   const emailLimpio = datos.email.trim();
@@ -96,6 +121,7 @@ const actualizar = async (id, datos, usuario) => {
     if (!rol) {
       throw new AppError('El rol especificado no existe', 404, 'NO_ENCONTRADO');
     }
+    await validarLimiteRolContingencia(datos.rol_id, id);
   }
 
   if (cambiaEmail) {

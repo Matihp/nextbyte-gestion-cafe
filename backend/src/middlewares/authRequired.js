@@ -10,29 +10,29 @@ const usuarioDev = {
 };
 
 const authRequired = (req, res, next) => {
+  const cabecera = req.headers && req.headers.authorization;
+  if (cabecera && typeof cabecera === 'string' && cabecera.startsWith('Bearer ')) {
+    const token = cabecera.slice(7).trim();
+    if (token && token !== 'demo-token-dev') {
+      try {
+        const secret = process.env.JWT_SECRET || 'secreto_super_seguro_dev';
+        const decoded = jwt.verify(token, secret);
+        req.user = decoded;
+        return next();
+      } catch (err) {
+        if (authActivada()) {
+          throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
+        }
+      }
+    }
+  }
+
   if (!authActivada()) {
     req.user = { ...usuarioDev };
     return next();
   }
 
-  const cabecera = req.headers && req.headers.authorization;
-  if (!cabecera || typeof cabecera !== 'string' || !cabecera.startsWith('Bearer ')) {
-    throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
-  }
-
-  const token = cabecera.slice(7).trim();
-  if (!token) {
-    throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
-  }
-
-  try {
-    const secret = process.env.JWT_SECRET || 'secreto_super_seguro_dev';
-    const decoded = jwt.verify(token, secret);
-    req.user = decoded;
-    return next();
-  } catch {
-    throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
-  }
+  throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
 };
 
 const requireAdmin = (req, res, next) => {

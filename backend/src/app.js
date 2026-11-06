@@ -26,6 +26,7 @@ app.use(checkRoleOffline);
 app.get('/api/health', (req, res) => {
   res.json({
     message: 'Backend NextByte funcionando correctamente!',
+    isOnline: Boolean(req.isOnline),
     status: req.isOnline ? 'Online (Turso)' : 'Offline (SQLite Contingencia)'
   });
 });

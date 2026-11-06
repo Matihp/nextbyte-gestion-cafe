@@ -2,32 +2,24 @@ const crypto = require('crypto');
 const AppError = require('../utils/AppError');
 const rolRepository = require('../repositories/rolRepository');
 const empleadoRepository = require('../repositories/empleadoRepository');
+const { ROLES_SISTEMA, ROLES_NO_ELIMINABLES, ROLES_PERMISOS_FIJOS } = require('../constants/roles');
 
 // Roles con permisos e identidad inalterables (nadie puede cambiarles permisos)
 const isImmutableRole = (rol) => {
   if (!rol) return false;
   if (rol.es_admin) return true;
+  if (ROLES_PERMISOS_FIJOS.includes(rol.id)) return true;
   const name = String(rol.nombre || '').trim().toLowerCase();
-  return (
-    name === 'admin' ||
-    name === 'administrador' ||
-    name === 'rol pantalla cliente' ||
-    name === 'caja-contingencia (cortes internet)'
-  );
+  return name === 'admin' || name === 'administrador';
 };
 
 // Roles fijos que no pueden ser eliminados por nadie en el sistema
 const isNonDeletableRole = (rol) => {
   if (!rol) return false;
   if (rol.es_admin) return true;
+  if (ROLES_NO_ELIMINABLES.includes(rol.id)) return true;
   const name = String(rol.nombre || '').trim().toLowerCase();
-  return (
-    name === 'admin' ||
-    name === 'administrador' ||
-    name === 'rol pantalla cliente' ||
-    name === 'caja-contingencia (cortes internet)' ||
-    name.includes('caja diaria')
-  );
+  return name === 'admin' || name === 'administrador';
 };
 
 const getAll = async () => {
@@ -127,7 +119,7 @@ const remove = async (id) => {
   }
 
   if (isNonDeletableRole(rol)) {
-    throw new AppError('No se pueden eliminar los roles fijos del sistema (Admin, Rol Pantalla Cliente, Caja-Contingencia, Caja Diaria)', 400, 'ROL_FIJO_NO_ELIMINABLE');
+    throw new AppError('No se pueden eliminar los roles fijos del sistema (Admin, Rol Pantalla Cliente, Cajero Diario / Principal, Cajero Secundario)', 400, 'ROL_FIJO_NO_ELIMINABLE');
   }
 
   await rolRepository.delete(id);

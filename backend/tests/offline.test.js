@@ -135,5 +135,57 @@ describe('checkRoleOffline middleware', () => {
     expect(nextMozo).not.toHaveBeenCalled();
     expect(resMozo.status).toHaveBeenCalledWith(403);
   });
+
+  it('permite escrituras sin conexion cuando el usuario tiene rol Caja-Contingencia por rol_id', () => {
+    const req = {
+      isOnline: false,
+      method: 'POST',
+      originalUrl: '/api/pedidos',
+      user: { id: 'caja1', es_admin: false, rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383' }
+    };
+    const res = crearRes();
+    const next = jest.fn();
+
+    checkRoleOffline(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('permite escrituras sin conexion cuando el usuario tiene es_contingencia en true', () => {
+    const req = {
+      isOnline: false,
+      method: 'POST',
+      originalUrl: '/api/pedidos',
+      user: { id: 'caja2', es_admin: false, es_contingencia: true }
+    };
+    const res = crearRes();
+    const next = jest.fn();
+
+    checkRoleOffline(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('valida token en cabecera con rol de contingencia si req.user aun no fue seteado', () => {
+    const tokenCaja = jwt.sign(
+      { id: 'caja-jwt', es_admin: false, rol_id: '877890f1-ffc8-488b-a5c4-b1caff520383', es_contingencia: true },
+      'secreto_offline_test'
+    );
+    const req = {
+      isOnline: false,
+      method: 'POST',
+      originalUrl: '/api/pedidos',
+      headers: { authorization: `Bearer ${tokenCaja}` }
+    };
+    const res = crearRes();
+    const next = jest.fn();
+
+    checkRoleOffline(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
 });
 
