@@ -133,8 +133,7 @@ export function OrdersPage() {
     'Pendiente',
     'En preparación',
     'En empaque',
-    'Completado',
-    'Entregado'
+    'Completado'
   ];
 
   // Carga de comandas y pedidos desde el backend
@@ -172,7 +171,11 @@ export function OrdersPage() {
       }
 
       if (backendOrders !== null) {
-        const mapped = backendOrders.map((o) => {
+        const ordenesComanda = backendOrders.filter((o) => {
+          const st = String(o.estado || o.status || '').toLowerCase().trim();
+          return st !== 'entregado' && st !== 'cancelado';
+        });
+        const mapped = ordenesComanda.map((o) => {
           const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
           const itemsRaw = (o.detalles && o.detalles.length > 0)
             ? o.detalles
@@ -281,6 +284,10 @@ export function OrdersPage() {
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return orders.filter((order) => {
+      // REGLA: Los pedidos entregados o cancelados no deben verse en la sección Comandas
+      const st = String(order.status || '').toLowerCase().trim();
+      if (st === 'entregado' || st === 'cancelado') return false;
+
       // REGLA 1: Solo pedidos del día actual
       if (!isOrderFromToday(order)) return false;
 
@@ -296,8 +303,6 @@ export function OrdersPage() {
       let matchesStatus = true;
       if (statusFilter !== 'Todos') {
         matchesStatus = order.status === statusFilter;
-      } else {
-        matchesStatus = order.status !== 'Cancelado';
       }
 
       return matchesSearch && matchesStatus;
@@ -310,10 +315,20 @@ export function OrdersPage() {
     if (!prevOrder) return;
     if (prevOrder.status === newStatusDisplay) return;
 
-    // Actualización optimista
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
-    );
+    // Actualización optimista: si se marca como Entregado, desaparece de inmediato de Comandas
+    if (newStatusDisplay === 'Entregado') {
+      setOrders((prev) => {
+        const next = prev.filter((o) => String(o.id) !== String(orderId));
+        try {
+          localStorage.setItem('nextbyte_orders', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } else {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
+      );
+    }
 
     // Si se pasa a Completado, registrar la hora para la expiración de 1 hora
     if (newStatusDisplay === 'Completado') {
