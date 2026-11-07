@@ -383,13 +383,17 @@ export default function ReporteCaja() {
         });
       } else if (tipo === 'pestana-2') {
         const { desde, hasta, nombreMes, anio } = getRangoPestana2();
+        const dataVentas = await reporteService.obtenerReporteCaja({ desde, hasta }).catch(() => ({ total_costo: 0, total_venta: 0 }));
+        const subtotalCosto = Number(dataVentas?.total_costo) || 0;
+        const totalVenta = Number(dataVentas?.total_venta) || ventasMesP2 || 0;
         setDatosImpresion({
-          titulo: `Reporte de Ingresos y Retiros - ${nombreMes.toUpperCase()} ${anio}`,
+          tipoReporte: 'ingresos-retiros',
+          titulo: `Reporte de Ingresos y Retiros de Caja - ${nombreMes.toUpperCase()} ${anio}`,
           periodo: `Período: ${desde} al ${hasta}`,
           pedidos: [],
           totales: {
-            subtotalCosto: 0,
-            totalVenta: ventasMesP2
+            subtotalCosto,
+            totalVenta
           },
           movimientos: movimientosP2
         });
@@ -412,57 +416,60 @@ export default function ReporteCaja() {
     }
   };
 
-  const descargarCsv = (pedidosAExportar, totalesAExportar, nombreArchivo, movimientosAExportar = []) => {
+  const descargarCsv = (pedidosAExportar, totalesAExportar, nombreArchivo, movimientosAExportar = [], soloTotalesVentas = false) => {
     const filas = [];
-    filas.push([
-      'Fecha',
-      'Hora',
-      'N° Pedido',
-      'Tipo',
-      'Medio de Pago',
-      'Producto',
-      'Cantidad',
-      'Costo Unit.',
-      'Venta Unit.',
-      'Total Costo',
-      'Total Venta',
-      'Estado'
-    ]);
+    if (!soloTotalesVentas) {
+      filas.push([
+        'Fecha',
+        'Hora',
+        'N° Pedido',
+        'Tipo',
+        'Medio de Pago',
+        'Producto',
+        'Cantidad',
+        'Costo Unit.',
+        'Venta Unit.',
+        'Total Costo',
+        'Total Venta',
+        'Estado'
+      ]);
 
-    for (const p of pedidosAExportar) {
-      const items = p.items && p.items.length > 0
-        ? p.items
-        : [{
-            nombre_producto: 'Venta Consolidada',
-            cantidad: 1,
-            precio_costo: p.total_costo,
-            precio_venta: p.total_venta,
-            costo_total: p.total_costo,
-            venta_total: p.total_venta
-          }];
+      for (const p of pedidosAExportar) {
+        const items = p.items && p.items.length > 0
+          ? p.items
+          : [{
+              nombre_producto: 'Venta Consolidada',
+              cantidad: 1,
+              precio_costo: p.total_costo,
+              precio_venta: p.total_venta,
+              costo_total: p.total_costo,
+              venta_total: p.total_venta
+            }];
 
-      const pedidoIdFormateado = String(p.id).startsWith('#') ? p.id : `#${p.id}`;
-      const fechaPedido = p.fecha || '-';
+        const pedidoIdFormateado = String(p.id).startsWith('#') ? p.id : `#${p.id}`;
+        const fechaPedido = p.fecha || '-';
 
-      for (const item of items) {
-        filas.push([
-          fechaPedido,
-          p.hora || '',
-          pedidoIdFormateado,
-          p.tipo_pedido || 'Mostrador',
-          p.metodo_pago || 'Efectivo',
-          `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
-          item.cantidad,
-          item.precio_costo,
-          item.precio_venta,
-          item.costo_total,
-          item.venta_total,
-          formatEstadoNombre(p.estado)
-        ]);
+        for (const item of items) {
+          filas.push([
+            fechaPedido,
+            p.hora || '',
+            pedidoIdFormateado,
+            p.tipo_pedido || 'Mostrador',
+            p.metodo_pago || 'Efectivo',
+            `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
+            item.cantidad,
+            item.precio_costo,
+            item.precio_venta,
+            item.costo_total,
+            item.venta_total,
+            formatEstadoNombre(p.estado)
+          ]);
+        }
       }
+
+      filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
     }
 
-    filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
     filas.push(['SUBTOTAL (Costos)', '', '', '', '', '', '', '', '', totalesAExportar.subtotalCosto, '', '']);
     filas.push(['TOTAL VENTAS', '', '', '', '', '', '', '', '', '', totalesAExportar.totalVenta, '']);
     filas.push(['DIFERENCIA (Ventas - Costos)', '', '', '', '', '', '', '', '', '', (totalesAExportar.totalVenta || 0) - (totalesAExportar.subtotalCosto || 0), '']);
@@ -555,8 +562,11 @@ export default function ReporteCaja() {
         descargarCsv(pedidosExp, totExp, `Cierre_Mes_${mesTag}.csv`, listaMovs);
         toast.success(`Exportado Cierre Mensual (${pedidosExp.length} ventas, ${listaMovs.length} movimientos)`);
       } else if (tipo === 'pestana-2') {
-        const { mesIso } = getRangoPestana2();
-        descargarCsv([], { subtotalCosto: 0, totalVenta: ventasMesP2 }, `Movimientos_Caja_${mesIso}.csv`, movimientosP2);
+        const { desde, hasta, mesIso } = getRangoPestana2();
+        const dataVentas = await reporteService.obtenerReporteCaja({ desde, hasta }).catch(() => ({ total_costo: 0, total_venta: 0 }));
+        const subtotalCosto = Number(dataVentas?.total_costo) || 0;
+        const totalVenta = Number(dataVentas?.total_venta) || ventasMesP2 || 0;
+        descargarCsv([], { subtotalCosto, totalVenta }, `Movimientos_Caja_${mesIso}.csv`, movimientosP2, true);
         toast.success(`Exportados movimientos de ${mesesInfo.seleccionado} (${movimientosP2.length} movimientos)`);
       } else {
         exportarAExcel(tipo);
@@ -1542,6 +1552,7 @@ export default function ReporteCaja() {
 
       {/* Plantilla de Impresión nativa mediante PrintPortal */}
       <ReporteCajaPrint
+        tipoReporte={datosImpresion?.tipoReporte || 'cierre'}
         titulo={datosImpresion?.titulo || tituloImpresion}
         periodo={datosImpresion?.periodo || getTituloTabla()}
         pedidos={datosImpresion ? datosImpresion.pedidos : pedidosFiltrados}
