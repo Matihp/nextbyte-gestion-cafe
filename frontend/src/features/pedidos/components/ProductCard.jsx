@@ -2,11 +2,14 @@ import { Plus, AlertTriangle } from 'lucide-react';
 import { formatearPrecio } from '@/utils/formatters';
 import { obtenerImagenProducto } from '@/features/menu/utils/imagenesCafe';
 
+const FALLBACK_PRODUCT_IMAGE =
+  'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500&auto=format&fit=crop&q=80';
+
 export function ProductCard({ product, onAddToCart }) {
   const stock = Number(product.stock_actual ?? product.stock ?? 0);
   const price = Number(product.precio_venta ?? product.price ?? 0);
   const name = product.nombre || product.name || '';
-  const imageUrl = obtenerImagenProducto(product);
+  const imageUrl = obtenerImagenProducto(product) || product.imagen || product.image || FALLBACK_PRODUCT_IMAGE;
 
   const getProductStockStatus = () => {
     if (stock <= 0) return { status: 'agotado', msg: 'Sin stock' };
@@ -41,8 +44,9 @@ export function ProductCard({ product, onAddToCart }) {
             !isAgotado ? 'group-hover:scale-105' : ''
           }`}
           onError={(e) => {
-            e.currentTarget.src =
-              'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500&auto=format&fit=crop&q=80';
+            if (e.currentTarget.src !== FALLBACK_PRODUCT_IMAGE) {
+              e.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+            }
           }}
         />
 

@@ -68,6 +68,15 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateUser = (nuevosDatos) => {
+    setUser((prev) => {
+      if (!prev) return nuevosDatos;
+      const actualizado = { ...prev, ...nuevosDatos };
+      localStorage.setItem('usuario', JSON.stringify(actualizado));
+      return actualizado;
+    });
+  };
+
   const value = {
     user,
     token,
@@ -75,7 +84,8 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(token && user),
     isAdmin: Boolean(user?.es_admin),
     login,
-    logout
+    logout,
+    updateUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
@@ -15,7 +15,10 @@ import {
   Eye, 
   EyeOff,
   AlertTriangle,
-  Info
+  Info,
+  Upload,
+  Camera,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +40,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { rolService } from '@/services/rolService';
 import { usuarioService } from '@/services/usuarioService';
+import { ImageUpload } from '@/components/ui/image-upload';
 import { cn } from '@/lib/utils';
 
 export const PERMISSION_LABELS = [
@@ -90,6 +94,7 @@ const emptyEmpForm = {
   lastName: '',
   email: '',
   password: '',
+  photo: '',
   roleId: '',
   permissions: { ...emptyPermissions },
 };
@@ -177,7 +182,7 @@ const permissionsToArray = (perms) => {
 };
 
 export function Configuracion() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('account');
@@ -328,19 +333,23 @@ export function Configuracion() {
   const handleSaveProfile = async () => {
     try {
       if (user?.id && user.id !== 'dev') {
-        await usuarioService.update(user.id, {
+        const usuarioActualizado = await usuarioService.update(user.id, {
           nombre: profile.firstName,
           apellido: profile.lastName,
-          foto: profile.photo,
+          foto: profile.photo || null,
           ...(profile.password ? { contrasena: profile.password } : {})
         });
+
+        if (updateUser && usuarioActualizado) {
+          updateUser(usuarioActualizado);
+        }
       }
       setProfileSaved(true);
-      toast.success('Perfil actualizado correctamente');
+      toast.success('Perfil actualizado y guardado en la base de datos');
       setTimeout(() => setProfileSaved(false), 2000);
     } catch (err) {
       console.error('Error al guardar perfil:', err);
-      toast.error('No se pudo guardar el perfil');
+      toast.error(err.message || 'No se pudo guardar el perfil');
     }
   };
 
@@ -475,6 +484,7 @@ export function Configuracion() {
         apellido: empForm.lastName,
         email: empForm.email,
         contrasena: empForm.password,
+        foto: empForm.photo || null,
         rol_id: empForm.roleId,
         permisos: finalPermissions
       });
@@ -504,6 +514,7 @@ export function Configuracion() {
         displayName: u.nombre_distintivo || u.displayName || '',
         email: u.email || '',
         password: '',
+        photo: u.foto || u.photo || '',
         roleId: u.rol_id || u.roleId || '',
         permissions: fixedPerms || normalizePermissions(u.permisos),
         es_empleado: u.es_empleado
@@ -569,6 +580,7 @@ export function Configuracion() {
         nombre: edit.firstName,
         apellido: edit.lastName,
         email: edit.email,
+        foto: edit.photo || null,
         rol_id: edit.roleId,
         permisos: finalPermissions,
         ...(edit.password ? { contrasena: edit.password } : {})
@@ -646,30 +658,29 @@ export function Configuracion() {
                 <p className="text-gray-500 text-sm mb-6">Actualiza tu información personal</p>
 
                 <div className="space-y-4">
-                  {/* Foto de perfil */}
-                  <div>
-                    <Label className="block text-sm font-medium text-gray-700 mb-2">Foto de Perfil</Label>
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F] text-xl font-bold overflow-hidden">
-                        {profile.photo ? (
-                          <img
-                            src={profile.photo}
-                            alt="Perfil"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          `${(profile.firstName || 'U').charAt(0)}${(profile.lastName || '').charAt(0)}`.toUpperCase()
-                        )}
-                      </div>
-                      <Input
-                        type="text"
-                        placeholder="URL de la imagen de perfil..."
-                        value={profile.photo || ''}
-                        onChange={(e) => setProfile((p) => ({ ...p, photo: e.target.value }))}
-                        className="flex-1 !h-auto px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                      />
-                    </div>
-                  </div>
+                  {/* Foto de perfil con componente universal ImageUpload */}
+                  <ImageUpload
+                    label="Foto de Perfil"
+                    value={profile.photo}
+                    folder="perfiles"
+                    shape="circle"
+                    size="lg"
+                    placeholderInitials={`${(profile.firstName || 'U').charAt(0)}${(profile.lastName || '').charAt(0)}`}
+                    buttonText="Subir Foto de Perfil"
+                    changeButtonText="Cambiar Foto"
+                    successMessage="Foto guardada en tu cuenta"
+                    onChange={(newUrl) => setProfile((p) => ({ ...p, photo: newUrl }))}
+                    onSave={async (newUrl) => {
+                      if (user?.id && user.id !== 'dev') {
+                        const usuarioActualizado = await usuarioService.update(user.id, {
+                          foto: newUrl || null
+                        });
+                        if (updateUser && usuarioActualizado) {
+                          updateUser(usuarioActualizado);
+                        }
+                      }
+                    }}
+                  />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -779,6 +790,22 @@ export function Configuracion() {
                   {showAddForm && (
                     <div className="mb-5 p-5 bg-[#F3E5DC] rounded-xl border border-[#F3E5DC]">
                       <h3 className="text-sm font-semibold text-[#4B2B1D] mb-3">Nuevo Usuario del Sistema</h3>
+                      
+                      <div className="mb-4">
+                        <ImageUpload
+                          label="Foto del Usuario (Opcional)"
+                          value={empForm.photo}
+                          folder="perfiles"
+                          shape="circle"
+                          size="sm"
+                          placeholderInitials={`${(empForm.firstName || 'U').charAt(0)}${(empForm.lastName || '').charAt(0)}`}
+                          buttonText="Subir Foto"
+                          changeButtonText="Cambiar Foto"
+                          successMessage="Foto lista para guardar"
+                          onChange={(url) => setEmpForm((f) => ({ ...f, photo: url }))}
+                        />
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                         <div>
                           <Label className="block text-xs font-medium text-gray-700 mb-1">Nombre</Label>
@@ -941,8 +968,19 @@ export function Configuracion() {
                                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left cursor-pointer"
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F] text-sm font-semibold shrink-0">
-                                    {initials}
+                                  <div className="w-8 h-8 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F] text-sm font-semibold shrink-0 overflow-hidden">
+                                    {(edit.photo || u.foto || u.photo) ? (
+                                      <img
+                                        src={edit.photo || u.foto || u.photo}
+                                        alt={`${edit.firstName} ${edit.lastName}`}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      initials
+                                    )}
                                   </div>
                                   <div>
                                     <p className="text-sm font-medium text-gray-900">
@@ -975,6 +1013,21 @@ export function Configuracion() {
                               {/* Panel desplegable de edición */}
                               {isExpanded && (
                                 <div className="border-t border-gray-100 px-4 py-4 bg-[#F3E5DC]/40">
+                                  <div className="mb-4">
+                                    <ImageUpload
+                                      label="Foto del Usuario"
+                                      value={edit.photo || ''}
+                                      folder="perfiles"
+                                      shape="circle"
+                                      size="sm"
+                                      placeholderInitials={initials}
+                                      buttonText="Subir Foto"
+                                      changeButtonText="Cambiar Foto"
+                                      successMessage="Foto lista para guardar"
+                                      onChange={(url) => setEditField(u.id, 'photo', url)}
+                                    />
+                                  </div>
+
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                     <div>
                                       <Label className="block text-xs font-medium text-gray-700 mb-1.5">Nombre</Label>

@@ -99,7 +99,8 @@ const crear = async (datos) => {
     rol_id,
     permisos: Array.isArray(permisos) ? permisos : [],
     es_empleado: false,
-    tiene_usuario: true
+    tiene_usuario: true,
+    foto: datos.foto ? datos.foto.trim() : null
   };
 
   const nuevoUsuario = await empleadoRepository.create(payload);
@@ -138,6 +139,9 @@ const actualizar = async (id, datos, currentUser) => {
   }
   if (datos.permisos !== undefined) {
     payload.permisos = Array.isArray(datos.permisos) ? datos.permisos : [];
+  }
+  if (datos.foto !== undefined) {
+    payload.foto = datos.foto ? datos.foto.trim() : null;
   }
 
   const actualizado = await empleadoRepository.update(id, payload);
