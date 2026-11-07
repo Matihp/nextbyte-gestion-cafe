@@ -255,7 +255,9 @@ export function EmployeesPage() {
                   firstName: updated.nombre || nombreLimpio,
                   lastName: updated.apellido || apellidoLimpio,
                   displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
-                  email: updated.email || emailLimpio
+                  email: updated.email || emailLimpio,
+                  photo: updated.foto || emp.photo || emp.foto,
+                  foto: updated.foto || emp.photo || emp.foto
                 }
               : item
           )
@@ -278,7 +280,9 @@ export function EmployeesPage() {
           displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
           legajo: created.legajo || legajoLimpio,
           email: created.email || emailLimpio,
-          roleId: created.rol_id || emp.roleId
+          roleId: created.rol_id || emp.roleId,
+          photo: created.foto || emp.photo || emp.foto,
+          foto: created.foto || emp.photo || emp.foto
         };
 
         setEmployees((prev) => [...prev, newEmpObj]);

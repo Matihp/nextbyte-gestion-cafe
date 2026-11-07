@@ -12,6 +12,7 @@ import productoService from '@/services/productoService';
 import inventarioService from '@/services/inventarioService';
 import { toast } from 'sonner';
 import { X, ExternalLink, Trash2, Loader2 } from 'lucide-react';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 export default function ProductoModal({
   open,
@@ -52,7 +53,7 @@ export default function ProductoModal({
         categoryId: producto.categoria_id ? String(producto.categoria_id) : (categories[0]?.id ? String(categories[0].id) : ''),
         price: producto.precio_venta !== undefined ? Number(producto.precio_venta) : 0,
         stock: producto.stock_actual !== undefined ? Number(producto.stock_actual) : 0,
-        image: producto.imagen || ''
+        image: producto.imagen || producto.image || ''
       });
 
       // Buscar si el producto tiene receta
@@ -334,18 +335,18 @@ export default function ProductoModal({
               />
             </div>
 
-            <div>
-              <Label className="block text-sm mb-2 text-gray-700 font-normal">
-                URL de la Imagen
-              </Label>
-              <Input
-                type="text"
-                placeholder=""
-                value={formData.image}
-                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:ring-2 focus-visible:ring-[#A67C52] text-sm bg-white"
-              />
-            </div>
+            <ImageUpload
+              label="Imagen del Producto"
+              value={formData.image}
+              folder="productos"
+              shape="rounded"
+              size="lg"
+              buttonText="Subir Foto del Producto"
+              changeButtonText="Cambiar Foto"
+              successMessage="Foto lista para guardar"
+              helperText="JPG, PNG o WEBP (máx. 5 MB)"
+              onChange={(url) => setFormData((prev) => ({ ...prev, image: url }))}
+            />
 
             <div className="flex gap-2 pt-4 border-t border-gray-100">
               {producto && onDelete && (

@@ -6,7 +6,7 @@ export const productoService = {
   actualizarCategoria: (id, datos) => api.put(`/categorias/${id}`, datos),
   eliminarCategoria: (id) => api.delete(`/categorias/${id}`),
 
-  obtenerProductos: (params = {}) => api.get('/productos', { params }),
+  obtenerProductos: (params = {}) => api.get('/productos', { params: { _t: Date.now(), ...params } }),
   obtenerProductoPorId: (id) => api.get(`/productos/${id}`),
   crearProducto: (datos) => api.post('/productos', datos),
   actualizarProducto: (id, datos) => api.put(`/productos/${id}`, datos),
@@ -17,7 +17,7 @@ export const productoService = {
   eliminarReceta: (productoId) => api.delete(`/productos/${productoId}/receta`),
 
   getCategorias: () => api.get('/categorias'),
-  getProductos: (params = {}) => api.get('/productos', { params })
+  getProductos: (params = {}) => api.get('/productos', { params: { _t: Date.now(), ...params } })
 };
 
 export default productoService;

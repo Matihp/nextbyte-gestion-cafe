@@ -1,19 +1,21 @@
 import { Card } from '@/components/ui/card';
 import ImageWithFallback from './ImageWithFallback';
+import { obtenerImagenProducto } from '../utils/imagenesCafe';
 
 export default function ProductoCard({ producto, tieneReceta = false, estrellas = 0, onEditar }) {
   const stock = Number(producto.stock_actual || 0);
+  const imagenUrl = obtenerImagenProducto(producto) || producto?.imagen || producto?.image;
 
   return (
     <Card
       onClick={() => onEditar && onEditar(producto)}
       className="bg-white rounded-xl shadow-xs overflow-hidden border border-gray-100 cursor-pointer hover:shadow-md transition-shadow flex flex-col p-0 gap-0"
     >
-      <div className="relative w-full h-28">
+      <div className="relative w-full h-28 bg-gray-50 overflow-hidden">
         <ImageWithFallback
-          src={producto.imagen}
+          src={imagenUrl}
           alt={producto.nombre}
-          className={`w-full h-28 object-cover ${stock <= 0 ? 'opacity-60 grayscale-[50%]' : ''}`}
+          className={`w-full h-28 object-cover transition-opacity duration-300 ${stock <= 0 ? 'opacity-60 grayscale-[50%]' : ''}`}
         />
         {stock <= 0 && (
           <div className="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-[1px]">

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table';
 import { X, Edit, Trash2 } from 'lucide-react';
 import ModalConfirmarEliminarProducto from './ModalConfirmarEliminarProducto';
+import ImageWithFallback from './ImageWithFallback';
 
 export default function ProductosModalEditarEliminar({
   open,
@@ -75,7 +76,16 @@ export default function ProductosModalEditarEliminar({
                     productos.map((product) => (
                       <TableRow key={product.id} className="hover:bg-gray-50/50">
                         <TableCell className="px-5 py-3 font-medium text-gray-900">
-                          {product.nombre}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-gray-200/60">
+                              <ImageWithFallback
+                                src={product.imagen || product.image}
+                                alt={product.nombre}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span className="truncate max-w-[200px]" title={product.nombre}>{product.nombre}</span>
+                          </div>
                         </TableCell>
                         <TableCell className="px-5 py-3 whitespace-nowrap">
                           <span className="inline-block px-2 py-1 bg-[#F3E5DC] text-[#4B2B1D] text-xs font-semibold rounded-full">

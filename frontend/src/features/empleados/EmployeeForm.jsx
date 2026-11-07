@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ROLES_SISTEMA } from '@/constants/roles';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -264,20 +265,18 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="photo" className="text-sm font-medium text-gray-700">
-                  URL de la Foto
-                </Label>
-                <Input
-                  id="photo"
-                  type="text"
-                  name="photo"
-                  placeholder="https://..."
-                  value={formData.photo}
-                  onChange={handleChange}
-                  className="mt-1"
-                />
-              </div>
+              <ImageUpload
+                label="Foto del Empleado"
+                value={formData.photo}
+                folder="empleados"
+                shape="circle"
+                size="md"
+                placeholderInitials={`${(formData.firstName || 'E').charAt(0)}${(formData.lastName || '').charAt(0)}`}
+                buttonText="Subir Foto del Empleado"
+                changeButtonText="Cambiar Foto"
+                successMessage="Foto cargada correctamente"
+                onChange={(url) => setFormData((prev) => ({ ...prev, photo: url }))}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
