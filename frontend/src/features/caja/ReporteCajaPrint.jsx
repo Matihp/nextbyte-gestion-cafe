@@ -28,7 +28,8 @@ export function ReporteCajaPrint({
   periodo = '',
   pedidos = [],
   totales = { subtotalCosto: 0, totalVenta: 0 },
-  ticketPedido = null
+  ticketPedido = null,
+  movimientos = []
 }) {
   // CASO 1: Reimpresión de ticket individual de control interno (igual al PDF de muestra)
   if (ticketPedido) {
@@ -98,69 +99,61 @@ export function ReporteCajaPrint({
               <span>TOTAL VENTA</span>
               <span>{formatearPrecio(ticketPedido.total_venta)}</span>
             </div>
+            <div className="flex justify-between text-xs text-gray-600 pt-0.5">
+              <span>DIFERENCIA (Ganancia Bruta):</span>
+              <span className="font-bold">
+                {formatearPrecio((ticketPedido.total_venta || 0) - (ticketPedido.total_costo || 0))}
+              </span>
+            </div>
           </div>
 
-          <div className="mt-8 text-center text-[10px] text-gray-500 italic">
-            Documento de uso interno - No válido como factura
+          {/* Pie de ticket */}
+          <div className="mt-6 pt-3 border-t border-dashed border-gray-400 text-center text-[10px] text-gray-500">
+            <p>Comprobante no válido como factura.</p>
+            <p>Sistema de Gestión Andén Café.</p>
           </div>
         </div>
       </PrintPortal>
     );
   }
 
-  // CASO 2: Impresión del Reporte General de Caja
-  const gananciaBruta = (totales.totalVenta || 0) - (totales.subtotalCosto || 0);
-  const ticketPromedio = pedidos.length > 0 ? (totales.totalVenta || 0) / pedidos.length : 0;
-  const fechaEmision = formatearFecha(new Date());
+  // Cálculos para movimientos de caja en el reporte impreso
+  let printTotalIngresos = 0;
+  let printTotalRetiros = 0;
+  if (Array.isArray(movimientos)) {
+    for (const m of movimientos) {
+      const monto = Number(m.monto) || 0;
+      if (m.tipo === 'INGRESO') printTotalIngresos += monto;
+      if (m.tipo === 'RETIRO') printTotalRetiros += monto;
+    }
+  }
+  const printSaldoNeto = printTotalIngresos - printTotalRetiros;
+  const printSaldoFinal = (totales.totalVenta || 0) + printSaldoNeto;
 
+  // CASO 2: Reporte General de Caja (Cierre Diario o Cierre Mensual)
   return (
     <PrintPortal id="print-area">
       <div className="p-8 max-w-4xl mx-auto bg-white text-black font-sans leading-normal">
-        {/* Encabezado del Comercio */}
-        <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
+        {/* Encabezado del Reporte */}
+        <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
           <div>
-            <h1 className="text-2xl font-bold uppercase tracking-wider text-black">
-              ANDÉN
-            </h1>
-            <p className="text-xs font-semibold tracking-wide text-gray-700 uppercase">
-              Café de Especialidad al Paso
-            </p>
-            <p className="text-sm font-bold mt-2 text-black">
+            <h1 className="text-2xl font-black uppercase tracking-wider text-black">
               {titulo}
+            </h1>
+            <p className="text-xs text-gray-600 mt-1 font-medium">
+              {periodo}
             </p>
           </div>
-
-          <div className="text-right text-xs text-gray-600 space-y-1">
-            <p><span className="font-semibold text-black">Período:</span> {periodo || 'Al día'}</p>
-            <p><span className="font-semibold text-black">Fecha emisión:</span> {fechaEmision}</p>
-            <p><span className="font-semibold text-black">Cant. Pedidos:</span> {pedidos.length}</p>
+          <div className="text-right text-xs text-gray-500">
+            <p className="font-bold text-black uppercase tracking-wider">Andén Café Bar</p>
+            <p>Fecha de emisión: {formatearFecha(new Date().toISOString())}</p>
           </div>
         </div>
 
-        {/* Resumen Financiero Compacto */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          <div className="border border-gray-300 p-2.5 rounded text-left">
-            <span className="text-[10px] uppercase font-bold text-gray-500 block">Subtotal Costos</span>
-            <span className="text-sm font-bold text-gray-800">{formatearPrecio(totales.subtotalCosto)}</span>
-          </div>
-          <div className="border border-gray-300 p-2.5 rounded text-left">
-            <span className="text-[10px] uppercase font-bold text-gray-500 block">Total Ventas</span>
-            <span className="text-sm font-bold text-black">{formatearPrecio(totales.totalVenta)}</span>
-          </div>
-          <div className="border border-gray-300 p-2.5 rounded text-left">
-            <span className="text-[10px] uppercase font-bold text-gray-500 block">Diferencia (Ventas - Costos)</span>
-            <span className="text-sm font-bold text-emerald-800">{formatearPrecio(gananciaBruta)}</span>
-          </div>
-          <div className="border border-gray-300 p-2.5 rounded text-left">
-            <span className="text-[10px] uppercase font-bold text-gray-500 block">Ticket Promedio</span>
-            <span className="text-sm font-bold text-gray-800">{formatearPrecio(ticketPromedio)}</span>
-          </div>
-        </div>
-
-        {/* Tabla de Detalle de Transacciones con Fecha y Hora */}
-        <table className="w-full text-left text-xs border-collapse mb-6">
+        {/* Tabla General de Pedidos y Ventas */}
+        <table className="w-full text-left text-xs mb-6 border-collapse">
           <thead>
-            <tr className="border-b-2 border-black text-[11px] font-bold text-black uppercase bg-gray-100">
+            <tr className="border-b-2 border-black text-black font-bold uppercase text-[10px] tracking-wider">
               <th className="py-2 px-2">Fecha</th>
               <th className="py-2 px-2">Hora</th>
               <th className="py-2 px-2">Nº Pedido</th>
@@ -173,11 +166,12 @@ export function ReporteCajaPrint({
               <th className="py-2 px-2 text-center">Estado</th>
             </tr>
           </thead>
+
           {pedidos.length === 0 ? (
             <tbody>
               <tr>
                 <td colSpan={10} className="py-8 text-center text-gray-500 italic">
-                  No se registraron transacciones para este período.
+                  No se registraron ventas en este período.
                 </td>
               </tr>
             </tbody>
@@ -186,7 +180,6 @@ export function ReporteCajaPrint({
               const items = pedido.items && pedido.items.length > 0
                 ? pedido.items
                 : [{
-                    detalle_id: `sin-item-${pedido.id}`,
                     nombre_producto: 'Venta Consolidada',
                     cantidad: 1,
                     precio_costo: pedido.total_costo,
@@ -196,9 +189,10 @@ export function ReporteCajaPrint({
                   }];
 
               return (
-                <tbody key={`print-${pedido.id}`} className="border-b border-gray-300">
+                <tbody key={`print-group-${pedido.id}`} className="border-b border-gray-200">
                   {items.map((item, idx) => {
                     const esPrimer = idx === 0;
+
                     return (
                       <tr key={`print-row-${pedido.id}-${idx}`}>
                         {esPrimer && (
@@ -207,7 +201,7 @@ export function ReporteCajaPrint({
                           </td>
                         )}
                         {esPrimer && (
-                          <td rowSpan={items.length} className="py-2 px-2 font-medium text-gray-700 align-top whitespace-nowrap">
+                          <td rowSpan={items.length} className="py-2 px-2 text-gray-700 align-top whitespace-nowrap">
                             {pedido.hora || '-'}
                           </td>
                         )}
@@ -219,10 +213,10 @@ export function ReporteCajaPrint({
                             </div>
                           </td>
                         )}
-                        <td className="py-1.5 px-2 font-medium text-black">
+                        <td className="py-1.5 px-2 text-black">
                           {item.nombre_producto}
                         </td>
-                        <td className="py-1.5 px-2 text-center font-semibold text-black">
+                        <td className="py-1.5 px-2 text-center text-black font-semibold">
                           {item.cantidad}
                         </td>
                         <td className="py-1.5 px-2 text-right text-gray-700">
@@ -251,14 +245,51 @@ export function ReporteCajaPrint({
           )}
         </table>
 
+        {/* Recuadro de Movimientos de Caja Chica (Ingresos y Retiros) */}
+        {movimientos && movimientos.length > 0 && (
+          <div className="mt-6 border-t-2 border-black pt-4 break-inside-avoid">
+            <h3 className="font-bold text-xs uppercase tracking-wider mb-2 text-black">
+              Movimientos de Caja Chica (Ingresos y Retiros)
+            </h3>
+            <table className="w-full text-left text-xs mb-3 border-collapse">
+              <thead>
+                <tr className="border-b border-black text-black font-bold">
+                  <th className="py-1 px-1">Fecha</th>
+                  <th className="py-1 px-1">Hora</th>
+                  <th className="py-1 px-1">Tipo</th>
+                  <th className="py-1 px-1">Detalle</th>
+                  <th className="py-1 px-1 text-right">Ingreso</th>
+                  <th className="py-1 px-1 text-right">Retiro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientos.map((m, idx) => (
+                  <tr key={idx} className="border-b border-gray-200">
+                    <td className="py-1 px-1 text-[11px]">{m.fecha ? formatearFechaDDMMAAAA(m.fecha) : '-'}</td>
+                    <td className="py-1 px-1 text-[11px]">{m.hora || '-'}</td>
+                    <td className="py-1 px-1 text-[11px] font-semibold">{m.tipo}</td>
+                    <td className="py-1 px-1 text-[11px]">{m.detalle}</td>
+                    <td className="py-1 px-1 text-right text-[11px] font-semibold text-emerald-700">
+                      {m.tipo === 'INGRESO' ? `+${formatearPrecio(m.monto)}` : '-'}
+                    </td>
+                    <td className="py-1 px-1 text-right text-[11px] font-semibold text-red-600">
+                      {m.tipo === 'RETIRO' ? `-${formatearPrecio(m.monto)}` : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Resumen Final al pie de tabla */}
-        <div className="flex justify-between items-start border-t-2 border-black pt-4">
+        <div className="flex justify-between items-start border-t-2 border-black pt-4 break-inside-avoid">
           <div className="text-[11px] text-gray-600 space-y-1">
             <p>Documento de uso interno y control de caja.</p>
             <p>Andén Café - Sistema de Gestión NextByte.</p>
           </div>
 
-          <div className="w-64 space-y-1.5 text-xs text-right">
+          <div className="w-72 space-y-1.5 text-xs text-right">
             <div className="flex justify-between font-semibold text-gray-700">
               <span>Subtotal Costos:</span>
               <span>{formatearPrecio(totales.subtotalCosto)}</span>
@@ -267,11 +298,27 @@ export function ReporteCajaPrint({
               <span>Total Ventas:</span>
               <span>{formatearPrecio(totales.totalVenta)}</span>
             </div>
+            {movimientos && movimientos.length > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-emerald-800 font-semibold">
+                  <span>(+) Total Ingresos:</span>
+                  <span>+{formatearPrecio(printTotalIngresos)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-red-800 font-semibold">
+                  <span>(-) Total Retiros:</span>
+                  <span>-{formatearPrecio(printTotalRetiros)}</span>
+                </div>
+                <div className="flex justify-between font-black text-sm text-black border-t-2 border-black pt-1">
+                  <span>SALDO FINAL DE CAJA:</span>
+                  <span>{formatearPrecio(printSaldoFinal)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Línea para firma */}
-        <div className="mt-14 pt-4 border-t border-dashed border-gray-400 flex justify-between text-xs text-gray-600">
+        <div className="mt-14 pt-4 border-t border-dashed border-gray-400 flex justify-between text-xs text-gray-600 break-inside-avoid">
           <div>
             <p>Firma Responsable de Caja: _________________________</p>
           </div>

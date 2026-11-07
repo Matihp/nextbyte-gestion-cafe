@@ -38,12 +38,27 @@ module.exports = {
 
   delete: (id, trx = null) => consulta(trx).where({ id }).del(),
 
-  getSaldoTotal: (trx = null) =>
-    consulta(trx)
+  getSaldoTotal: async (trx = null) => {
+    const pedidosQ = trx ? trx('pedidos') : dbLocal('pedidos');
+    const ventaRes = await pedidosQ
+      .whereIn('estado', ['completado', 'entregado'])
+      .select(dbLocal.raw('COALESCE(SUM(total), 0) as total_ventas'))
+      .first();
+
+    const movRes = await consulta(trx)
       .select(dbLocal.raw(`
-        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as saldo
+        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as total_movimientos
       `))
-      .first(),
+      .first();
+
+    const totalVentas = Number(ventaRes?.total_ventas) || 0;
+    const totalMovs = Number(movRes?.total_movimientos) || 0;
+    return {
+      saldo: totalVentas + totalMovs,
+      total_ventas: totalVentas,
+      total_movimientos: totalMovs,
+    };
+  },
 
   getSaldoAntesDeMes: (mes, trx = null) =>
     consulta(trx)
@@ -60,4 +75,3 @@ module.exports = {
       .select('*')
       .orderBy('fecha', 'desc'),
 };
-
