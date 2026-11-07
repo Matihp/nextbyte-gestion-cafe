@@ -152,11 +152,34 @@ export default function ProductoModal({
       return;
     }
 
+    const stockDiff = stockNum - (producto ? Number(producto.stock_actual || 0) : 0);
+
+    // Validar disponibilidad de insumos en inventario si se aumentan unidades de un producto con receta
+    if (stockDiff > 0 && selectedRecipeId && recipeDetails?.ingredientes?.length > 0) {
+      for (const ing of recipeDetails.ingredientes) {
+        const insumo = insumos.find((i) => Number(i.id) === Number(ing.insumo_id));
+        const amountToDeduct = Number(ing.cantidad) * stockDiff;
+        const totalAvailable = Number(insumo ? insumo.cantidad_disponible : 0);
+
+        if (totalAvailable < amountToDeduct) {
+          const missing = Number((amountToDeduct - totalAvailable).toFixed(3));
+          const unidad = insumo?.unidad_medida || 'un';
+          const nombreInsumo = insumo?.nombre || 'Insumo';
+          toast.error(
+            `No se podrá cargar el producto debido a que no hay suficiente stock de insumos en el inventario.\nFaltan ${missing} ${unidad} de "${nombreInsumo}".\n(Disponible en inventario: ${totalAvailable} ${unidad})`,
+            { duration: 6000 }
+          );
+          return; // Bloquea el guardado
+        }
+      }
+    }
+
     const payload = {
       nombre: formData.name.trim(),
       categoria_id: Number(formData.categoryId),
       precio_venta: precioVentaNum,
       stock_actual: stockNum,
+      receta_id: selectedRecipeId ? Number(selectedRecipeId) : null,
       imagen: formData.image?.trim() ? formData.image.trim() : null
     };
 
@@ -164,13 +187,18 @@ export default function ProductoModal({
       setCargando(true);
       if (producto) {
         await productoService.actualizarProducto(producto.id, payload);
-        toast.success(`Producto "${payload.nombre}" actualizado`);
+        toast.success(
+          stockDiff > 0 && selectedRecipeId
+            ? `Producto "${payload.nombre}" actualizado y se descontaron los insumos del inventario`
+            : `Producto "${payload.nombre}" actualizado con éxito`
+        );
       } else {
-        const nuevo = await productoService.crearProducto(payload);
-        toast.success(`Producto "${payload.nombre}" agregado`);
-        if (selectedRecipeId && nuevo?.id) {
-          // Si seleccionó una receta al crear, podríamos asociarla
-        }
+        await productoService.crearProducto(payload);
+        toast.success(
+          stockNum > 0 && selectedRecipeId
+            ? `Producto "${payload.nombre}" creado y se descontaron los insumos del inventario`
+            : `Producto "${payload.nombre}" creado con éxito`
+        );
       }
 
       onOpenChange(false);
