@@ -270,4 +270,22 @@ describe('Distinción estricta entre Empleados del Comercio y Usuarios del Siste
     ]).del();
     await dbLocal('empleados').where('rol_id', '877890f1-ffc8-488b-a5c4-b1caff520383').del();
   });
+
+  it('6. Actualizar un usuario con nueva foto guarda la URL en la base de datos', async () => {
+    const fotoUrl = 'https://res.cloudinary.com/testcloud/image/upload/v123456/perfiles/avatar.jpg';
+
+    const res = await request(app)
+      .put('/api/usuarios/EMP-ADMIN-ROOT')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        foto: fotoUrl
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.foto).toBe(fotoUrl);
+
+    // Verificar directamente en la base de datos
+    const usuarioEnBd = await dbLocal('empleados').where({ id: 'EMP-ADMIN-ROOT' }).first();
+    expect(usuarioEnBd.foto).toBe(fotoUrl);
+  });
 });
