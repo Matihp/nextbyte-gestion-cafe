@@ -153,13 +153,6 @@ const create = async (datos) => {
     const id = Array.isArray(resultado) ? resultado[0] : resultado;
     const creado = await trx('productos').where({ id }).first();
 
-    if (datos.receta_id) {
-      await trx('recetas')
-        .where({ id: datos.receta_id })
-        .orWhere({ producto_id: datos.receta_id })
-        .update({ producto_id: id });
-    }
-
     const precioCosto = await calcularCostoProducto(id, trx);
 
     return {
@@ -206,12 +199,13 @@ const update = async (id, datos) => {
   return dbLocal.transaction(async (trx) => {
     // Si se incrementó el stock (stockDiff > 0), verificar receta y descontar insumos
     if (stockDiff > 0) {
-      let receta = await trx('recetas').where({ producto_id: id }).first();
-      if (!receta && datos.receta_id) {
-        receta = await trx('recetas')
-          .where({ id: datos.receta_id })
-          .orWhere({ producto_id: datos.receta_id })
-          .first();
+      const recetaIdTarget = datos.receta_id || actual.receta_id;
+      let receta = null;
+      if (recetaIdTarget) {
+        receta = await trx('recetas').where({ id: recetaIdTarget }).first();
+      }
+      if (!receta) {
+        receta = await trx('recetas').where({ producto_id: id }).first();
       }
 
       if (receta) {
@@ -236,13 +230,6 @@ const update = async (id, datos) => {
           await insumoRepository.descontarStock(ing.insumo_id, cantidadRequerida, trx);
         }
       }
-    }
-
-    if (datos.receta_id) {
-      await trx('recetas')
-        .where({ id: datos.receta_id })
-        .orWhere({ producto_id: datos.receta_id })
-        .update({ producto_id: id });
     }
 
     const payload = {

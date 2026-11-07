@@ -11,7 +11,8 @@ const conFksDesactivadas = async (knex, fn) => {
 
 exports.up = async function (knex) {
   await conFksDesactivadas(knex, async () => {
-    // 1. Permitir producto_id nullable en recetas para recetas independientes
+    // 1. Permitir producto_id nullable en recetas y eliminar índice único si existía
+    await knex.raw('DROP INDEX IF EXISTS recetas_producto_id_unique');
     await knex.schema.alterTable('recetas', function (table) {
       table.integer('producto_id').unsigned().nullable().alter();
     });
