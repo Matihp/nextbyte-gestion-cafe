@@ -133,7 +133,7 @@ export default function CategoriasModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100">
+      <DialogContent showCloseButton={false} className="bg-white rounded-xl shadow-xl max-w-md sm:max-w-md w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100">
         <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-100">
           <DialogTitle className="text-xl font-semibold text-gray-900">
             Categorías

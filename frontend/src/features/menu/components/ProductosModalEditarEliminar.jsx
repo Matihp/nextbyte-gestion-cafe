@@ -35,7 +35,10 @@ export default function ProductosModalEditarEliminar({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="bg-white rounded-xl shadow-xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100">
+        <DialogContent
+          showCloseButton={false}
+          className="bg-white rounded-xl shadow-xl max-w-3xl sm:max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100"
+        >
           <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-100">
             <DialogTitle className="text-xl font-semibold text-gray-900">
               Editar Productos
@@ -43,7 +46,8 @@ export default function ProductosModalEditarEliminar({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors cursor-pointer"
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              aria-label="Cerrar"
             >
               <X className="w-5 h-5" />
             </button>
@@ -54,10 +58,10 @@ export default function ProductosModalEditarEliminar({
               <Table className="w-full text-left text-sm text-gray-600">
                 <TableHeader className="bg-gray-50 border-b border-gray-200 text-gray-700">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="px-4 py-3 font-medium text-gray-700">Producto</TableHead>
-                    <TableHead className="px-4 py-3 font-medium text-gray-700">Categoría</TableHead>
-                    <TableHead className="px-4 py-3 font-medium text-gray-700">Precio</TableHead>
-                    <TableHead className="px-4 py-3 font-medium text-right text-gray-700">Acciones</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700">Producto</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700 whitespace-nowrap">Categoría</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700 whitespace-nowrap">Precio</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-right text-gray-700 whitespace-nowrap">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100">
@@ -70,18 +74,18 @@ export default function ProductosModalEditarEliminar({
                   ) : (
                     productos.map((product) => (
                       <TableRow key={product.id} className="hover:bg-gray-50/50">
-                        <TableCell className="px-4 py-3 font-medium text-gray-900">
+                        <TableCell className="px-5 py-3 font-medium text-gray-900">
                           {product.nombre}
                         </TableCell>
-                        <TableCell className="px-4 py-3">
+                        <TableCell className="px-5 py-3 whitespace-nowrap">
                           <span className="inline-block px-2 py-1 bg-[#F3E5DC] text-[#4B2B1D] text-xs font-semibold rounded-full">
                             {product.categoria_nombre || 'Sin Categoría'}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-3 text-gray-900 font-medium">
+                        <TableCell className="px-5 py-3 text-gray-900 font-medium whitespace-nowrap">
                           ${Number(product.precio_venta || 0).toFixed(2)}
                         </TableCell>
-                        <TableCell className="px-4 py-3 text-right">
+                        <TableCell className="px-5 py-3 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"

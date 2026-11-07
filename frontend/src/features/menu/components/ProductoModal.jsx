@@ -212,7 +212,7 @@ export default function ProductoModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[90vh] flex flex-col p-0 border border-gray-200">
+      <DialogContent showCloseButton={false} className="bg-white rounded-xl shadow-lg max-w-lg sm:max-w-lg w-full max-h-[90vh] flex flex-col p-0 border border-gray-200">
         <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-200">
           <DialogTitle className="text-xl font-semibold text-gray-900">
             {producto ? 'Editar Producto' : 'Agregar Nuevo Producto'}

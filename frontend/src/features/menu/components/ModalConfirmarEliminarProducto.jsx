@@ -33,7 +33,7 @@ export default function ModalConfirmarEliminarProducto({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border border-gray-100 p-0">
+      <DialogContent showCloseButton={false} className="bg-white rounded-xl shadow-xl max-w-sm sm:max-w-sm w-full overflow-hidden border border-gray-100 p-0">
         {paso === 'confirmar' ? (
           <div>
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/70">
