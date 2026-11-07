@@ -7,7 +7,10 @@
     "dev": "nodemon src/index.js",
     "test": "jest --runInBand",
     "migrate": "knex migrate:latest",
+    "migrate:turso": "knex migrate:latest --env turso",
     "seed": "knex seed:run",
+    "seed:turso": "knex seed:run --env turso",
+    "migrate:data-to-turso": "node scripts/migrar-datos-a-turso.js",
     "reset-db": "node scripts/reset-db.js"
   },
   "jest": {
@@ -22,6 +25,7 @@
   "description": "",
   "dependencies": {
     "@libsql/client": "^0.18.0",
+    "@libsql/knex-libsql": "^0.1.0",
     "bcryptjs": "3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

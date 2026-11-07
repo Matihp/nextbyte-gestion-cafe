@@ -1,5 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const Client_Libsql = require('@libsql/knex-libsql');
 
 module.exports = {
   development: {
@@ -15,6 +16,22 @@ module.exports = {
         conn.run('PRAGMA foreign_keys = ON', cb);
       }
     },
+    migrations: {
+      directory: path.join(__dirname, 'src', 'db', 'migrations')
+    },
+    seeds: {
+      directory: path.join(__dirname, 'src', 'db', 'seeds')
+    }
+  },
+
+  turso: {
+    client: Client_Libsql,
+    connection: {
+      filename: process.env.TURSO_DB_URL
+        ? `${process.env.TURSO_DB_URL}?authToken=${process.env.TURSO_AUTH_TOKEN || ''}`
+        : path.join(__dirname, 'dev_local.db')
+    },
+    useNullAsDefault: true,
     migrations: {
       directory: path.join(__dirname, 'src', 'db', 'migrations')
     },
