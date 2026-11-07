@@ -342,7 +342,8 @@ export function OrdersPage() {
       } else {
         await comandaService.cambiarEstado(orderId, backendTarget);
       }
-      toast.success(`Pedido #${prevOrder.displayId || prevOrder.id} actualizado a "${newStatusDisplay}"`);
+      const orderNumLabel = prevOrder.displayId || prevOrder.orderNumber || `#${prevOrder.id}`;
+      toast.success(`Pedido ${orderNumLabel.startsWith('#') ? orderNumLabel : `#${orderNumLabel}`} actualizado a "${newStatusDisplay}"`);
     } catch {
       // Revertir en error
       setOrders((prev) =>
@@ -355,12 +356,15 @@ export function OrdersPage() {
   // Cancelar pedido completo desde el modal
   const handleCancelOrder = async (orderId) => {
     try {
-      await pedidoService.cancelar(orderId);
+      const esMerma = window.confirm(
+        '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
+      );
+      await pedidoService.cancelar(orderId, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
       );
       setSelectedOrderId(null);
-      toast.success('Pedido cancelado exitosamente');
+      toast.success(esMerma ? 'Pedido cancelado y registrado como MERMA' : 'Pedido cancelado exitosamente');
     } catch {
       toast.error('Error al cancelar el pedido');
     }

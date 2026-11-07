@@ -17,12 +17,12 @@ const create = async (req, res) => {
 };
 
 const cancelar = async (req, res) => {
-  const data = await pedidoService.cancelar(req.params.id);
+  const data = await pedidoService.cancelar(req.params.id, req.body);
   return ok(res, data);
 };
 
 const eliminarItem = async (req, res) => {
-  const data = await pedidoService.eliminarItem(req.params.id, req.params.detalleId);
+  const data = await pedidoService.eliminarItem(req.params.id, req.params.detalleId, req.body);
   return ok(res, data);
 };
 

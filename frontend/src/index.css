@@ -238,11 +238,22 @@
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 
   #print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  #print-area thead {
+    display: table-header-group;
+  }
+
+  #print-area tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

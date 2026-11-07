@@ -3,110 +3,128 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
-  DialogFooter
+  DialogTitle
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { formatearPrecio } from '@/utils/formatters';
-import { Search, Pencil, Trash2 } from 'lucide-react';
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell
+} from '@/components/ui/table';
+import { X, Edit, Trash2 } from 'lucide-react';
+import ModalConfirmarEliminarProducto from './ModalConfirmarEliminarProducto';
 
 export default function ProductosModalEditarEliminar({
   open,
   onOpenChange,
   productos = [],
-  onEditarProducto,
-  onEliminarProducto
+  onEditProduct,
+  onDeleteProduct
 }) {
-  const [filtro, setFiltro] = useState('');
+  const [deletingProduct, setDeletingProduct] = useState(null);
 
-  const productosFiltrados = productos.filter((p) =>
-    (p.nombre || '').toLowerCase().includes(filtro.toLowerCase().trim()) ||
-    (p.categoria_nombre || '').toLowerCase().includes(filtro.toLowerCase().trim())
-  );
+  const handleConfirmDelete = (motivo) => {
+    if (deletingProduct && onDeleteProduct) {
+      onDeleteProduct(deletingProduct, motivo);
+    }
+    setDeletingProduct(null);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-card border-primary/20 text-card-foreground rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-1">
-          <DialogTitle className="text-xl font-bold text-primary tracking-tight">
-            Editar / Eliminar Producto
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-white rounded-xl shadow-xl max-w-3xl sm:max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100"
+        >
+          <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-100">
+            <DialogTitle className="text-xl font-semibold text-gray-900">
+              Editar Productos
+            </DialogTitle>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </DialogHeader>
 
-        {/* Buscador de productos */}
-        <div className="relative pt-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/40 pointer-events-none mt-0.5" />
-          <Input
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
-            placeholder="Buscar producto a modificar o eliminar..."
-            className="pl-9 h-10 bg-background/50 border-primary/20 text-primary text-xs placeholder:text-primary/40 rounded-xl"
-          />
-        </div>
+          <div className="p-6 overflow-y-auto flex-1">
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <Table className="w-full text-left text-sm text-gray-600">
+                <TableHeader className="bg-gray-50 border-b border-gray-200 text-gray-700">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700">Producto</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700 whitespace-nowrap">Categoría</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-gray-700 whitespace-nowrap">Precio</TableHead>
+                    <TableHead className="px-5 py-3 font-semibold text-right text-gray-700 whitespace-nowrap">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100">
+                  {productos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                        No hay productos registrados.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    productos.map((product) => (
+                      <TableRow key={product.id} className="hover:bg-gray-50/50">
+                        <TableCell className="px-5 py-3 font-medium text-gray-900">
+                          {product.nombre}
+                        </TableCell>
+                        <TableCell className="px-5 py-3 whitespace-nowrap">
+                          <span className="inline-block px-2 py-1 bg-[#F3E5DC] text-[#4B2B1D] text-xs font-semibold rounded-full">
+                            {product.categoria_nombre || 'Sin Categoría'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-5 py-3 text-gray-900 font-medium whitespace-nowrap">
+                          ${Number(product.precio_venta || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="px-5 py-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onOpenChange(false);
+                                onEditProduct(product);
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-[#4B2B1D] bg-white border border-gray-200 rounded-md shadow-2xs transition-colors cursor-pointer"
+                              title="Editar producto"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingProduct(product)}
+                              className="p-1.5 text-gray-500 hover:text-red-600 bg-white border border-gray-200 rounded-md shadow-2xs transition-colors cursor-pointer"
+                              title="Eliminar producto"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Lista de productos */}
-        <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1 py-1">
-          {productosFiltrados.length === 0 ? (
-            <p className="text-xs text-primary/50 text-center py-6">
-              No se encontraron productos coincidentes.
-            </p>
-          ) : (
-            productosFiltrados.map((producto) => (
-              <div
-                key={producto.id}
-                className="flex items-center justify-between px-4 py-3 rounded-2xl border border-primary/10 bg-background/50 hover:bg-background/80 transition-colors shadow-2xs"
-              >
-                <div className="flex flex-col">
-                  <span className="font-semibold text-sm text-primary">{producto.nombre}</span>
-                  <div className="flex items-center gap-2 text-xs text-primary/60">
-                    <span>{producto.categoria_nombre || 'Sin categoría'}</span>
-                    <span>•</span>
-                    <span className="font-bold text-primary">{formatearPrecio(producto.precio_venta)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onEditarProducto(producto);
-                    }}
-                    title="Editar producto"
-                    className="p-1 rounded-md text-primary/60 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onEliminarProducto(producto);
-                    }}
-                    title="Eliminar producto"
-                    className="p-1 rounded-md text-primary/60 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <DialogFooter className="pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="w-full h-11 bg-muted/60 border-transparent text-primary hover:bg-muted font-medium rounded-xl"
-          >
-            Cerrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Modal de Confirmación y Motivo de Eliminación (2 pasos: Confirmar -> Tipificar) */}
+      <ModalConfirmarEliminarProducto
+        open={Boolean(deletingProduct)}
+        onOpenChange={(val) => !val && setDeletingProduct(null)}
+        producto={deletingProduct}
+        onConfirmar={handleConfirmDelete}
+      />
+    </>
   );
 }
-

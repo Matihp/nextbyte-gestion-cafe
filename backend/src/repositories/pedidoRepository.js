@@ -7,7 +7,29 @@ const TABLE = 'pedidos';
 const getTodayDate = () => new Date().toISOString().split('T')[0];
 const getTodayTime = () => new Date().toTimeString().split(' ')[0];
 
+const enrichOrder = (order) => {
+  if (!order) return null;
+  const num = order.numero_pedido || 1;
+  const numStr = String(num).padStart(4, '0');
+  const displayId = `#${numStr}`;
+  return {
+    ...order,
+    numero_pedido: num,
+    display_id: displayId,
+    displayId: displayId,
+    orderNumber: displayId,
+  };
+};
+
 module.exports = {
+  getUltimoNumeroDelDia: async (fecha, trx = null) => {
+    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
+    return qb
+      .where('fecha', fecha)
+      .max('numero_pedido as numero_pedido')
+      .first();
+  },
+
   getAll: async (filters = {}) => {
     let query = dbLocal(TABLE).select('*');
 
@@ -30,48 +52,77 @@ module.exports = {
       query = query.where('fecha', '<=', filters.hasta);
     }
     if (filters.search) {
-      const term = `%${filters.search}%`;
+      const rawTerm = String(filters.search).trim();
+      const termWithoutHash = rawTerm.replace(/^#/, '');
+      const term = `%${termWithoutHash}%`;
       query = query.where((qb) => {
         qb.where('cliente', 'like', term)
-          .orWhere('id', 'like', term)
-          .orWhere('telefono', 'like', term);
+          .orWhere('id', 'like', `%${rawTerm}%`)
+          .orWhere('telefono', 'like', term)
+          .orWhere('numero_pedido', 'like', term);
       });
     }
 
-    return await query.orderBy('created_at', 'desc');
+    const rows = await query.orderBy('created_at', 'desc');
+    return rows.map(enrichOrder);
   },
 
-  getById: (id, trx = null) => {
+  getById: async (id, trx = null) => {
     const qb = trx ? trx(TABLE) : dbLocal(TABLE);
-    return qb.where({ id }).first();
+    let order = await qb.where({ id }).first();
+    if (!order && String(id).startsWith('#')) {
+      const num = parseInt(String(id).replace('#', ''), 10);
+      if (!isNaN(num)) {
+        order = await (trx ? trx(TABLE) : dbLocal(TABLE))
+          .where({ numero_pedido: num })
+          .orderBy('created_at', 'desc')
+          .first();
+      }
+    }
+    return enrichOrder(order);
   },
 
   getWithDetails: async (id, trx = null) => {
     const order = await module.exports.getById(id, trx);
     if (!order) return null;
 
-    const details = await detallePedidoRepository.getByPedidoId(id, trx);
+    const details = await detallePedidoRepository.getByPedidoId(order.id, trx);
     return {
       ...order,
       detalles: details
     };
   },
 
-  getByEstado: (estado) => dbLocal(TABLE).where({ estado }).orderBy('created_at', 'asc'),
-
-  getByEstados: (estados, trx = null) => {
-    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
-    return qb.whereIn('estado', estados).orderBy('created_at', 'asc');
+  getByEstado: async (estado) => {
+    const rows = await dbLocal(TABLE).where({ estado }).orderBy('created_at', 'asc');
+    return rows.map(enrichOrder);
   },
 
-  getActiveComandas: () =>
-    dbLocal(TABLE)
+  getByEstados: async (estados, trx = null) => {
+    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
+    const rows = await qb.whereIn('estado', estados).orderBy('created_at', 'asc');
+    return rows.map(enrichOrder);
+  },
+
+  getActiveComandas: async () => {
+    const rows = await dbLocal(TABLE)
       .whereIn('estado', ['pendiente', 'en_preparacion'])
-      .orderBy('created_at', 'asc'),
+      .orderBy('created_at', 'asc');
+    return rows.map(enrichOrder);
+  },
 
   create: async (data, trx = null) => {
+    let numero_pedido = data.numero_pedido;
+    if (!numero_pedido) {
+      const fechaOrder = data.fecha || getTodayDate();
+      const ultimo = await module.exports.getUltimoNumeroDelDia(fechaOrder, trx);
+      const ultimoNum = Number(ultimo?.numero_pedido || 0);
+      numero_pedido = (ultimoNum % 9999) + 1;
+    }
+
     const payload = {
       id: data.id || `PED-${Date.now().toString().slice(-6)}`,
+      numero_pedido,
       cliente: data.cliente || 'Consumidor Final',
       total: Number(data.total || 0),
       estado: data.estado || 'pendiente',

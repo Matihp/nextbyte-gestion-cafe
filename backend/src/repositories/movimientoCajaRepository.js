@@ -3,7 +3,17 @@ const { dbLocal } = require('../config/db');
 
 const TABLE = 'movimientos_caja';
 const MERMAS_TABLE = 'registros_mermas';
-const MOTIVOS_MERMA = ['VENCIDO', 'MERMA', 'EN FALTA'];
+const MOTIVOS_MERMA = [
+  'VENCIDO',
+  'MERMA',
+  'EN FALTA',
+  'Vencido',
+  'Merma',
+  'En falta',
+  'En Falta',
+  'Producto Vencido',
+  'PRODUCTO VENCIDO'
+];
 
 const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
 
@@ -38,12 +48,27 @@ module.exports = {
 
   delete: (id, trx = null) => consulta(trx).where({ id }).del(),
 
-  getSaldoTotal: (trx = null) =>
-    consulta(trx)
+  getSaldoTotal: async (trx = null) => {
+    const pedidosQ = trx ? trx('pedidos') : dbLocal('pedidos');
+    const ventaRes = await pedidosQ
+      .whereNot('estado', 'cancelado')
+      .select(dbLocal.raw('COALESCE(SUM(total), 0) as total_ventas'))
+      .first();
+
+    const movRes = await consulta(trx)
       .select(dbLocal.raw(`
-        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as saldo
+        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as total_movimientos
       `))
-      .first(),
+      .first();
+
+    const totalVentas = Number(ventaRes?.total_ventas) || 0;
+    const totalMovs = Number(movRes?.total_movimientos) || 0;
+    return {
+      saldo: totalVentas + totalMovs,
+      total_ventas: totalVentas,
+      total_movimientos: totalMovs,
+    };
+  },
 
   getSaldoAntesDeMes: (mes, trx = null) =>
     consulta(trx)
@@ -57,7 +82,11 @@ module.exports = {
     dbLocal(MERMAS_TABLE)
       .whereIn('motivo', MOTIVOS_MERMA)
       .whereRaw(`strftime('%Y-%m', fecha) = ?`, [mes])
-      .select('*')
-      .orderBy('fecha', 'desc'),
+      .select(
+        '*',
+        dbLocal.raw('COALESCE(precio_costo, 0) as precio_costo'),
+        dbLocal.raw('ROUND(COALESCE(precio_costo, 0) * cantidad, 2) as costo_total')
+      )
+      .orderBy('fecha', 'desc')
+      .orderBy('created_at', 'desc'),
 };
-

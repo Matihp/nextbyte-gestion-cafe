@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getStatusColor, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 
 export function OrderDetailModal({ order, open, onClose }) {
   if (!order) return null;
@@ -22,7 +22,7 @@ export function OrderDetailModal({ order, open, onClose }) {
         <DialogHeader>
           <div className="flex items-center justify-between gap-4 mb-1">
             <DialogTitle className="text-xl font-bold text-[#4B2B1D]">
-              Pedido #{order.id}
+              Pedido {formatearIdPedido(order)}
             </DialogTitle>
             <span
               className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(

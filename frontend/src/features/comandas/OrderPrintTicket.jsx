@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/formatters';
 import { normalizeOrderTypeDisplay } from './OrdersPage';
 import { formatDateDDMMAAAA } from './orderSequence';
 
@@ -25,7 +25,7 @@ export function OrderPrintTicket({ order }) {
 
         <div className="mb-6 space-y-1 text-sm">
           <p>
-            <span className="font-bold">ID Pedido:</span> {order.displayId || `#${order.id}`}
+            <span className="font-bold">ID Pedido:</span> {formatearIdPedido(order)}
           </p>
           <p>
             <span className="font-bold">Cliente:</span> {order.customer || 'Consumidor Final'}

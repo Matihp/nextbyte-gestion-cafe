@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
-import { formatearPrecio, formatearSoloFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearSoloFecha, formatearIdPedido } from '@/utils/formatters';
 
 const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
@@ -16,7 +16,7 @@ const formatEstadoNombre = (estado) => {
 export function DetallePedidoModal({ pedido, abierto, alCerrar, alImprimir }) {
   if (!abierto || !pedido) return null;
 
-  const idFormateado = String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`;
+  const idFormateado = formatearIdPedido(pedido);
   const items = pedido.items && pedido.items.length > 0 ? pedido.items : [];
 
   const fechaTexto = pedido.fecha ? formatearSoloFecha(pedido.fecha) : '';

@@ -33,6 +33,7 @@ module.exports = {
       motivo: data.motivo,
       fecha: data.fecha || new Date().toISOString().split("T")[0],
       cantidad: data.cantidad !== undefined ? Number(data.cantidad) : 1,
+      precio_costo: data.precio_costo !== undefined ? Number(data.precio_costo) : (data.precioCosto !== undefined ? Number(data.precioCosto) : 0),
     };
 
     await consulta(trx).insert(payload);

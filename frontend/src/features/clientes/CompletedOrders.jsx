@@ -25,13 +25,18 @@ export function CompletedOrders({ orders = [] }) {
     >
       {/* 1. Nombre y primera inicial del apellido */}
       <span
-        className={`font-black text-emerald-950 truncate flex-1 min-w-0 tracking-wide ${
+        className={`font-black text-emerald-950 truncate flex-1 min-w-0 tracking-wide flex items-center gap-1.5 ${
           isMultiColumn
             ? 'text-sm md:text-base'
             : 'text-lg md:text-xl lg:text-2xl'
         }`}
       >
-        {formatCustomerName(order.customer)}
+        {order.displayId && (
+          <span className="text-xs md:text-sm font-bold opacity-75 font-mono text-emerald-800">
+            {order.displayId}
+          </span>
+        )}
+        <span>{formatCustomerName(order.customer)}</span>
       </span>
 
       {/* 2. Estado + 3. Tipo de pedido */}

@@ -181,6 +181,7 @@ async function obtenerTransaccionesCaja(filtros = {}) {
     .join('detalles_pedidos as dp', 'p.id', 'dp.pedido_id')
     .select(
       'p.id as pedido_id',
+      'p.numero_pedido',
       'p.cliente',
       'p.fecha',
       'p.hora',
@@ -195,7 +196,8 @@ async function obtenerTransaccionesCaja(filtros = {}) {
       'dp.precio_venta',
       dbLocal.raw('ROUND(dp.cantidad * dp.precio_costo, 2) as costo_total'),
       dbLocal.raw('ROUND(dp.cantidad * dp.precio_venta, 2) as venta_total')
-    );
+    )
+    .whereNot('p.estado', 'cancelado');
 
   if (filtros.fecha) {
     query = query.where('p.fecha', filtros.fecha);

@@ -32,3 +32,23 @@ export function formatearSoloFecha(fecha) {
   }).format(d);
 }
 
+export function formatearIdPedido(pedidoOrId) {
+  if (!pedidoOrId) return '#0001';
+  if (typeof pedidoOrId === 'object') {
+    if (pedidoOrId.display_id) return pedidoOrId.display_id;
+    if (pedidoOrId.displayId) return pedidoOrId.displayId;
+    if (pedidoOrId.orderNumber) return pedidoOrId.orderNumber;
+    if (pedidoOrId.numero_pedido) {
+      return `#${String(pedidoOrId.numero_pedido).padStart(4, '0')}`;
+    }
+    return formatearIdPedido(pedidoOrId.id);
+  }
+  const str = String(pedidoOrId).trim();
+  if (/^#?\d{1,4}$/.test(str)) {
+    const digits = str.replace('#', '');
+    return `#${digits.padStart(4, '0')}`;
+  }
+  return str.startsWith('#') ? str : `#${str}`;
+}
+
+

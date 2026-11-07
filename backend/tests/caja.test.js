@@ -261,5 +261,44 @@ describe('Pruebas de integración - API /api/caja', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('VALIDACION');
     });
+
+    it('permite retirar dinero considerando el total acumulado de ventas (efectivo, tarjeta, mercadopago) sin importar el método', async () => {
+      // Insertamos ventas con distintos métodos de pago y estados
+      await dbLocal('pedidos').insert([
+        {
+          id: 'PED-VENTA-EFECTIVO',
+          cliente: 'Cliente 1',
+          total: 5000,
+          estado: 'pendiente',
+          tipo_pedido: 'salon',
+          metodo_pago: 'efectivo',
+          fecha: '2026-11-07',
+          hora: '10:00:00'
+        },
+        {
+          id: 'PED-VENTA-TARJETA',
+          cliente: 'Cliente 2',
+          total: 5000,
+          estado: 'pendiente',
+          tipo_pedido: 'salon',
+          metodo_pago: 'credito',
+          fecha: '2026-11-07',
+          hora: '10:05:00'
+        }
+      ]);
+
+      // Intentamos retirar 10.000 (disponible gracias a las dos ventas)
+      const resRetiro = await request(app).post('/api/caja/movimientos').send({
+        fecha: '2026-11-07',
+        hora: '10:30:00',
+        tipo: 'RETIRO',
+        detalle: 'Retiro total de caja mixta',
+        monto: 10000
+      });
+
+      expect(resRetiro.status).toBe(201);
+      expect(resRetiro.body.success).toBe(true);
+      expect(resRetiro.body.data.monto).toBe(10000);
+    });
   });
 });

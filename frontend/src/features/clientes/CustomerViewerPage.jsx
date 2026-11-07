@@ -106,6 +106,8 @@ export function CustomerViewerPage() {
 
           return {
             id: String(o.id),
+            displayId: o.display_id || o.displayId || (o.numero_pedido ? `#${String(o.numero_pedido).padStart(4, '0')}` : null),
+            numero_pedido: o.numero_pedido,
             customer: o.cliente || o.customer || 'Consumidor Final',
             total: Number(o.total || 0),
             status: normalizeStatusDisplay(o.estado || o.status),

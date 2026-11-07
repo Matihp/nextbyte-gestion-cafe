@@ -1,5 +1,5 @@
 import { formatDate } from '../utils/categoryDetails';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 
 export function TicketPrintArea({ order }) {
   if (!order) return null;
@@ -15,7 +15,7 @@ export function TicketPrintArea({ order }) {
       </div>
 
       <div className="mb-6 space-y-1">
-        <p><span className="font-bold">ID Pedido:</span> {order.id}</p>
+        <p><span className="font-bold">ID Pedido:</span> {formatearIdPedido(order)}</p>
         <p><span className="font-bold">Cliente:</span> {order.customer || order.cliente}</p>
         <p><span className="font-bold">Tipo:</span> {order.orderType || order.tipo_pedido}</p>
         <p><span className="font-bold">Medio de Pago:</span> {order.paymentMethod || order.metodo_pago}</p>

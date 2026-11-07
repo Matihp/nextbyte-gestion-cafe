@@ -221,12 +221,15 @@ export default function Pedidos() {
       };
 
       const respuesta = await pedidoService.crear(payload);
-      const pedidoCreadoId = respuesta?.id || `PED-${Math.floor(1000 + Math.random() * 9000)}`;
+      const pedidoDisplayId = respuesta?.display_id || respuesta?.displayId || (respuesta?.numero_pedido ? `#${String(respuesta.numero_pedido).padStart(4, '0')}` : '#0001');
 
-      toast.success(`Comanda enviada con éxito (${pedidoCreadoId})`);
+      toast.success(`Comanda enviada con éxito (${pedidoDisplayId})`);
 
       const ordenParaTicket = {
-        id: respuesta?.id || pedidoCreadoId,
+        id: respuesta?.id || pedidoDisplayId,
+        displayId: pedidoDisplayId,
+        display_id: pedidoDisplayId,
+        numero_pedido: respuesta?.numero_pedido,
         customer: respuesta?.cliente || customerName.trim(),
         orderType,
         paymentMethod:

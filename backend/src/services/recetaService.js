@@ -25,13 +25,19 @@ const getByProductoId = async (productoId) => {
   const insumos = await insumoRepository.getAll();
   const insumosMap = new Map(insumos.map((i) => [i.id, i]));
 
+  let costoTotal = 0;
   const ingredientesFormateados = ingredientes.map((item) => {
     const insumo = insumosMap.get(item.insumo_id);
+    const pCosto = insumo ? Number(insumo.precio_costo || 0) : 0;
+    const subtotal = Number((pCosto * Number(item.cantidad)).toFixed(2));
+    costoTotal += subtotal;
     return {
       insumo_id: item.insumo_id,
       insumo_nombre: insumo ? insumo.nombre : null,
       unidad_medida: insumo ? insumo.unidad_medida : null,
-      cantidad: Number(item.cantidad)
+      precio_costo: pCosto,
+      cantidad: Number(item.cantidad),
+      subtotal_costo: subtotal
     };
   });
 
@@ -39,6 +45,7 @@ const getByProductoId = async (productoId) => {
     id: receta.id,
     producto_id: Number(productoId),
     nombre: receta.nombre,
+    costo_total: Number(costoTotal.toFixed(2)),
     ingredientes: ingredientesFormateados
   };
 };
@@ -92,13 +99,19 @@ const guardar = async (productoId, datos) => {
 
     await ingredienteRecetaRepository.createMany(ingredientesPayload, trx);
 
+    let costoTotal = 0;
     const ingredientesFormateados = datos.ingredientes.map((item) => {
       const insumo = insumosMap.get(Number(item.insumo_id));
+      const pCosto = insumo ? Number(insumo.precio_costo || 0) : 0;
+      const subtotal = Number((pCosto * Number(item.cantidad)).toFixed(2));
+      costoTotal += subtotal;
       return {
         insumo_id: Number(item.insumo_id),
         insumo_nombre: insumo ? insumo.nombre : null,
         unidad_medida: insumo ? insumo.unidad_medida : null,
-        cantidad: Number(item.cantidad)
+        precio_costo: pCosto,
+        cantidad: Number(item.cantidad),
+        subtotal_costo: subtotal
       };
     });
 
@@ -106,6 +119,7 @@ const guardar = async (productoId, datos) => {
       id: receta.id,
       producto_id: Number(productoId),
       nombre: receta.nombre,
+      costo_total: Number(costoTotal.toFixed(2)),
       ingredientes: ingredientesFormateados
     };
   });

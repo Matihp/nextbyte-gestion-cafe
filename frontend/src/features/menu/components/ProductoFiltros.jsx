@@ -12,62 +12,64 @@ export default function ProductoFiltros({
   categorias = []
 }) {
   return (
-    <div className="bg-card/90 backdrop-blur-xs border border-primary/10 rounded-2xl p-2.5 shadow-xs flex flex-col md:flex-row items-center gap-3 w-full">
-      {/* Buscador de Productos */}
-      <div className="relative flex-1 w-full">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/40 pointer-events-none" />
-        <Input
-          type="text"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar productos..."
-          className="pl-9 h-10 bg-background/50 border-primary/15 text-primary placeholder:text-primary/40 rounded-xl focus-visible:ring-primary/20 w-full"
-        />
-      </div>
+    <div className="bg-white rounded-xl shadow-xs p-6 border border-gray-100 mb-6">
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Search */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+          <Input
+            type="text"
+            placeholder="Buscar productos..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus-visible:ring-2 focus-visible:ring-[#A67C52] text-sm bg-white"
+          />
+        </div>
 
-      {/* Controles de Filtros y Categorías (Fieles a Imágenes 1, 2 y 3) */}
-      <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap sm:flex-nowrap">
-        {/* Menú Desplegable "Filtro" (Imagen 2: Filtro, +Vendidos, -Vendidos) */}
-        <select
-          value={filtroVentas}
-          onChange={(e) => setFiltroVentas(e.target.value)}
-          className="h-10 rounded-xl border border-primary/20 bg-background/50 px-3.5 pr-7 text-xs sm:text-sm font-medium text-primary outline-none transition-colors focus:border-primary/40 cursor-pointer min-w-28 shadow-2xs"
-        >
-          <option value="filtro">Filtro</option>
-          <option value="+vendidos">+Vendidos</option>
-          <option value="-vendidos">-Vendidos</option>
-        </select>
+        {/* Filters */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <select
+            value={filtroVentas}
+            onChange={(e) => setFiltroVentas(e.target.value)}
+            className="px-4 py-2 pr-8 rounded-lg border border-gray-300 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#A67C52] bg-white text-gray-700 hover:bg-gray-50 text-sm h-10"
+          >
+            <option value="none">Filtro</option>
+            <option value="+Vendidos">+Vendidos</option>
+            <option value="-Vendidos">-Vendidos</option>
+          </select>
 
-        {/* Píldora "Todos" (Fondo chocolate oscuro cuando está activa) */}
-        <Button
-          type="button"
-          onClick={() => setCategoriaSeleccionada('')}
-          className={`h-10 px-5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 cursor-pointer ${
-            !categoriaSeleccionada
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'bg-background/50 border border-primary/15 text-primary hover:bg-muted/40'
-          }`}
-        >
-          Todos
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setCategoriaSeleccionada('Todos')}
+            className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium h-10 ${
+              categoriaSeleccionada === 'Todos'
+                ? 'bg-[#4B2B1D] text-white hover:bg-[#4B2B1D]/90 hover:text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Todos
+          </Button>
 
-        {/* Menú Desplegable "Categoría" (Imagen 1: Lista de Categorías en mayúsculas) */}
-        <select
-          value={categoriaSeleccionada}
-          onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-          className={`h-10 rounded-xl border bg-background/50 px-3.5 pr-7 text-xs sm:text-sm font-medium transition-colors outline-none cursor-pointer min-w-32 shadow-2xs ${
-            categoriaSeleccionada
-              ? 'border-primary text-primary font-semibold'
-              : 'border-primary/20 text-primary/80'
-          }`}
-        >
-          <option value="">Categoría</option>
-          {categorias.map((cat) => (
-            <option key={cat.id} value={cat.nombre}>
-              {cat.nombre.toUpperCase()}
+          <select
+            value={categoriaSeleccionada === 'Todos' ? '' : categoriaSeleccionada}
+            onChange={(e) => setCategoriaSeleccionada(e.target.value || 'Todos')}
+            className={`px-4 py-2 pr-8 rounded-lg transition-colors cursor-pointer focus:outline-none text-sm h-10 ${
+              categoriaSeleccionada !== 'Todos'
+                ? 'bg-[#4B2B1D] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <option value="" disabled hidden>
+              Categoría
             </option>
-          ))}
-        </select>
+            {categorias.map((cat) => (
+              <option key={cat.id} value={cat.nombre} className="bg-white text-gray-900">
+                {cat.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

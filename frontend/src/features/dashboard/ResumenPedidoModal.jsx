@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Printer, XCircle } from 'lucide-react';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 
 export function ResumenPedidoModal({
   abierto,
@@ -13,7 +13,7 @@ export function ResumenPedidoModal({
   if (!abierto || !pedido) return null;
 
   const items = pedido.detalles || pedido.items || [];
-  const idStr = String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`;
+  const idStr = formatearIdPedido(pedido);
 
   const tipoDisplay = () => {
     const t = String(pedido.tipo_pedido || pedido.orderType || '').toLowerCase();
