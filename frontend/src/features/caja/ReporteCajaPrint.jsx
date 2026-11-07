@@ -30,7 +30,8 @@ export function ReporteCajaPrint({
   pedidos = [],
   totales = { subtotalCosto: 0, totalVenta: 0 },
   ticketPedido = null,
-  movimientos = []
+  movimientos = [],
+  mermas = []
 }) {
   // CASO 1: Reimpresión de ticket individual de control interno (igual al PDF de muestra)
   if (ticketPedido) {
@@ -133,6 +134,16 @@ export function ReporteCajaPrint({
   const printDiferenciaVentasCostos = (totales.totalVenta || 0) - (totales.subtotalCosto || 0);
 
   const esIngresosRetiros = tipoReporte === 'ingresos-retiros';
+  const esEliminados = tipoReporte === 'eliminados';
+
+  let printTotalCostoMermas = 0;
+  if (Array.isArray(mermas)) {
+    for (const m of mermas) {
+      const cant = Number(m.cantidad) || 1;
+      const pCosto = Number(m.precio_costo) || 0;
+      printTotalCostoMermas += Number(m.costo_total) || (cant * pCosto);
+    }
+  }
 
   // CASO 2: Reporte General de Caja o Reporte de Ingresos/Retiros
   return (
@@ -154,8 +165,81 @@ export function ReporteCajaPrint({
           </div>
         </div>
 
-        {/* SI ES REPORTE DE INGRESOS/RETIROS: No listar las transacciones, solo mostrar los totales del mes */}
-        {esIngresosRetiros ? (
+        {/* SI ES REPORTE DE PRODUCTOS ELIMINADOS (AUDITORÍA) */}
+        {esEliminados ? (
+          <div>
+            <div className="mb-4 p-3 border border-black bg-gray-50 rounded-lg text-xs">
+              <span className="font-bold">INFORME DE AUDITORÍA:</span> Registro inmutable de bajas de productos ({periodo}). Modo solo lectura.
+            </div>
+
+            <table className="w-full text-left text-xs mb-6 border-collapse">
+              <thead>
+                <tr className="border-b-2 border-black text-black font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-2 px-2">Fecha y Hora</th>
+                  <th className="py-2 px-2">Producto</th>
+                  <th className="py-2 px-2 text-center">Cant.</th>
+                  <th className="py-2 px-2 text-right">Precio Costo</th>
+                  <th className="py-2 px-2 text-right">Costo Total</th>
+                  <th className="py-2 px-2 text-center">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!mermas || mermas.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-gray-500 italic">
+                      No se registraron productos eliminados en este período.
+                    </td>
+                  </tr>
+                ) : (
+                  mermas.map((m, idx) => {
+                    const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
+                    const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                    const cant = Number(m.cantidad) || 1;
+                    const pCosto = Number(m.precio_costo) || 0;
+                    const cTotal = Number(m.costo_total) || (cant * pCosto);
+
+                    return (
+                      <tr key={idx} className="border-b border-gray-200">
+                        <td className="py-2 px-2 whitespace-nowrap">
+                          {fechaStr} {horaStr && `(${horaStr} hs)`}
+                        </td>
+                        <td className="py-2 px-2 font-medium">
+                          {m.nombre_producto}
+                          {m.nombre_categoria && (
+                            <span className="text-[10px] text-gray-500 block">
+                              {m.nombre_categoria}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-center font-bold">{cant}</td>
+                        <td className="py-2 px-2 text-right">{formatearPrecio(pCosto)}</td>
+                        <td className="py-2 px-2 text-right font-bold">{formatearPrecio(cTotal)}</td>
+                        <td className="py-2 px-2 text-center">
+                          <span className="px-2 py-0.5 border border-black rounded text-[10px] font-bold uppercase">
+                            {m.motivo}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {mermas && mermas.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-black font-bold text-xs">
+                    <td colSpan={4} className="py-2.5 px-2 uppercase font-black">
+                      TOTAL VALOR DE COSTOS ELIMINADOS
+                    </td>
+                    <td className="py-2.5 px-2 text-right font-black text-red-700 text-sm">
+                      {formatearPrecio(totales.totalCostoMermas || printTotalCostoMermas)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        ) : esIngresosRetiros ? (
           <div className="mb-6 p-4 border-2 border-black bg-gray-50 rounded-xl break-inside-avoid">
             <h2 className="text-xs font-black uppercase tracking-wider text-black border-b border-gray-300 pb-2 mb-3">
               Transacciones del Mes (Totales Contables)
@@ -287,105 +371,127 @@ export function ReporteCajaPrint({
         )}
 
         {/* Tabla de la Sección: Movimientos de Caja Chica (Ingresos y Retiros) */}
-        <div className="mt-4 border-t-2 border-black pt-4 break-inside-avoid">
-          <h3 className="font-bold text-xs uppercase tracking-wider mb-2 text-black">
-            Detalle de Ingresos y Retiros de Caja
-          </h3>
-          <table className="w-full text-left text-xs mb-3 border-collapse">
-            <thead>
-              <tr className="border-b-2 border-black text-black font-bold uppercase text-[10px]">
-                <th className="py-1 px-1">Fecha</th>
-                <th className="py-1 px-1">Hora</th>
-                <th className="py-1 px-1">Tipo</th>
-                <th className="py-1 px-1">Detalle</th>
-                <th className="py-1 px-1 text-right">Ingreso</th>
-                <th className="py-1 px-1 text-right">Retiro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!movimientos || movimientos.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-4 text-center text-gray-500 italic">
-                    No se registraron movimientos en este período.
-                  </td>
+        {!esEliminados && (
+          <div className="mt-4 border-t-2 border-black pt-4 break-inside-avoid">
+            <h3 className="font-bold text-xs uppercase tracking-wider mb-2 text-black">
+              Detalle de Ingresos y Retiros de Caja
+            </h3>
+            <table className="w-full text-left text-xs mb-3 border-collapse">
+              <thead>
+                <tr className="border-b-2 border-black text-black font-bold uppercase text-[10px]">
+                  <th className="py-1 px-1">Fecha</th>
+                  <th className="py-1 px-1">Hora</th>
+                  <th className="py-1 px-1">Tipo</th>
+                  <th className="py-1 px-1">Detalle</th>
+                  <th className="py-1 px-1 text-right">Ingreso</th>
+                  <th className="py-1 px-1 text-right">Retiro</th>
                 </tr>
-              ) : (
-                movimientos.map((m, idx) => (
-                  <tr key={idx} className="border-b border-gray-200">
-                    <td className="py-1 px-1 text-[11px]">{m.fecha ? formatearFechaDDMMAAAA(m.fecha) : '-'}</td>
-                    <td className="py-1 px-1 text-[11px]">{m.hora || '-'}</td>
-                    <td className="py-1 px-1 text-[11px] font-semibold">{m.tipo}</td>
-                    <td className="py-1 px-1 text-[11px] break-words whitespace-pre-wrap">{m.detalle}</td>
-                    <td className="py-1 px-1 text-right text-[11px] font-semibold text-emerald-700">
-                      {m.tipo === 'INGRESO' ? `+${formatearPrecio(m.monto)}` : '-'}
-                    </td>
-                    <td className="py-1 px-1 text-right text-[11px] font-semibold text-red-600">
-                      {m.tipo === 'RETIRO' ? `-${formatearPrecio(m.monto)}` : '-'}
+              </thead>
+              <tbody>
+                {!movimientos || movimientos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-4 text-center text-gray-500 italic">
+                      No se registraron movimientos en este período.
                     </td>
                   </tr>
-                ))
+                ) : (
+                  movimientos.map((m, idx) => (
+                    <tr key={idx} className="border-b border-gray-200">
+                      <td className="py-1 px-1 text-[11px]">{m.fecha ? formatearFechaDDMMAAAA(m.fecha) : '-'}</td>
+                      <td className="py-1 px-1 text-[11px]">{m.hora || '-'}</td>
+                      <td className="py-1 px-1 text-[11px] font-semibold">{m.tipo}</td>
+                      <td className="py-1 px-1 text-[11px] break-words whitespace-pre-wrap">{m.detalle}</td>
+                      <td className="py-1 px-1 text-right text-[11px] font-semibold text-emerald-700">
+                        {m.tipo === 'INGRESO' ? `+${formatearPrecio(m.monto)}` : '-'}
+                      </td>
+                      <td className="py-1 px-1 text-right text-[11px] font-semibold text-red-600">
+                        {m.tipo === 'RETIRO' ? `-${formatearPrecio(m.monto)}` : '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {movimientos && movimientos.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-black font-bold text-[11px]">
+                    <td colSpan={4} className="py-1.5 px-1 uppercase">
+                      TOTALES DE MOVIMIENTOS
+                    </td>
+                    <td className="py-1.5 px-1 text-right text-emerald-700 font-bold">
+                      +{formatearPrecio(printTotalIngresos)}
+                    </td>
+                    <td className="py-1.5 px-1 text-right text-red-600 font-bold">
+                      -{formatearPrecio(printTotalRetiros)}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {movimientos && movimientos.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-black font-bold text-[11px]">
-                  <td colSpan={4} className="py-1.5 px-1 uppercase">
-                    TOTALES DE MOVIMIENTOS
-                  </td>
-                  <td className="py-1.5 px-1 text-right text-emerald-700 font-bold">
-                    +{formatearPrecio(printTotalIngresos)}
-                  </td>
-                  <td className="py-1.5 px-1 text-right text-red-600 font-bold">
-                    -{formatearPrecio(printTotalRetiros)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        )}
 
         {/* Resumen Final al pie de tabla */}
-        <div className="flex justify-between items-start border-t-2 border-black pt-4 break-inside-avoid">
-          <div className="text-[11px] text-gray-600 space-y-1">
-            <p>Documento de uso interno y control de caja.</p>
-            <p>Andén Café - Sistema de Gestión NextByte.</p>
-          </div>
+        {esEliminados ? (
+          <div className="flex justify-between items-start border-t-2 border-black pt-4 break-inside-avoid">
+            <div className="text-[11px] text-gray-600 space-y-1">
+              <p>Auditoría de bajas y cancelaciones (Inmutable).</p>
+              <p>Andén Café - Sistema de Gestión NextByte.</p>
+            </div>
 
-          <div className="w-72 space-y-1.5 text-xs text-right">
-            <div className="flex justify-between font-semibold text-gray-700">
-              <span>Subtotal Costos:</span>
-              <span>{formatearPrecio(totales.subtotalCosto)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-sm text-black border-t border-gray-300 pt-1">
-              <span>Total Ventas:</span>
-              <span>{formatearPrecio(totales.totalVenta)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-gray-600">
-              <span>Diferencia (Ventas - Costos):</span>
-              <span className="font-semibold">{formatearPrecio(printDiferenciaVentasCostos)}</span>
-            </div>
-            {movimientos && movimientos.length > 0 && (
-              <>
-                <div className="flex justify-between text-xs text-emerald-800 font-semibold border-t border-gray-200 pt-1">
-                  <span>(+) Total Ingresos:</span>
-                  <span>+{formatearPrecio(printTotalIngresos)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-red-800 font-semibold">
-                  <span>(-) Total Retiros:</span>
-                  <span>-{formatearPrecio(printTotalRetiros)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-700 font-semibold">
-                  <span>Saldo Neto Movimientos:</span>
-                  <span>{formatearPrecio(printSaldoNeto)}</span>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between font-black text-sm text-black border-t-2 border-black pt-1">
-              <span>SALDO FINAL DE CAJA:</span>
-              <span>{formatearPrecio(printSaldoFinal)}</span>
+            <div className="w-80 space-y-1.5 text-xs text-right">
+              <div className="flex justify-between font-semibold text-gray-700">
+                <span>Total Registros:</span>
+                <span>{mermas.length} productos</span>
+              </div>
+              <div className="flex justify-between font-black text-sm text-black border-t-2 border-black pt-1">
+                <span>TOTAL VALOR COSTOS ELIMINADOS:</span>
+                <span className="text-red-700">{formatearPrecio(totales.totalCostoMermas || printTotalCostoMermas)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex justify-between items-start border-t-2 border-black pt-4 break-inside-avoid">
+            <div className="text-[11px] text-gray-600 space-y-1">
+              <p>Documento de uso interno y control de caja.</p>
+              <p>Andén Café - Sistema de Gestión NextByte.</p>
+            </div>
+
+            <div className="w-72 space-y-1.5 text-xs text-right">
+              <div className="flex justify-between font-semibold text-gray-700">
+                <span>Subtotal Costos:</span>
+                <span>{formatearPrecio(totales.subtotalCosto)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm text-black border-t border-gray-300 pt-1">
+                <span>Total Ventas:</span>
+                <span>{formatearPrecio(totales.totalVenta)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>Diferencia (Ventas - Costos):</span>
+                <span className="font-semibold">{formatearPrecio(printDiferenciaVentasCostos)}</span>
+              </div>
+              {movimientos && movimientos.length > 0 && (
+                <>
+                  <div className="flex justify-between text-xs text-emerald-800 font-semibold border-t border-gray-200 pt-1">
+                    <span>(+) Total Ingresos:</span>
+                    <span>+{formatearPrecio(printTotalIngresos)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-red-800 font-semibold">
+                    <span>(-) Total Retiros:</span>
+                    <span>-{formatearPrecio(printTotalRetiros)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-700 font-semibold">
+                    <span>Saldo Neto Movimientos:</span>
+                    <span>{formatearPrecio(printSaldoNeto)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-black text-sm text-black border-t-2 border-black pt-1">
+                <span>SALDO FINAL DE CAJA:</span>
+                <span>{formatearPrecio(printSaldoFinal)}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Línea para firma */}
         <div className="mt-14 pt-4 border-t border-dashed border-gray-400 flex justify-between text-xs text-gray-600 break-inside-avoid">

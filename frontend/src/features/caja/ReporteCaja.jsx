@@ -13,7 +13,8 @@ import {
   ReceiptText,
   PlusCircle,
   Trash2,
-  Wallet
+  Wallet,
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
@@ -55,6 +56,20 @@ const formatEstadoNombre = (estado) => {
   if (s === 'cancelado') return 'Cancelado';
   if (s === 'pendiente') return 'Pendiente';
   return estado || 'Pendiente';
+};
+
+const getBadgeMotivo = (motivo) => {
+  const m = String(motivo || '').toUpperCase().trim();
+  switch (m) {
+    case 'VENCIDO':
+      return 'bg-amber-100 text-amber-900 border border-amber-300';
+    case 'MERMA':
+      return 'bg-red-100 text-red-900 border border-red-300';
+    case 'EN FALTA':
+      return 'bg-blue-100 text-blue-900 border border-blue-300';
+    default:
+      return 'bg-gray-100 text-gray-800 border border-gray-300';
+  }
 };
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
@@ -121,6 +136,10 @@ export default function ReporteCaja() {
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
   const [eliminandoMovimiento, setEliminandoMovimiento] = useState(false);
 
+  // Estados propios de Pestaña 3: Productos Eliminados (Auditoría - Fase 4)
+  const [mermasP3, setMermasP3] = useState([]);
+  const [cargandoP3, setCargandoP3] = useState(false);
+
   const handleAbrirDetalle = (pedido) => {
     setPedidoSeleccionado(pedido);
     setModalDetalleAbierto(true);
@@ -175,6 +194,46 @@ export default function ReporteCaja() {
   useEffect(() => {
     cargarDatosPestana2();
   }, [cargarDatosPestana2]);
+
+  const cargarDatosPestana3 = useCallback(async () => {
+    setCargandoP3(true);
+    try {
+      const { mesIso } = getRangoPestana2();
+      const res = await cajaService.obtenerMermasMes(mesIso);
+      const lista = res?.data || res || [];
+      setMermasP3(Array.isArray(lista) ? lista : []);
+    } catch (err) {
+      console.error('Error al cargar datos de Pestaña 3 (Productos Eliminados):', err);
+      setMermasP3([]);
+    } finally {
+      setCargandoP3(false);
+    }
+  }, [getRangoPestana2]);
+
+  useEffect(() => {
+    if (pestanaActiva === 'eliminados') {
+      cargarDatosPestana3();
+    }
+  }, [pestanaActiva, cargarDatosPestana3]);
+
+  // 4.2 Restringir los motivos únicamente a los 3 permitidos: VENCIDO, MERMA, EN FALTA
+  const MOTIVOS_PERMITIDOS = useMemo(() => ['VENCIDO', 'MERMA', 'EN FALTA'], []);
+  const mermasValidas = useMemo(() => {
+    return mermasP3.filter((m) => {
+      const motivoNorm = String(m.motivo || '').toUpperCase().trim();
+      return MOTIVOS_PERMITIDOS.includes(motivoNorm);
+    });
+  }, [mermasP3, MOTIVOS_PERMITIDOS]);
+
+  // 4.3 Calcular en la última fila el Total del valor de costos de todos los productos eliminados del mes en curso
+  const totalCostoMermas = useMemo(() => {
+    return mermasValidas.reduce((acc, m) => {
+      const cant = Number(m.cantidad) || 1;
+      const pCosto = Number(m.precio_costo) || 0;
+      const cTot = Number(m.costo_total) || (cant * pCosto);
+      return acc + cTot;
+    }, 0);
+  }, [mermasValidas]);
 
   // Totales calculados de Pestaña 2 (Punto 3.6)
   const totalesP2 = useMemo(() => {
@@ -410,6 +469,17 @@ export default function ReporteCaja() {
           },
           movimientos: movimientosP2
         });
+      } else if (tipo === 'pestana-3') {
+        const { desde, hasta, nombreMes, anio } = getRangoPestana2();
+        setDatosImpresion({
+          tipoReporte: 'eliminados',
+          titulo: `Reporte de Productos Eliminados (Auditoría) - ${nombreMes.toUpperCase()} ${anio}`,
+          periodo: `Período: ${desde} al ${hasta}`,
+          pedidos: [],
+          movimientos: [],
+          mermas: mermasValidas,
+          totales: { totalCostoMermas }
+        });
       } else {
         setDatosImpresion({
           titulo: getTituloTabla(),
@@ -581,6 +651,39 @@ export default function ReporteCaja() {
         const totalVenta = Number(dataVentas?.total_venta) || ventasMesP2 || 0;
         descargarCsv([], { subtotalCosto, totalVenta }, `Movimientos_Caja_${mesIso}.csv`, movimientosP2, true);
         toast.success(`Exportados movimientos de ${mesesInfo.seleccionado} (${movimientosP2.length} movimientos)`);
+      } else if (tipo === 'pestana-3') {
+        const { mesIso } = getRangoPestana2();
+        const filas = [];
+        filas.push(['Fecha', 'Hora', 'Producto', 'Categoría', 'Cantidad', 'Precio Costo', 'Costo Total', 'Motivo de Eliminación']);
+        for (const m of mermasValidas) {
+          const fecha = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
+          const hora = m.created_at ? (String(m.created_at).split(' ')[1]?.slice(0, 5) || '-') : '-';
+          const cant = Number(m.cantidad) || 1;
+          const pCosto = Number(m.precio_costo) || 0;
+          const cTot = Number(m.costo_total) || (cant * pCosto);
+          filas.push([
+            fecha,
+            hora,
+            `"${(m.nombre_producto || '').replace(/"/g, '""')}"`,
+            `"${(m.nombre_categoria || '').replace(/"/g, '""')}"`,
+            cant,
+            pCosto,
+            cTot,
+            m.motivo
+          ]);
+        }
+        filas.push(['', '', '', '', '', '', '', '']);
+        filas.push(['TOTAL VALOR DE COSTOS ELIMINADOS', '', '', '', '', '', totalCostoMermas, '']);
+        const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');
+        const blob = new Blob([contenidoCsv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Auditoria_Productos_Eliminados_${mesIso}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success(`Exportada auditoría de productos eliminados (${mermasValidas.length} registros)`);
       } else {
         exportarAExcel(tipo);
       }
@@ -1475,17 +1578,24 @@ export default function ReporteCaja() {
             </div>
           )}
 
-          {/* PESTAÑA 3: MOTIVOS DE ELIMINACION */}
+          {/* PESTAÑA 3: MOTIVOS DE ELIMINACION / PRODUCTOS ELIMINADOS (FASE 4) */}
           {pestanaActiva === 'eliminados' && (
-            <div className="flex-1 flex flex-col justify-between py-2">
-              <div className="space-y-4">
+            <div className="flex-1 flex flex-col justify-between py-2 space-y-6">
+              <div className="space-y-5">
+                {/* Cabecera de la sección */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border/20">
                   <div>
-                    <h3 className="text-base font-bold text-primary">
-                      Lista de Productos Eliminados de {mesesInfo.seleccionado}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Auditoría acumulativa mensual de mermas y cancelaciones (Solo Lectura)
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-primary">
+                        Productos Eliminados de {mesesInfo.seleccionado}
+                      </h3>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100/80 text-amber-900 border border-amber-200">
+                        <ShieldCheck className="w-3 h-3 text-amber-700" />
+                        Solo Lectura (Auditoría)
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Registro inmutable de mermas, productos vencidos y faltantes del mes.
                     </p>
                   </div>
 
@@ -1527,18 +1637,18 @@ export default function ReporteCaja() {
 
                     <button
                       type="button"
-                      disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8C6D58]/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
-                      title="Imprimir"
+                      onClick={() => handleImprimir('pestana-3')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8C6D58] hover:bg-[#785C48] text-white rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap shadow-2xs transition-colors"
+                      title="Imprimir auditoría de productos eliminados"
                     >
                       <Printer className="w-3.5 h-3.5" />
                       <span>Imprimir</span>
                     </button>
                     <button
                       type="button"
-                      disabled
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/60 text-white rounded-xl text-xs font-semibold cursor-not-allowed whitespace-nowrap shadow-2xs"
-                      title="Exportar"
+                      onClick={() => handleExportar('pestana-3')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap shadow-2xs transition-colors"
+                      title="Exportar auditoría a Excel"
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
                       <span>Exportar</span>
@@ -1546,16 +1656,153 @@ export default function ReporteCaja() {
                   </div>
                 </div>
 
-                <div className="py-20 flex flex-col items-center justify-center text-center gap-3 border-2 border-dashed border-border/40 rounded-2xl p-8 bg-[#FAF7F5]/50">
-                  <div className="w-12 h-12 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F]">
-                    <ReceiptText className="w-6 h-6" />
+                {/* Tarjetas resumen de auditoría */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-[#FAF7F5] p-3.5 rounded-xl border border-border/30">
+                    <p className="text-[11px] text-muted-foreground font-medium">Total Eliminados</p>
+                    <p className="text-base font-bold text-primary">
+                      {mermasValidas.length} <span className="text-xs font-normal text-muted-foreground">registros</span>
+                    </p>
                   </div>
-                  <p className="text-sm font-bold text-primary">
-                    Pestaña "Motivos de Eliminacion" ({mesesInfo.seleccionado})
-                  </p>
-                  <p className="text-xs text-muted-foreground max-w-md">
-                    En las siguientes fases se listarán los productos eliminados por VENCIDO, MERMA y EN FALTA con la sumatoria del costo total del mes.
-                  </p>
+
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200">
+                    <p className="text-[11px] text-amber-900 font-medium">Vencidos</p>
+                    <p className="text-base font-bold text-amber-800">
+                      {mermasValidas.filter((m) => String(m.motivo).toUpperCase() === 'VENCIDO').length}
+                    </p>
+                  </div>
+
+                  <div className="bg-red-50/70 p-3.5 rounded-xl border border-red-200">
+                    <p className="text-[11px] text-red-900 font-medium">Mermas</p>
+                    <p className="text-base font-bold text-red-700">
+                      {mermasValidas.filter((m) => String(m.motivo).toUpperCase() === 'MERMA').length}
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-200">
+                    <p className="text-[11px] text-blue-900 font-medium">En Falta</p>
+                    <p className="text-base font-bold text-blue-700">
+                      {mermasValidas.filter((m) => String(m.motivo).toUpperCase() === 'EN FALTA').length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4.1 Maquetación de la tabla de solo lectura */}
+                <div className="overflow-x-auto border border-border/30 rounded-2xl">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-[#FAF7F5] border-b border-border/20 text-muted-foreground font-semibold text-[11px]">
+                        <th className="py-3 px-4 font-semibold w-36 whitespace-nowrap">Fecha y Hora</th>
+                        <th className="py-3 px-4 font-semibold">Producto</th>
+                        <th className="py-3 px-4 font-semibold text-right w-40 whitespace-nowrap">Precio de Costo</th>
+                        <th className="py-3 px-4 font-semibold text-center w-36 whitespace-nowrap">Motivo de Eliminación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cargandoP3 ? (
+                        <tr>
+                          <td colSpan={4} className="py-12 text-center text-primary">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              <span className="text-xs font-medium">Cargando productos eliminados...</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : mermasValidas.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-12 text-center text-muted-foreground">
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <Inbox className="w-8 h-8 opacity-30 text-secondary" />
+                              <p className="text-xs font-medium text-primary">
+                                No hay productos eliminados registrados en {mesesInfo.seleccionado}.
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Los registros con motivos VENCIDO, MERMA o EN FALTA aparecerán automáticamente en esta lista.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        mermasValidas.map((m) => {
+                          const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
+                          const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                          const cant = Number(m.cantidad) || 1;
+                          const pCosto = Number(m.precio_costo) || 0;
+                          const cTotal = Number(m.costo_total) || (cant * pCosto);
+
+                          return (
+                            <tr
+                              key={m.id}
+                              className="border-b border-border/10 last:border-b-0 hover:bg-muted/10 transition-colors"
+                            >
+                              <td className="py-3 px-4 text-primary font-medium whitespace-nowrap align-middle">
+                                <div className="text-xs font-semibold">{fechaStr}</div>
+                                {horaStr && <div className="text-[10px] text-muted-foreground">{horaStr} hs</div>}
+                              </td>
+
+                              <td className="py-3 px-4 text-primary font-medium align-middle">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-primary text-xs">
+                                    {m.nombre_producto}
+                                  </span>
+                                  {cant > 1 && (
+                                    <span className="inline-block px-1.5 py-0.5 bg-muted text-muted-foreground text-[10px] font-bold rounded-md">
+                                      x{cant} u.
+                                    </span>
+                                  )}
+                                  {m.nombre_categoria && (
+                                    <span className="text-[10px] text-muted-foreground font-normal">
+                                      ({m.nombre_categoria})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-4 text-right font-bold text-primary whitespace-nowrap align-middle">
+                                <div>{formatearPrecio(cTotal)}</div>
+                                {cant > 1 && (
+                                  <div className="text-[10px] text-muted-foreground font-normal">
+                                    {cant} × {formatearPrecio(pCosto)}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-4 text-center align-middle whitespace-nowrap">
+                                {/* 4.2 Restringir los motivos únicamente a los 3 permitidos con badges visuales */}
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase shadow-2xs ${getBadgeMotivo(m.motivo)}`}>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                                  {m.motivo}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+
+                    {/* 4.3 Calcular en la última fila el Total del valor de costos de todos los productos eliminados del mes en curso */}
+                    <tfoot>
+                      <tr className="bg-[#FAF7F5] border-t-2 border-border/30 font-bold text-xs">
+                        <td colSpan={2} className="py-3 px-4 text-primary font-bold uppercase tracking-wider">
+                          Total Costo Productos Eliminados ({mesesInfo.seleccionado})
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-red-700 whitespace-nowrap text-sm">
+                          {formatearPrecio(totalCostoMermas)}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap text-[11px] text-muted-foreground font-medium">
+                          {mermasValidas.length} registro{mermasValidas.length === 1 ? '' : 's'} de auditoría
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* 4.4 Deshabilitar cualquier acción de escritura o edición (garantizar modo 100% solo lectura) */}
+                <div className="flex items-center gap-2 p-3 bg-muted/20 border border-border/30 rounded-xl text-xs text-muted-foreground">
+                  <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                  <span>
+                    <strong>Modo Auditoría 100% Solo Lectura:</strong> Los registros de esta sección provienen de las bajas automáticas del sistema de inventario y no admiten adición, modificación ni eliminación manual para garantizar la integridad contable.
+                  </span>
                 </div>
               </div>
             </div>
@@ -1574,6 +1821,7 @@ export default function ReporteCaja() {
         totales={datosImpresion ? datosImpresion.totales : totales}
         ticketPedido={ticketPedidoImprimir}
         movimientos={datosImpresion?.movimientos !== undefined ? datosImpresion.movimientos : movimientos}
+        mermas={datosImpresion?.mermas !== undefined ? datosImpresion.mermas : mermasValidas}
       />
 
       {/* Modal de Detalle Interno del Pedido */}
