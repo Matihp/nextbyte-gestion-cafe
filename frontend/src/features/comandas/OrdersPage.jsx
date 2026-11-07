@@ -69,6 +69,8 @@ export const toBackendStatus = (statusDisplay) => {
       return 'en_empaque';
     case 'Completado':
       return 'completado';
+    case 'Entregado':
+      return 'entregado';
     case 'Cancelado':
       return 'cancelado';
     case 'Pendiente':
@@ -132,7 +134,7 @@ export function OrdersPage() {
     'En preparación',
     'En empaque',
     'Completado',
-    'Cancelado'
+    'Entregado'
   ];
 
   // Carga de comandas y pedidos desde el backend
@@ -225,12 +227,14 @@ export function OrdersPage() {
       if (document.visibilityState === 'visible') {
         fetchOrders();
       }
-    }, 8000);
+    }, 5000);
     const onFocus = () => fetchOrders();
     window.addEventListener('focus', onFocus);
+    window.addEventListener('orders-updated', fetchOrders);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('orders-updated', fetchOrders);
     };
   }, []);
 
@@ -329,7 +333,9 @@ export function OrdersPage() {
     const backendCurrent = toBackendStatus(prevOrder.status);
 
     try {
-      if (backendTarget === 'cancelado') {
+      if (backendTarget === 'entregado') {
+        await comandaService.entregar(orderId);
+      } else if (backendTarget === 'cancelado') {
         await pedidoService.cancelar(orderId);
       } else if (backendTarget === 'completado') {
         if (backendCurrent === 'pendiente') {
@@ -342,6 +348,7 @@ export function OrdersPage() {
       } else {
         await comandaService.cambiarEstado(orderId, backendTarget);
       }
+      window.dispatchEvent(new CustomEvent('orders-updated'));
       const orderNumLabel = prevOrder.displayId || prevOrder.orderNumber || `#${prevOrder.id}`;
       toast.success(`Pedido ${orderNumLabel.startsWith('#') ? orderNumLabel : `#${orderNumLabel}`} actualizado a "${newStatusDisplay}"`);
     } catch {
@@ -364,6 +371,7 @@ export function OrdersPage() {
         prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
       );
       setSelectedOrderId(null);
+      window.dispatchEvent(new CustomEvent('orders-updated'));
       toast.success(esMerma ? 'Pedido cancelado y registrado como MERMA' : 'Pedido cancelado exitosamente');
     } catch {
       toast.error('Error al cancelar el pedido');
@@ -559,7 +567,7 @@ export function OrdersPage() {
                         <option value="En preparación">En preparación</option>
                         <option value="En empaque">En empaque</option>
                         <option value="Completado">Completado</option>
-                        <option value="Cancelado">Cancelado</option>
+                        <option value="Entregado">Entregado</option>
                       </select>
                     </td>
 

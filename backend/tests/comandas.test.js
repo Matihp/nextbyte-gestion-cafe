@@ -238,5 +238,25 @@ describe('Pruebas de integracion - API /api/comandas', () => {
     expect(resVacio.body.success).toBe(false);
     expect(resVacio.body.error).toBe('VALIDACION');
   });
+
+  it('GET /api/comandas/activas?incluir_completados=true incluye pedidos en estado completado', async () => {
+    const res = await request(app).get('/api/comandas/activas?incluir_completados=true');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const estados = res.body.data.map((p) => p.estado);
+    expect(estados).toContain('completado');
+  });
+
+  it('PATCH /api/comandas/:id/entregar pasa el pedido a entregado', async () => {
+    const res = await request(app).patch('/api/comandas/PED-COM-04/entregar');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.estado).toBe('entregado');
+
+    // Ya no debe figurar en activas (incluso con incluir_completados)
+    const resActivas = await request(app).get('/api/comandas/activas?incluir_completados=true');
+    const ids = resActivas.body.data.map((p) => p.id);
+    expect(ids).not.toContain('PED-COM-04');
+  });
 });
 

@@ -166,10 +166,14 @@ export function CustomerViewerPage() {
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('orders-updated', fetchOrders);
+    window.addEventListener('storage', fetchOrders);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('orders-updated', fetchOrders);
+      window.removeEventListener('storage', fetchOrders);
     };
   }, [fetchOrders, isFullscreen]);
 
