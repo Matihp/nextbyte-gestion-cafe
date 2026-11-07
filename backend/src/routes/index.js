@@ -18,5 +18,6 @@ router.use('/insumos', require('./insumo.routes'));
 router.use('/mermas', require('./merma.routes'));
 router.use('/reportes', require('./reporte.routes'));
 router.use('/caja', require('./caja.routes'));
+router.use('/sync', require('./sync.routes'));
 
 module.exports = router;

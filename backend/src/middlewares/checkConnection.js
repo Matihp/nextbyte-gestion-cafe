@@ -1,31 +1,67 @@
-const { dbLocal } = require('../config/db');
+const {
+  isOnline: getIsOnline,
+  setOnlineStatus,
+  hasPendingLocalSync,
+  setPendingLocalSync
+} = require('../config/db');
+const syncService = require('../services/syncService');
+const syncJob = require('../jobs/syncJob');
+
+let cachedOnline = null;
+let lastCheckTime = 0;
+const CACHE_TTL_MS = 3000;
 
 /**
- * Middleware para verificar si hay conexión a internet activa
+ * Middleware para verificar si hay conexión a internet activa y enrutar
+ * las peticiones a Turso Cloud o a SQLite local (modo contingencia).
  */
 const checkConnection = async (req, res, next) => {
+  // En entorno de tests, respetamos el estado asignado o por defecto online
+  if (process.env.NODE_ENV === 'test') {
+    if (req.isOnline === undefined) {
+      req.isOnline = true;
+    }
+    return next();
+  }
+
   try {
-    // 1. Verificar conexión a internet
-    let isOnline = true;
-    
-    // 2. Si detecta internet, revisar que no hayan datos viejos sin subir
-    if (isOnline) {
-      // Para despues: consultar si hay registros pendientes en SQLite.
-      // Dependerá de las tablas que incorporemos
-      const hasPendingData = false;
-      
-      // Si todavía hay datos pendientes de subir, forzamos a que el sistema actúe 
-      // como si estuviera offline hasta que esto nuevo se guarde detrás de los viejos.
-      if (hasPendingData) {
-        isOnline = false;
-        console.log('⏳ [Info] Internet detectado, pero hay datos locales pendientes. Enrutando a local temporalmente.');
+    const ahora = Date.now();
+    const estadoActual = getIsOnline();
+
+    if (estadoActual) {
+      cachedOnline = true;
+    } else {
+      if (cachedOnline === false && ahora - lastCheckTime > 5000) {
+        cachedOnline = await syncJob.verificarConexionTurso(2000);
+        lastCheckTime = ahora;
+        setOnlineStatus(cachedOnline);
       }
     }
+
+    let isOnline = cachedOnline !== null ? cachedOnline : estadoActual;
+
+    if (isOnline) {
+      const hasPendingData = hasPendingLocalSync() || (await syncService.hayPendientes());
+      if (hasPendingData) {
+        isOnline = false;
+        syncJob.sincronizar().catch(() => {});
+      }
+    }
+
     req.isOnline = isOnline;
+
+    if (!req.isOnline && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      res.on('finish', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          setPendingLocalSync(true);
+        }
+      });
+    }
+
     next();
   } catch (error) {
-    console.error("❌ Error al verificar conexión/sincronización:", error);
-    req.isOnline = false; 
+    console.error('❌ Error al verificar conexión/sincronización:', error.message);
+    req.isOnline = false;
     next();
   }
 };
