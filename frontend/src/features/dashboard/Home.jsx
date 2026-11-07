@@ -8,7 +8,8 @@ import {
   Bike,
   RotateCw,
   AlertCircle,
-  Eye
+  Eye,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventarioService } from '@/services/inventarioService';
@@ -17,6 +18,7 @@ import { pedidoService } from '@/services/pedidoService';
 import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
 import { OrderPrintTicket } from '@/features/comandas/OrderPrintTicket';
+import { formatCustomerName } from '@/features/clientes/CustomerViewerPage';
 
 // Cálculo de días restantes hasta el vencimiento (idéntico a InventoryPage)
 const getExpirationDiff = (expirationDateStr) => {
@@ -58,48 +60,64 @@ const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
   if (s === 'en_empaque') return 'En empaque';
   if (s === 'en_preparacion' || s === 'en preparacion') return 'En preparación';
-  if (s === 'completado') return 'Completado';
+  if (s === 'completado') return 'Listo';
   if (s === 'entregado') return 'Entregado';
   if (s === 'cancelado') return 'Cancelado';
   if (s === 'pendiente') return 'Pendiente';
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-function TarjetaPedido({ pedido, onVerResumen }) {
-  const items = pedido.detalles || pedido.items || [];
-  const itemsTexto = items.length > 0
-    ? items.map((it) => `${it.cantidad || it.quantity || 1}x ${it.nombre_producto || it.name || 'Producto'}`).join(', ')
-    : 'Sin artículos';
+function TarjetaPedido({ pedido, onVerResumen, onMarcarEntregado, entregandoId }) {
+  const isEntregando = entregandoId === pedido.id;
+  const clienteFormateado = formatCustomerName(pedido.cliente || pedido.customer);
 
   return (
-    <div className="bg-white border border-[#EAD5C8] rounded-xl p-4 space-y-2 hover:shadow-sm transition-shadow">
-      <div className="flex justify-between items-center gap-2">
-        <span className="font-bold text-gray-900 text-sm tracking-tight">{formatearIdPedido(pedido)}</span>
-        <span
-          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getBadgeEstado(
-            pedido.estado || pedido.status
-          )}`}
-        >
-          {formatEstadoNombre(pedido.estado || pedido.status)}
-        </span>
-        <span className="font-bold text-gray-900 text-sm">
-          {formatearPrecio(pedido.total)}
-        </span>
-      </div>
+    <div className="bg-white border border-[#EAD5C8] rounded-xl p-3.5 space-y-2.5 hover:shadow-sm transition-shadow">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="font-extrabold text-[#4B2B1D] text-sm tracking-tight font-mono shrink-0">
+            {formatearIdPedido(pedido)}
+          </span>
+          <span
+            className="text-xs font-bold text-gray-800 truncate"
+            title={pedido.cliente || pedido.customer || 'Consumidor Final'}
+          >
+            {clienteFormateado}
+          </span>
+          <span
+            className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
+              pedido.estado || pedido.status
+            )}`}
+          >
+            {formatEstadoNombre(pedido.estado || pedido.status)}
+          </span>
+        </div>
 
-      <div>
-        <p className="text-xs font-semibold text-gray-800">
-          {pedido.cliente || pedido.customer || 'Consumidor Final'}
-        </p>
-        <p className="text-xs text-gray-600 font-normal mt-0.5 line-clamp-2">
-          {itemsTexto}
-        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="font-bold text-gray-900 text-sm whitespace-nowrap">
+            {formatearPrecio(pedido.total)}
+          </span>
+
+          <button
+            type="button"
+            disabled={isEntregando}
+            onClick={() => onMarcarEntregado && onMarcarEntregado(pedido)}
+            title="Pedido Entregado"
+            className="p-1 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            {isEntregando ? (
+              <span className="w-5 h-5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Check className="w-5 h-5 stroke-[2.5]" />
+            )}
+          </button>
+        </div>
       </div>
 
       <button
         type="button"
         onClick={() => onVerResumen && onVerResumen(pedido)}
-        className="w-full mt-2 py-1.5 px-3 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        className="w-full py-1.5 px-3 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
       >
         <Eye className="w-3.5 h-3.5" />
         <span>Ver Resumen</span>
@@ -113,6 +131,33 @@ export default function Home() {
   const [comandas, setComandas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  const [entregandoId, setEntregandoId] = useState(null);
+
+  const handleMarcarEntregado = async (pedido) => {
+    if (!pedido || !pedido.id) return;
+    setEntregandoId(pedido.id);
+    try {
+      await comandaService.entregar(pedido.id);
+      setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+      try {
+        const saved = localStorage.getItem('nextbyte_orders');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const filtered = parsed.filter((p) => String(p.id) !== String(pedido.id));
+          localStorage.setItem('nextbyte_orders', JSON.stringify(filtered));
+        }
+      } catch {}
+      window.dispatchEvent(new CustomEvent('orders-updated'));
+      toast.success(`Pedido ${formatearIdPedido(pedido)} marcado como entregado`);
+    } catch (err) {
+      console.error('Error al entregar pedido:', err);
+      toast.error('No se pudo marcar el pedido como entregado');
+      await cargarDatos();
+    } finally {
+      setEntregandoId(null);
+    }
+  };
 
   // Estados para el Modal de Resumen e Impresión de Comanda
   const [pedidoResumen, setPedidoResumen] = useState(null);
@@ -236,7 +281,7 @@ export default function Home() {
     try {
       const [resInsumos, resComandas] = await Promise.allSettled([
         inventarioService.obtenerInsumos(),
-        comandaService.obtenerActivas()
+        comandaService.obtenerActivas({ incluir_completados: true })
       ]);
 
       if (resInsumos.status === 'fulfilled') {
@@ -268,6 +313,20 @@ export default function Home() {
 
   useEffect(() => {
     cargarDatos();
+
+    const handleSync = () => {
+      cargarDatos();
+    };
+
+    window.addEventListener('orders-updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    const interval = setInterval(cargarDatos, 5000);
+
+    return () => {
+      window.removeEventListener('orders-updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      clearInterval(interval);
+    };
   }, [cargarDatos]);
 
   // Cálculos de Stock / Insumos para las 4 Tarjetas (sincronizado con InventoryPage)
@@ -454,7 +513,7 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.mostrador.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
@@ -481,7 +540,7 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.takeAway.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
@@ -508,7 +567,7 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.delivery.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
