@@ -117,7 +117,7 @@ const update = async (id, datos) => {
   };
 };
 
-const remove = async (id) => {
+const remove = async (id, motivo = null) => {
   const actual = await productoRepository.getById(id);
   if (!actual) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
@@ -126,6 +126,31 @@ const remove = async (id) => {
   const detalles = await detallePedidoRepository.getByProductoId(id);
   if (detalles && detalles.length > 0) {
     throw new AppError('No se puede eliminar: el producto tiene pedidos asociados', 409, 'RELACION');
+  }
+
+  if (motivo) {
+    try {
+      const categoria = actual.categoria_id
+        ? await categoriaRepository.getById(actual.categoria_id)
+        : null;
+      const crypto = require('crypto');
+      const { hoy } = require('../utils/fechas');
+      const { dbLocal } = require('../config/db');
+      await dbLocal('registros_mermas').insert({
+        id: crypto.randomUUID(),
+        producto_id: actual.id,
+        nombre_producto: actual.nombre,
+        nombre_categoria: categoria ? categoria.nombre : null,
+        motivo: String(motivo).trim(),
+        fecha: hoy(),
+        cantidad: actual.stock_actual > 0 ? actual.stock_actual : 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) {
+      // Si falla la inserción del log, no interrumpimos la eliminación
+      console.warn('Advertencia al registrar auditoría de producto eliminado:', e.message);
+    }
   }
 
   await productoRepository.delete(id);

@@ -10,7 +10,7 @@ export const productoService = {
   obtenerProductoPorId: (id) => api.get(`/productos/${id}`),
   crearProducto: (datos) => api.post('/productos', datos),
   actualizarProducto: (id, datos) => api.put(`/productos/${id}`, datos),
-  eliminarProducto: (id) => api.delete(`/productos/${id}`),
+  eliminarProducto: (id, motivo) => api.delete(`/productos/${id}`, { data: { motivo } }),
 
   obtenerReceta: (productoId) => api.get(`/productos/${productoId}/receta`),
   guardarReceta: (productoId, datos) => api.put(`/productos/${productoId}/receta`, datos),

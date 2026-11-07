@@ -3,15 +3,14 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
-  DialogFooter
+  DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import productoService from '@/services/productoService';
-import { obtenerEmojiCategoria } from '../utils/categoriasHelper';
+import { AVAILABLE_EMOJIS, getCategoryDetails } from '../utils/categoriasHelper';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, Check, X, Loader2 } from 'lucide-react';
+import { X, Plus, Edit, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 
 export default function CategoriasModal({
   open,
@@ -20,237 +19,325 @@ export default function CategoriasModal({
   productos = [],
   onActualizarCategorias
 }) {
-  const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
-  const [nuevoNombre, setNuevoNombre] = useState('');
-  const [creando, setCreando] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editIcon, setEditIcon] = useState('📦');
 
-  const [editandoId, setEditandoId] = useState(null);
-  const [nombreEdicion, setNombreEdicion] = useState('');
-  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
-  const [eliminandoId, setEliminandoId] = useState(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newIcon, setNewIcon] = useState('📦');
 
-  // Mapear productos asociados por ID de categoría
-  const productosPorCategoria = productos.reduce((acc, p) => {
-    acc[p.categoria_id] = (acc[p.categoria_id] || 0) + 1;
-    return acc;
-  }, {});
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showWarning, setShowWarning] = useState(null); // id de categoría en advertencia
+  const [guardando, setGuardando] = useState(false);
 
-  const handleCrearCategoria = async (e) => {
-    e.preventDefault();
-    const nombreLimpio = nuevoNombre.trim().toUpperCase();
+  const handleAdd = () => {
+    setIsAddingNew(true);
+    setNewName('');
+    setNewIcon('📦');
+    setEditingId(null);
+    setShowEmojiPicker(false);
+  };
 
+  const handleSaveNew = async () => {
+    const nombreLimpio = newName.trim();
     if (!nombreLimpio) {
       toast.error('El nombre de la categoría es obligatorio');
       return;
     }
 
     try {
-      setCreando(true);
-      await productoService.crearCategoria({ nombre: nombreLimpio });
-      toast.success(`Categoría "${nombreLimpio}" creada con éxito`);
-      setNuevoNombre('');
-      setMostrarFormNuevo(false);
+      setGuardando(true);
+      await productoService.crearCategoria({
+        nombre: nombreLimpio,
+        icono: newIcon
+      });
+      toast.success(`Categoría "${nombreLimpio}" agregada`);
+      setIsAddingNew(false);
+      setNewName('');
+      setShowEmojiPicker(false);
       if (onActualizarCategorias) onActualizarCategorias();
     } catch (error) {
       toast.error(error.message || 'Error al crear la categoría');
     } finally {
-      setCreando(false);
+      setGuardando(false);
     }
   };
 
-  const iniciarEdicion = (cat) => {
-    setEditandoId(cat.id);
-    setNombreEdicion(cat.nombre);
-  };
-
-  const cancelarEdicion = () => {
-    setEditandoId(null);
-    setNombreEdicion('');
-  };
-
-  const handleGuardarEdicion = async (id) => {
-    const nombreLimpio = nombreEdicion.trim().toUpperCase();
+  const handleSaveEdit = async (catId) => {
+    const nombreLimpio = editName.trim();
     if (!nombreLimpio) {
       toast.error('El nombre no puede estar vacío');
       return;
     }
 
     try {
-      setGuardandoEdicion(true);
-      await productoService.actualizarCategoria(id, { nombre: nombreLimpio });
-      toast.success('Categoría actualizada con éxito');
-      setEditandoId(null);
+      setGuardando(true);
+      await productoService.actualizarCategoria(catId, {
+        nombre: nombreLimpio,
+        icono: editIcon
+      });
+      toast.success('Categoría actualizada');
+      setEditingId(null);
+      setShowEmojiPicker(false);
       if (onActualizarCategorias) onActualizarCategorias();
     } catch (error) {
       toast.error(error.message || 'Error al actualizar la categoría');
     } finally {
-      setGuardandoEdicion(false);
+      setGuardando(false);
     }
   };
 
-  const handleEliminarCategoria = async (cat) => {
-    const cantidadProductos = productosPorCategoria[cat.id] || 0;
-    if (cantidadProductos > 0) {
-      toast.error(`No podés eliminar "${cat.nombre}" porque tiene ${cantidadProductos} producto(s) asignado(s).`);
-      return;
+  const handleDeleteRequest = (catId) => {
+    const hasProducts = productos.some((p) => Number(p.categoria_id) === Number(catId));
+    if (hasProducts) {
+      setShowWarning(catId);
+    } else {
+      procederEliminar(catId);
     }
+  };
 
+  const procederEliminar = async (catId) => {
     try {
-      setEliminandoId(cat.id);
-      await productoService.eliminarCategoria(cat.id);
-      toast.success(`Categoría "${cat.nombre}" eliminada`);
+      setGuardando(true);
+      await productoService.eliminarCategoria(catId);
+      toast.success('Categoría eliminada');
+      setShowWarning(null);
       if (onActualizarCategorias) onActualizarCategorias();
     } catch (error) {
       toast.error(error.message || 'Error al eliminar la categoría');
     } finally {
-      setEliminandoId(null);
+      setGuardando(false);
+    }
+  };
+
+  const confirmDeleteWithProducts = async () => {
+    if (!showWarning) return;
+    try {
+      setGuardando(true);
+      // Eliminar primero los productos asignados a la categoría
+      const prodsAEliminar = productos.filter((p) => Number(p.categoria_id) === Number(showWarning));
+      for (const p of prodsAEliminar) {
+        await productoService.eliminarProducto(p.id, 'Merma');
+      }
+      await productoService.eliminarCategoria(showWarning);
+      toast.success('Categoría y sus productos eliminados');
+      setShowWarning(null);
+      if (onActualizarCategorias) onActualizarCategorias();
+    } catch (error) {
+      toast.error(error.message || 'Error al eliminar la categoría y productos');
+    } finally {
+      setGuardando(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-card border-primary/20 text-card-foreground rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-1">
-          <DialogTitle className="text-xl font-bold text-primary tracking-tight">
+      <DialogContent className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh] p-0 border border-gray-100">
+        <DialogHeader className="flex flex-row items-center justify-between p-6 border-b border-gray-100">
+          <DialogTitle className="text-xl font-semibold text-gray-900">
             Categorías
           </DialogTitle>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </DialogHeader>
 
-        {/* Formulario condicional para Nueva Categoría */}
-        {mostrarFormNuevo && (
-          <form onSubmit={handleCrearCategoria} className="p-3 bg-background/60 border border-primary/20 rounded-xl space-y-2 mt-2">
-            <span className="text-xs font-semibold text-primary">Nombre de la nueva categoría</span>
-            <div className="flex items-center gap-2">
-              <Input
-                value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                placeholder="Ej: CAFETERÍA, POSTRES..."
-                className="h-9 bg-background border-primary/20 text-xs text-primary"
-                autoFocus
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={creando || !nuevoNombre.trim()}
-                className="h-9 bg-primary text-primary-foreground font-semibold px-3"
-              >
-                {creando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Guardar'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setMostrarFormNuevo(false)}
-                className="h-9 text-xs"
-              >
-                Cancelar
-              </Button>
+        <div className="p-6 overflow-y-auto flex-1">
+          {showWarning && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-bold text-red-800 mb-1">
+                    ¡Atención! Categoría en uso
+                  </h3>
+                  <p className="text-xs text-red-700 mb-3 leading-relaxed">
+                    Esta categoría tiene productos ingresados. Si se elimina, se eliminarán todos sus productos. Puede editar su nombre y los productos seguirán estando disponibles, pero si la elimina, desaparecerán definitivamente.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmDeleteWithProducts}
+                      disabled={guardando}
+                      className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 cursor-pointer disabled:opacity-50"
+                    >
+                      {guardando ? 'Eliminando...' : 'Eliminar definitivamente'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowWarning(null)}
+                      className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-50 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </form>
-        )}
+          )}
 
-        {/* Listado de Categorías (Fiel a la Imagen 4) */}
-        <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1 py-2">
-          {categorias.length === 0 ? (
-            <p className="text-sm text-primary/50 text-center py-8">
-              No hay categorías cargadas aún.
-            </p>
-          ) : (
-            categorias.map((cat) => {
-              const emoji = obtenerEmojiCategoria(cat.nombre);
-              const totalProds = productosPorCategoria[cat.id] || 0;
-              const esEstaEditando = editandoId === cat.id;
+          <div className="space-y-3">
+            {categorias.map((cat) => {
+              const emojiDisplay = cat.icono || getCategoryDetails(cat.nombre).emoji;
+              const isEditingThis = editingId === cat.id;
 
               return (
                 <div
                   key={cat.id}
-                  className="flex items-center justify-between px-4 py-3 rounded-2xl border border-primary/10 bg-background/50 hover:bg-background/80 transition-colors shadow-2xs"
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
                 >
-                  {esEstaEditando ? (
-                    <div className="flex items-center gap-2 flex-1 mr-2">
+                  {isEditingThis ? (
+                    <div className="flex-1 flex gap-2 relative items-center">
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-md text-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                        >
+                          {editIcon}
+                        </button>
+                        {showEmojiPicker && (
+                          <div className="absolute top-10 left-0 w-64 bg-white border border-gray-200 shadow-xl rounded-lg p-2 z-20 grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
+                            {AVAILABLE_EMOJIS.map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => {
+                                  setEditIcon(e);
+                                  setShowEmojiPicker(false);
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded text-xl cursor-pointer"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <Input
-                        value={nombreEdicion}
-                        onChange={(e) => setNombreEdicion(e.target.value)}
-                        className="h-8 text-xs bg-background border-primary/30"
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus-visible:ring-2 focus-visible:ring-[#A67C52] bg-white h-9"
                         autoFocus
                       />
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        onClick={() => handleGuardarEdicion(cat.id)}
-                        disabled={guardandoEdicion}
-                        className="text-green-600 hover:text-green-700"
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(cat.id)}
+                        disabled={guardando}
+                        className="px-3 py-1.5 bg-[#4B2B1D] text-white text-sm rounded-md hover:bg-[#9F4F2F] cursor-pointer"
                       >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        onClick={cancelarEdicion}
-                        className="text-primary/60"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                        Guardar
+                      </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3">
-                      <span className="text-base select-none">{emoji}</span>
-                      <span className="font-semibold text-sm tracking-wide text-primary">
-                        {cat.nombre.toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-
-                  {!esEstaEditando && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => iniciarEdicion(cat)}
-                        title="Editar categoría"
-                        className="p-1 rounded-md text-primary/60 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEliminarCategoria(cat)}
-                        disabled={eliminandoId === cat.id}
-                        title={totalProds > 0 ? `Tiene ${totalProds} producto(s) asignado(s)` : 'Eliminar categoría'}
-                        className="p-1 rounded-md text-primary/60 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {eliminandoId === cat.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-destructive" />
-                        ) : (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl leading-none select-none">{emojiDisplay}</span>
+                        <span className="font-medium text-gray-800">{cat.nombre}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(cat.id);
+                            setEditName(cat.nombre);
+                            setEditIcon(cat.icono || getCategoryDetails(cat.nombre).emoji);
+                            setIsAddingNew(false);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-[#4B2B1D] transition-colors cursor-pointer"
+                          title="Editar categoría"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRequest(cat.id)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Eliminar categoría"
+                        >
                           <Trash2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               );
-            })
-          )}
+            })}
+
+            {isAddingNew && (
+              <div className="flex gap-2 p-3 bg-[#F3E5DC] rounded-lg border border-amber-100 relative items-center">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="w-9 h-9 flex items-center justify-center bg-white border border-gray-300 rounded-md text-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    {newIcon}
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="absolute top-10 left-0 w-64 bg-white border border-gray-200 shadow-xl rounded-lg p-2 z-20 grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
+                      {AVAILABLE_EMOJIS.map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          onClick={() => {
+                            setNewIcon(e);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded text-xl cursor-pointer"
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Nombre de categoría..."
+                  className="flex-1 px-3 py-1.5 text-sm border border-amber-300 rounded-md focus-visible:ring-2 focus-visible:ring-[#A67C52] bg-white h-9"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveNew}
+                  disabled={guardando}
+                  className="px-3 py-1.5 bg-[#4B2B1D] text-white text-sm rounded-md hover:bg-[#9F4F2F] cursor-pointer"
+                >
+                  Guardar
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Footer (Cerrar / + Agregar Categoría) */}
-        <DialogFooter className="pt-3 flex flex-row items-center justify-between gap-3 border-t border-primary/10">
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="flex-1 h-11 bg-muted/60 border-transparent text-primary hover:bg-muted font-medium rounded-xl"
+            className="flex-1 px-4 py-2.5 bg-gray-200 border border-gray-300 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium shadow-2xs h-10"
           >
             Cerrar
           </Button>
           <Button
             type="button"
-            onClick={() => setMostrarFormNuevo(true)}
-            className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold rounded-xl flex items-center justify-center gap-1.5 shadow-xs"
+            onClick={handleAdd}
+            disabled={isAddingNew || Boolean(editingId)}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#4B2B1D] text-white rounded-lg hover:bg-[#9F4F2F] disabled:opacity-50 transition-colors font-medium shadow-2xs h-10 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            Agregar Categoría
+            <Plus className="w-5 h-5" /> Agregar Categoría
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

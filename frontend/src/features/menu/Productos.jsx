@@ -10,34 +10,21 @@ import {
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter
-} from '@/components/ui/dialog';
-import {
   LayoutGrid,
   ChevronDown,
-  ChevronUp,
-  Layers,
-  FileText,
-  Plus,
   List,
-  PackageX,
-  AlertTriangle,
-  Loader2
+  ScrollText,
+  Plus,
+  PackageX
 } from 'lucide-react';
 
 import ProductoCard from './components/ProductoCard';
 import ProductoFiltros from './components/ProductoFiltros';
 import ProductoModal from './components/ProductoModal';
+import ProductosModalEditarEliminar from './components/ProductosModalEditarEliminar';
 import CategoriasModal from './components/CategoriasModal';
 import RecetasModal from './components/RecetasModal';
-import RecetaEditorModal from './components/RecetaEditorModal';
-import ProductosModalEditarEliminar from './components/ProductosModalEditarEliminar';
-import { obtenerVentasProducto } from './utils/metricasProducto';
+import { normalizeText } from './utils/categoriasHelper';
 
 export default function Productos() {
   const [productos, setProductos] = useState([]);
@@ -45,29 +32,21 @@ export default function Productos() {
   const [recetas, setRecetas] = useState([]);
   const [cargando, setCargando] = useState(true);
 
-  // Control del dropdown superior de Productos (chevron arriba / abajo)
-  const [dropdownProductosAbierto, setDropdownProductosAbierto] = useState(false);
-
-  // Estados de filtros y búsqueda (Fieles a Imágenes 1, 2 y 3)
-  const [busqueda, setBusqueda] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
-  const [filtroVentas, setFiltroVentas] = useState('filtro');
+  // Filtros y Búsqueda
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [sortOption, setSortOption] = useState('none'); // 'none' | '+Vendidos' | '-Vendidos'
 
   // Modales
-  const [modalProductoOpen, setModalProductoOpen] = useState(false);
-  const [productoAEditar, setProductoAEditar] = useState(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
 
-  const [modalEditarEliminarOpen, setModalEditarEliminarOpen] = useState(false);
+  const [isProductListOpen, setIsProductListOpen] = useState(false);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [isRecipeManagerOpen, setIsRecipeManagerOpen] = useState(false);
+  const [initialRecipeEditId, setInitialRecipeEditId] = useState(null);
 
-  const [modalCategoriasOpen, setModalCategoriasOpen] = useState(false);
-
-  const [modalRecetasOpen, setModalRecetasOpen] = useState(false);
-  const [modalRecetaEditorOpen, setModalRecetaEditorOpen] = useState(false);
-  const [productoParaReceta, setProductoParaReceta] = useState(null);
-
-  // Eliminación con confirmación modal
-  const [productoAEliminar, setProductoAEliminar] = useState(null);
-  const [eliminando, setEliminando] = useState(false);
+  const [isProductsMenuOpen, setIsProductsMenuOpen] = useState(false);
 
   const cargarDatos = async () => {
     try {
@@ -84,13 +63,13 @@ export default function Productos() {
 
       const prodsList = (Array.isArray(prodsRes) ? prodsRes : []).map((p) => ({
         ...p,
-        ventas_reales: topProdsMap.get(p.id) || undefined
+        ventas_reales: topProdsMap.get(p.id) || 0
       }));
 
       setProductos(prodsList);
       setCategorias(Array.isArray(catsRes) ? catsRes : []);
 
-      // Cargar recetas asociadas para el modal de Recetas
+      // Cargar recetas asociadas para los productos
       if (prodsList.length > 0) {
         const recetasCheck = await Promise.all(
           prodsList.map((p) =>
@@ -115,288 +94,251 @@ export default function Productos() {
     cargarDatos();
   }, []);
 
-  // Filtrado y Ordenamiento
-  const productosFiltrados = useMemo(() => {
-    let resultado = [...productos];
+  // Cálculo dinámico de ventas y estrellas sin datos falsos / mock
+  const productSalesCount = useMemo(() => {
+    const map = {};
+    productos.forEach((p) => {
+      map[p.id] = Number(p.ventas_reales) || 0;
+    });
+    return map;
+  }, [productos]);
 
-    // 1. Filtro por categoría seleccionada
-    if (categoriaSeleccionada) {
-      resultado = resultado.filter(
-        (p) =>
-          (p.categoria_nombre || '').toUpperCase() === categoriaSeleccionada.toUpperCase() ||
-          String(p.categoria_id) === String(categoriaSeleccionada)
-      );
+  const maxSales = useMemo(() => {
+    const vals = Object.values(productSalesCount);
+    return vals.length > 0 ? Math.max(...vals, 1) : 1;
+  }, [productSalesCount]);
+
+  const getProductStars = (productId) => {
+    const sales = productSalesCount[productId] || 0;
+    if (sales === 0) return 0;
+    return Math.min(5, Math.max(1, Math.ceil((sales / maxSales) * 5)));
+  };
+
+  // Filtrado y ordenamiento de productos
+  const filteredProducts = useMemo(() => {
+    let prods = productos.filter((product) => {
+      const matchesSearch = normalizeText(product.nombre).includes(normalizeText(searchTerm));
+      const matchesCategory =
+        selectedCategory === 'Todos' ||
+        normalizeText(product.categoria_nombre) === normalizeText(selectedCategory);
+      return matchesSearch && matchesCategory;
+    });
+
+    if (sortOption === '+Vendidos') {
+      prods.sort((a, b) => {
+        const starsDiff = getProductStars(b.id) - getProductStars(a.id);
+        if (starsDiff !== 0) return starsDiff;
+        return (productSalesCount[b.id] || 0) - (productSalesCount[a.id] || 0);
+      });
+    } else if (sortOption === '-Vendidos') {
+      prods.sort((a, b) => {
+        const starsDiff = getProductStars(a.id) - getProductStars(b.id);
+        if (starsDiff !== 0) return starsDiff;
+        return (productSalesCount[a.id] || 0) - (productSalesCount[b.id] || 0);
+      });
     }
 
-    // 2. Filtro por búsqueda de texto
-    if (busqueda.trim() !== '') {
-      const termino = busqueda.toLowerCase().trim();
-      resultado = resultado.filter(
-        (p) =>
-          (p.nombre || '').toLowerCase().includes(termino) ||
-          (p.categoria_nombre || '').toLowerCase().includes(termino)
-      );
-    }
-
-    // 3. Ordenamiento por Filtro (+Vendidos / -Vendidos / Filtro por defecto)
-    if (filtroVentas === '+vendidos') {
-      resultado.sort((a, b) => obtenerVentasProducto(b) - obtenerVentasProducto(a));
-    } else if (filtroVentas === '-vendidos') {
-      resultado.sort((a, b) => obtenerVentasProducto(a) - obtenerVentasProducto(b));
-    } else {
-      // Orden por defecto: id o orden original del menú
-      resultado.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-    }
-
-    return resultado;
-  }, [productos, categoriaSeleccionada, busqueda, filtroVentas]);
+    return prods;
+  }, [productos, searchTerm, selectedCategory, sortOption, productSalesCount, maxSales]);
 
   // Handlers
-  const handleNuevoProducto = () => {
-    setProductoAEditar(null);
-    setModalProductoOpen(true);
+  const handleAddProduct = () => {
+    setEditingProduct(null);
+    setIsProductModalOpen(true);
   };
 
-  const handleEditarProducto = (producto) => {
-    setProductoAEditar(producto);
-    setModalProductoOpen(true);
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setIsProductModalOpen(true);
+    setIsProductListOpen(false);
   };
 
-  const handleEditarRecetaDesdeModal = (receta) => {
-    const prod = productos.find((p) => p.id === receta.producto_id);
-    setProductoParaReceta(prod || { id: receta.producto_id, nombre: receta.nombre });
-    setModalRecetaEditorOpen(true);
+  const handleViewRecipe = (recipeId) => {
+    setIsProductModalOpen(false);
+    setInitialRecipeEditId(recipeId);
+    setIsRecipeManagerOpen(true);
   };
 
-  const handleCrearNuevaReceta = () => {
-    setProductoParaReceta(null);
-    setModalRecetaEditorOpen(true);
-  };
-
-  const handleGestionarRecetaDesdeCard = (producto) => {
-    setProductoParaReceta(producto);
-    setModalRecetaEditorOpen(true);
-  };
-
-  const handleConfirmarEliminar = async () => {
-    if (!productoAEliminar) return;
-
+  const handleDeleteProduct = async (product, reason = 'Merma') => {
     try {
-      setEliminando(true);
-      await productoService.eliminarProducto(productoAEliminar.id);
-      toast.success(`Producto "${productoAEliminar.nombre}" eliminado`);
-      setProductoAEliminar(null);
+      await productoService.eliminarProducto(product.id, reason);
+      toast.success(`Producto "${product.nombre}" eliminado`);
+      setIsProductModalOpen(false);
+      setEditingProduct(null);
       cargarDatos();
     } catch (error) {
       toast.error(error.message || 'Error al eliminar el producto');
-    } finally {
-      setEliminando(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Barra de Acciones Superiores (Alineada a la derecha, sin título duplicado) */}
-      <div className="flex justify-end items-center gap-3 flex-wrap">
-        {/* Dropdown Productos (Imagen 1) */}
-        <DropdownMenu onOpenChange={setDropdownProductosAbierto}>
+    <div className="w-full">
+      {/* Top Header Actions (Alineados a la derecha, Fieles a Cafeteria_1) */}
+      <div className="flex items-center justify-end mb-8 gap-3 flex-wrap">
+        {/* Dropdown Productos */}
+        <DropdownMenu open={isProductsMenuOpen} onOpenChange={setIsProductsMenuOpen}>
           <DropdownMenuTrigger render={
             <Button
-              variant="default"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold h-11 px-5 rounded-2xl gap-2 shadow-xs cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-[#4B2B1D] text-white rounded-lg hover:bg-[#9F4F2F] transition-colors font-medium h-10 shadow-2xs cursor-pointer"
             />
           }>
-            <LayoutGrid className="w-4 h-4" />
+            <LayoutGrid className="w-5 h-5" />
             <span>Productos</span>
-            {dropdownProductosAbierto ? (
-              <ChevronUp className="w-4 h-4 ml-0.5" />
-            ) : (
-              <ChevronDown className="w-4 h-4 ml-0.5" />
-            )}
+            <ChevronDown className={`w-4 h-4 transition-transform ${isProductsMenuOpen ? 'rotate-180' : ''}`} />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-card border border-primary/20 rounded-2xl shadow-xl p-1.5 mt-1">
+          <DropdownMenuContent
+            align="end"
+            className="w-48 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden p-0 mt-2 z-50"
+          >
             <DropdownMenuItem
-              onClick={handleNuevoProducto}
-              className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
+              onClick={handleAddProduct}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-[#F3E5DC] hover:text-[#4B2B1D] text-left transition-colors cursor-pointer rounded-none"
             >
-              <Plus className="w-4 h-4 text-primary/80" />
+              <Plus className="w-4 h-4" />
               <span>Agregar</span>
             </DropdownMenuItem>
+            <div className="border-t border-gray-100" />
             <DropdownMenuItem
-              onClick={() => setModalEditarEliminarOpen(true)}
-              className="text-xs cursor-pointer font-medium text-primary hover:text-accent gap-2.5 py-2.5 px-3 rounded-xl"
+              onClick={() => {
+                setIsProductListOpen(true);
+                setIsProductsMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-[#F3E5DC] hover:text-[#4B2B1D] text-left transition-colors cursor-pointer rounded-none"
             >
-              <List className="w-4 h-4 text-primary/80" />
+              <List className="w-4 h-4" />
               <span>Editar / Eliminar</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Botón Categorías (Imagen 1 y 4) */}
+        {/* Categories Button */}
         <Button
           variant="outline"
-          onClick={() => setModalCategoriasOpen(true)}
-          className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
+          onClick={() => setIsCategoryManagerOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium h-10 shadow-2xs cursor-pointer"
         >
-          <Layers className="w-4 h-4 text-primary/80" />
+          <List className="w-5 h-5" />
           <span>Categorías</span>
         </Button>
 
-        {/* Botón Recetas (Imagen 1 y 5) */}
+        {/* Recipes Button */}
         <Button
           variant="outline"
-          onClick={() => setModalRecetasOpen(true)}
-          className="border-primary/20 bg-card hover:bg-muted text-primary font-semibold h-11 px-5 rounded-2xl gap-2 shadow-2xs cursor-pointer"
+          onClick={() => {
+            setInitialRecipeEditId(null);
+            setIsRecipeManagerOpen(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium h-10 shadow-2xs cursor-pointer"
         >
-          <FileText className="w-4 h-4 text-primary/80" />
+          <ScrollText className="w-5 h-5" />
           <span>Recetas</span>
         </Button>
       </div>
 
-      {/* Barra de Filtros y Búsqueda (Fiel a Imágenes 1, 2 y 3) */}
+      {/* Filters Bar (Fiel a Cafeteria_1) */}
       <ProductoFiltros
-        busqueda={busqueda}
-        setBusqueda={setBusqueda}
-        filtroVentas={filtroVentas}
-        setFiltroVentas={setFiltroVentas}
-        categoriaSeleccionada={categoriaSeleccionada}
-        setCategoriaSeleccionada={setCategoriaSeleccionada}
+        busqueda={searchTerm}
+        setBusqueda={setSearchTerm}
+        filtroVentas={sortOption}
+        setFiltroVentas={setSortOption}
+        categoriaSeleccionada={selectedCategory}
+        setCategoriaSeleccionada={setSelectedCategory}
         categorias={categorias}
       />
 
-      {/* Grilla de Tarjetas de Productos */}
+      {/* Grilla de Productos */}
       {cargando ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="h-64 rounded-2xl border border-primary/10 bg-card/60 p-3 flex flex-col justify-between animate-pulse"
+              className="bg-white rounded-xl shadow-xs border border-gray-100 p-3 h-52 flex flex-col justify-between animate-pulse"
             >
-              <div className="w-full aspect-[4/3] rounded-xl bg-primary/10" />
-              <div className="space-y-2 mt-3">
-                <div className="h-4 w-3/4 rounded bg-primary/10" />
-                <div className="h-3 w-1/2 rounded bg-primary/10" />
-                <div className="h-3 w-1/3 rounded bg-primary/10" />
+              <div className="w-full h-28 rounded-lg bg-gray-200" />
+              <div className="space-y-2 mt-2">
+                <div className="h-4 w-3/4 rounded bg-gray-200" />
+                <div className="h-3 w-1/2 rounded bg-gray-200" />
               </div>
             </div>
           ))}
         </div>
-      ) : productosFiltrados.length === 0 ? (
-        <div className="text-center py-16 px-4 rounded-2xl border border-dashed border-primary/20 bg-card/40 flex flex-col items-center justify-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary/60">
+      ) : filteredProducts.length === 0 ? (
+        <div className="bg-white rounded-xl border border-dashed border-gray-200 py-16 px-4 text-center flex flex-col items-center justify-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
             <PackageX className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-primary">No se encontraron productos</h3>
-          <p className="text-sm text-primary/60 max-w-sm">
-            {busqueda || categoriaSeleccionada
+          <h3 className="text-lg font-bold text-gray-900">No se encontraron productos</h3>
+          <p className="text-sm text-gray-500 max-w-sm">
+            {searchTerm || selectedCategory !== 'Todos'
               ? 'Intentá cambiar los filtros o el término de búsqueda.'
-              : 'Todavía no hay productos registrados en el menú.'}
+              : 'No hay productos registrados en el sistema.'}
           </p>
           <Button
-            onClick={handleNuevoProducto}
-            className="mt-2 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold rounded-xl"
+            onClick={handleAddProduct}
+            className="mt-2 bg-[#4B2B1D] text-white hover:bg-[#9F4F2F] rounded-lg h-10 px-4 font-medium"
           >
             <Plus className="w-4 h-4 mr-2" />
             Agregar Producto
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {productosFiltrados.map((producto) => (
-            <ProductoCard
-              key={producto.id}
-              producto={producto}
-              onEditar={handleEditarProducto}
-              onReceta={handleGestionarRecetaDesdeCard}
-              onEliminar={(prod) => setProductoAEliminar(prod)}
-            />
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {filteredProducts.map((product) => {
+            const hasRecipe = recetas.some(
+              (r) => Number(r.producto_id) === Number(product.id) || Number(r.id) === Number(product.id)
+            );
+            return (
+              <ProductoCard
+                key={product.id}
+                producto={product}
+                tieneReceta={hasRecipe}
+                estrellas={getProductStars(product.id)}
+                onEditar={handleEditProduct}
+              />
+            );
+          })}
         </div>
       )}
 
-      {/* Modal Agregar / Editar Producto (Imágenes 2 y 3) */}
+      {/* Modal Agregar / Editar Producto (Fiel a Cafeteria_1) */}
       <ProductoModal
-        open={modalProductoOpen}
-        onOpenChange={setModalProductoOpen}
-        producto={productoAEditar}
-        categorias={categorias}
-        recetasDisponibles={recetas}
-        onGuardado={cargarDatos}
+        open={isProductModalOpen}
+        onOpenChange={setIsProductModalOpen}
+        producto={editingProduct}
+        categories={categorias}
+        recipes={recetas}
+        onSave={cargarDatos}
+        onViewRecipe={handleViewRecipe}
+        onDelete={(prod) => handleDeleteProduct(prod, 'Merma')}
       />
 
-      {/* Modal Editar / Eliminar Producto (Imagen 1) */}
+      {/* Modal Editar / Eliminar Productos (Lista con Motivo de Eliminación) */}
       <ProductosModalEditarEliminar
-        open={modalEditarEliminarOpen}
-        onOpenChange={setModalEditarEliminarOpen}
+        open={isProductListOpen}
+        onOpenChange={setIsProductListOpen}
         productos={productos}
-        onEditarProducto={handleEditarProducto}
-        onEliminarProducto={(prod) => setProductoAEliminar(prod)}
+        onEditProduct={handleEditProduct}
+        onDeleteProduct={handleDeleteProduct}
       />
 
-      {/* Modal Gestión de Categorías (Imagen 4) */}
+      {/* Modal Administrador de Categorías */}
       <CategoriasModal
-        open={modalCategoriasOpen}
-        onOpenChange={setModalCategoriasOpen}
+        open={isCategoryManagerOpen}
+        onOpenChange={setIsCategoryManagerOpen}
         categorias={categorias}
         productos={productos}
         onActualizarCategorias={cargarDatos}
       />
 
-      {/* Modal Recetas (Imagen 5) */}
+      {/* Modal Administrador de Recetas */}
       <RecetasModal
-        open={modalRecetasOpen}
-        onOpenChange={setModalRecetasOpen}
+        open={isRecipeManagerOpen}
+        onOpenChange={setIsRecipeManagerOpen}
         recetas={recetas}
-        onEditarReceta={handleEditarRecetaDesdeModal}
-        onCrearNuevaReceta={handleCrearNuevaReceta}
-        onRecetaEliminada={cargarDatos}
-      />
-
-      {/* Modal Editor de Ingredientes de la Receta */}
-      <RecetaEditorModal
-        open={modalRecetaEditorOpen}
-        onOpenChange={setModalRecetaEditorOpen}
-        producto={productoParaReceta}
         productos={productos}
+        initialEditRecipeId={initialRecipeEditId}
         onRecetaGuardada={cargarDatos}
       />
-
-      {/* Modal de Confirmación para Eliminar Producto */}
-      <Dialog open={Boolean(productoAEliminar)} onOpenChange={(val) => !val && setProductoAEliminar(null)}>
-        <DialogContent className="sm:max-w-md bg-card border-primary/20 text-card-foreground rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-destructive flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
-              Confirmar Eliminación
-            </DialogTitle>
-            <DialogDescription className="text-sm text-primary/70 pt-2">
-              ¿Estás seguro de que deseás eliminar el producto{' '}
-              <strong className="text-primary font-bold">"{productoAEliminar?.nombre}"</strong>? Esta acción no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="pt-3 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setProductoAEliminar(null)}
-              disabled={eliminando}
-              className="border-primary/20 text-primary hover:bg-muted/40 rounded-xl"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleConfirmarEliminar}
-              disabled={eliminando}
-              className="bg-destructive text-white hover:bg-destructive/90 rounded-xl"
-            >
-              {eliminando && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Eliminar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -22,7 +22,8 @@ const update = async (req, res) => {
 };
 
 const remove = async (req, res) => {
-  const data = await productoService.delete(req.params.id);
+  const motivo = req.body?.motivo || req.query?.motivo || null;
+  const data = await productoService.delete(req.params.id, motivo);
   return ok(res, data);
 };
 
