@@ -693,11 +693,14 @@ export default function ReporteCaja() {
     }
   };
 
-  const handleGenerarFactura = (pedidoId) => {
-    toast.info(`Generando comprobante para Pedido #${pedidoId}...`, {
-      description: 'Conexión con ARCA simulada con éxito.'
-    });
+  const handleFacturar = (pedidoId) => {
+    const pedidoNum = String(pedidoId).startsWith('#') ? pedidoId : `#${pedidoId}`;
+    toast.info(
+      `Se deja implementado este botón para que, en próximas actualizaciones y mejoras, pueda asociarse a ARCA y obtener e imprimir el ticket fiscal correspondiente al pedido ${pedidoNum}.`,
+      { duration: 6500 }
+    );
   };
+  const handleGenerarFactura = handleFacturar;
 
   // Título detallado que se mostrará DENTRO de la sección de Transacciones
   const getTituloTabla = () => {
@@ -881,7 +884,7 @@ export default function ReporteCaja() {
 
         {/* Nota al pie */}
         <p className="text-[11px] text-muted-foreground italic leading-relaxed px-2">
-          Nota: Esta sección funciona como caja interna. La facturación oficial de ARCA podrá implementarse en el botón "Generar Factura" en cada transacción.
+          Nota: Esta sección funciona como caja interna. La facturación oficial de ARCA podrá implementarse en el botón "Facturar" en cada transacción.
         </p>
 
       </div>
@@ -1006,17 +1009,17 @@ export default function ReporteCaja() {
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-border/20 text-muted-foreground font-semibold text-[11px]">
-                          <th className="pb-3 pr-4 font-semibold">Fecha</th>
-                          <th className="pb-3 pr-4 font-semibold">Hora</th>
-                          <th className="pb-3 pr-4 font-semibold">Nº Pedido</th>
-                          <th className="pb-3 pr-4 font-semibold">Producto</th>
-                          <th className="pb-3 pr-4 font-semibold text-center">Cant.</th>
-                          <th className="pb-3 pr-4 font-semibold text-right">Costo U.</th>
-                          <th className="pb-3 pr-4 font-semibold text-right">Venta U.</th>
-                          <th className="pb-3 pr-4 font-semibold text-right">Costo Tot.</th>
-                          <th className="pb-3 pr-4 font-semibold text-right">Venta Tot.</th>
-                          <th className="pb-3 pr-4 font-semibold text-center">Estado</th>
-                          <th className="pb-3 text-center font-semibold">Acciones</th>
+                          <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">Fecha</th>
+                          <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">Hora</th>
+                          <th className="pb-2.5 pr-2 font-semibold whitespace-nowrap">Nº Pedido</th>
+                          <th className="pb-2.5 pr-2 font-semibold">Producto</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-center whitespace-nowrap">Cant.</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-right whitespace-nowrap">Costo U.</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-right whitespace-nowrap">Venta U.</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-right whitespace-nowrap">Costo Tot.</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-right whitespace-nowrap">Venta Tot.</th>
+                          <th className="pb-2.5 pr-2 font-semibold text-center whitespace-nowrap">Estado</th>
+                          <th className="pb-2.5 text-center font-semibold whitespace-nowrap">Acciones</th>
                         </tr>
                       </thead>
                       {pedidosFiltrados.map((pedido) => {
@@ -1046,7 +1049,7 @@ export default function ReporteCaja() {
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 pr-4 text-primary font-medium align-middle whitespace-nowrap"
+                                      className="py-2.5 pr-2 text-primary font-medium align-middle whitespace-nowrap text-xs"
                                     >
                                       {formatearFechaDDMMAAAA(pedido.fecha || reporte.fecha || getHoyIso())}
                                     </td>
@@ -1056,7 +1059,7 @@ export default function ReporteCaja() {
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 pr-4 text-muted-foreground font-medium align-middle whitespace-nowrap"
+                                      className="py-2.5 pr-2 text-muted-foreground font-medium align-middle whitespace-nowrap text-xs"
                                     >
                                       {pedido.hora || '-'}
                                     </td>
@@ -1066,11 +1069,11 @@ export default function ReporteCaja() {
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 pr-4 align-middle"
+                                      className="py-2.5 pr-2 align-middle whitespace-nowrap"
                                     >
                                       <button
                                         onClick={() => handleAbrirDetalle(pedido)}
-                                        className="text-primary hover:text-accent font-bold hover:underline cursor-pointer block"
+                                        className="text-primary hover:text-accent font-bold hover:underline cursor-pointer block text-xs"
                                         title="Ver detalle del pedido"
                                       >
                                         {String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`}
@@ -1082,32 +1085,32 @@ export default function ReporteCaja() {
                                   )}
 
                                   {/* Producto */}
-                                  <td className="py-2.5 pr-4 text-primary font-medium">
+                                  <td className="py-2 pr-2 text-primary font-medium text-xs">
                                     {item.nombre_producto}
                                   </td>
 
                                   {/* Cantidad */}
-                                  <td className="py-2.5 pr-4 text-center text-primary font-semibold">
+                                  <td className="py-2 pr-2 text-center text-primary font-semibold text-xs whitespace-nowrap">
                                     {item.cantidad}
                                   </td>
 
                                   {/* Costo Unitario */}
-                                  <td className="py-2.5 pr-4 text-right text-muted-foreground font-medium">
+                                  <td className="py-2 pr-2 text-right text-muted-foreground font-medium text-xs whitespace-nowrap">
                                     {formatearPrecio(item.precio_costo)}
                                   </td>
 
                                   {/* Venta Unitaria */}
-                                  <td className="py-2.5 pr-4 text-right text-primary font-medium">
+                                  <td className="py-2 pr-2 text-right text-primary font-medium text-xs whitespace-nowrap">
                                     {formatearPrecio(item.precio_venta)}
                                   </td>
 
                                   {/* Costo Total */}
-                                  <td className="py-2.5 pr-4 text-right text-red-600 font-semibold align-middle">
+                                  <td className="py-2 pr-2 text-right text-red-600 font-semibold align-middle text-xs whitespace-nowrap">
                                     {formatearPrecio(item.costo_total)}
                                   </td>
 
                                   {/* Venta Total */}
-                                  <td className="py-2.5 pr-4 text-right text-emerald-600 font-bold align-middle">
+                                  <td className="py-2 pr-2 text-right text-emerald-600 font-bold align-middle text-xs whitespace-nowrap">
                                     {formatearPrecio(item.venta_total)}
                                   </td>
 
@@ -1115,10 +1118,10 @@ export default function ReporteCaja() {
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 pr-4 text-center align-middle"
+                                      className="py-2.5 pr-2 text-center align-middle whitespace-nowrap"
                                     >
                                       <span
-                                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${getBadgeEstado(
+                                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${getBadgeEstado(
                                           pedido.estado
                                         )}`}
                                       >
@@ -1127,17 +1130,19 @@ export default function ReporteCaja() {
                                     </td>
                                   )}
 
-                                  {/* Acciones: Generar Factura (centrado verticalmente con rowSpan) */}
+                                  {/* Acciones: Facturar (centrado verticalmente con rowSpan) */}
                                   {esPrimerItem && (
                                     <td
                                       rowSpan={items.length}
-                                      className="py-3.5 text-center align-middle"
+                                      className="py-2.5 text-center align-middle whitespace-nowrap"
                                     >
                                       <button
-                                        onClick={() => handleGenerarFactura(pedido.id)}
-                                        className="px-3 py-1 border border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                                        type="button"
+                                        onClick={() => handleFacturar(pedido.id)}
+                                        className="px-2.5 py-1 bg-gray-100/90 border border-gray-300 text-gray-500 hover:bg-gray-200/80 hover:text-gray-700 rounded-lg text-[11px] font-medium transition-colors whitespace-nowrap cursor-pointer shadow-2xs opacity-85"
+                                        title="Facturar con ARCA (Próximamente)"
                                       >
-                                        Generar Factura
+                                        Facturar
                                       </button>
                                     </td>
                                   )}
