@@ -16,6 +16,11 @@ export const productoService = {
   guardarReceta: (productoId, datos) => api.put(`/productos/${productoId}/receta`, datos),
   eliminarReceta: (productoId) => api.delete(`/productos/${productoId}/receta`),
 
+  obtenerTodasLasRecetas: () => api.get('/recetas'),
+  crearReceta: (datos) => api.post('/recetas', datos),
+  actualizarRecetaIndependiente: (id, datos) => api.put(`/recetas/${id}`, datos),
+  eliminarRecetaIndependiente: (id) => api.delete(`/recetas/${id}`),
+
   getCategorias: () => api.get('/categorias'),
   getProductos: (params = {}) => api.get('/productos', { params: { _t: Date.now(), ...params } })
 };

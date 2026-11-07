@@ -12,6 +12,7 @@ router.use('/turnos', require('./turno.routes'));
 router.use('/pedidos', require('./pedido.routes'));
 router.use('/categorias', require('./categoria.routes'));
 router.use('/productos', require('./producto.routes'));
+router.use('/recetas', require('./receta.routes'));
 router.use('/comandas', require('./comanda.routes'));
 router.use('/proveedores', require('./proveedor.routes'));
 router.use('/insumos', require('./insumo.routes'));

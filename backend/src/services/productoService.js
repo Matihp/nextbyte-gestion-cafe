@@ -9,7 +9,14 @@ const AppError = require('../utils/AppError');
 const { validarProducto } = require('../dtos/producto.dto');
 
 const calcularCostoProducto = async (productoId, trx = null) => {
-  const receta = await recetaRepository.getByProductoId(productoId, trx);
+  const prod = await (trx ? trx('productos').where({ id: productoId }).first() : dbLocal('productos').where({ id: productoId }).first());
+  let receta = null;
+  if (prod && prod.receta_id) {
+    receta = await recetaRepository.getById(prod.receta_id, trx);
+  }
+  if (!receta) {
+    receta = await recetaRepository.getByProductoId(productoId, trx);
+  }
   if (!receta) return 0;
   const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id, trx);
   if (!ingredientes || ingredientes.length === 0) return 0;
@@ -51,7 +58,7 @@ const getAll = async (filtros = {}) => {
   }
 
   return productos.map((p) => {
-    const recetaId = recetaPorProducto.get(Number(p.id));
+    const recetaId = p.receta_id ? Number(p.receta_id) : recetaPorProducto.get(Number(p.id));
     const precioCosto = recetaId ? Number((costoPorReceta.get(recetaId) || 0).toFixed(2)) : 0;
     return {
       ...p,
@@ -138,6 +145,7 @@ const create = async (datos) => {
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
+      receta_id: datos.receta_id ? Number(datos.receta_id) : null,
       imagen: datos.imagen ? datos.imagen.trim() : null
     };
 
@@ -242,6 +250,7 @@ const update = async (id, datos) => {
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
+      receta_id: datos.receta_id !== undefined ? (datos.receta_id ? Number(datos.receta_id) : null) : actual.receta_id,
       imagen: datos.imagen !== undefined ? (datos.imagen ? datos.imagen.trim() : null) : actual.imagen
     };
 
