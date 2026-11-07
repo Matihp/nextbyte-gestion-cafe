@@ -26,9 +26,11 @@ export default function ProductosModalEditarEliminar({
 }) {
   const [deletingProduct, setDeletingProduct] = useState(null);
 
-  const handleConfirmDelete = (motivo) => {
-    if (deletingProduct && onDeleteProduct) {
-      onDeleteProduct(deletingProduct, motivo);
+  const handleConfirmDelete = (prodOrMotivo, maybeMotivo) => {
+    const motivo = maybeMotivo || prodOrMotivo;
+    const targetProd = (prodOrMotivo && typeof prodOrMotivo === 'object' && prodOrMotivo.id) ? prodOrMotivo : deletingProduct;
+    if (targetProd && onDeleteProduct) {
+      onDeleteProduct(targetProd, motivo);
     }
     setDeletingProduct(null);
   };

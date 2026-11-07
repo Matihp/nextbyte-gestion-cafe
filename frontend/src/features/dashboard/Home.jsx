@@ -17,6 +17,7 @@ import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
+import ModalConfirmarCancelarPedido from '@/features/comandas/ModalConfirmarCancelarPedido';
 import { OrderPrintTicket } from '@/features/comandas/OrderPrintTicket';
 import { formatCustomerName } from '@/features/clientes/CustomerViewerPage';
 
@@ -162,6 +163,9 @@ export default function Home() {
   // Estados para el Modal de Resumen e Impresión de Comanda
   const [pedidoResumen, setPedidoResumen] = useState(null);
   const [modalResumenAbierto, setModalResumenAbierto] = useState(false);
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
+  const [accionCancelar, setAccionCancelar] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
   const [ticketAImprimir, setTicketAImprimir] = useState(null);
 
   const handleVerResumen = (pedido) => {
@@ -185,75 +189,86 @@ export default function Home() {
     }, 80);
   };
 
-  // Cancelar pedido completo desde el modal
-  const handleCancelarPedido = async (pedido) => {
+  // Abrir modal de motivo de cancelación para pedido completo
+  const handleCancelarPedido = (pedido) => {
     if (!pedido) return;
-
-    // 1. Confirmar si desea eliminar el pedido
-    const confirma = window.confirm('¿Confirma que desea eliminar el pedido?');
-    if (!confirma) return;
-
-    // 2. Preguntar si se registra como MERMA o vuelve al stock de productos
-    const esMerma = window.confirm(
-      '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock de productos (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock de productos)\nCancelar = Vuelve al stock de productos'
-    );
-
-    try {
-      // Cancelar pedido en backend pasando si los productos son MERMA
-      await pedidoService.cancelar(pedido.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-
-      toast.success(esMerma ? 'Pedido cancelado y registrado en Mermas' : 'Pedido cancelado y restaurado en stock de productos');
-      handleCerrarResumen();
-      await cargarDatos();
-    } catch (err) {
-      console.error('Error al cancelar el pedido:', err);
-      toast.error('No se pudo cancelar el pedido');
-    }
+    setAccionCancelar({ tipo: 'pedido', pedido });
+    setModalCancelarOpen(true);
   };
 
-  // Cancelar/eliminar un ítem individual del pedido
-  const handleEliminarItem = async (pedido, item) => {
+  // Abrir modal de motivo de cancelación para un ítem individual
+  const handleEliminarItem = (pedido, item) => {
     if (!pedido || !item) return;
+    setAccionCancelar({ tipo: 'item', pedido, item });
+    setModalCancelarOpen(true);
+  };
 
-    // 1. Confirmar si desea eliminar el pedido (ítem del pedido)
-    const confirma = window.confirm('¿Confirma que desea eliminar el pedido?');
-    if (!confirma) return;
-
-    // 2. Preguntar si va a merma o regresa al stock de productos
-    const esMerma = window.confirm(
-      '¿Desea registrar este producto como MERMA (Aceptar) o RESTAURAR el stock de productos (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock de productos)\nCancelar = Vuelve al stock de productos'
-    );
-
+  // Confirmación desde el modal unificado de cancelación (ES MERMA / OTROS MOTIVOS)
+  const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
+    if (!accionCancelar) return;
+    setCancelando(true);
     try {
-      if (item.id) {
-        await pedidoService.eliminarItem(pedido.id, item.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-        toast.success(esMerma ? `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado y registrado en Mermas` : `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado`);
-      }
-
-      // Actualizar vista local
-      const itemsActuales = pedido.detalles || pedido.items || [];
-      if (itemsActuales.length <= 1) {
+      if (accionCancelar.tipo === 'pedido') {
+        const { pedido } = accionCancelar;
+        await pedidoService.cancelar(pedido.id, { esMerma, motivo });
+        setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+        toast.success(
+          esMerma
+            ? 'Pedido cancelado y registrado en Mermas'
+            : 'Pedido cancelado y restaurado en stock de productos'
+        );
         handleCerrarResumen();
-      } else {
-        const restantes = itemsActuales.filter((it) => it.id !== item.id);
-        const nuevoTotal = restantes.reduce((acc, it) => {
-          const c = Number(it.cantidad || it.quantity || 1);
-          const p = Number(it.precio_venta || it.price || 0);
-          return acc + (c * p);
-        }, 0);
+      } else if (accionCancelar.tipo === 'item') {
+        const { pedido, item } = accionCancelar;
+        if (item.id) {
+          await pedidoService.eliminarItem(pedido.id, item.id, { esMerma, motivo });
+          toast.success(
+            esMerma
+              ? `Artículo "${item.nombre_producto || item.name || 'Producto'}" cancelado y registrado en Mermas`
+              : `Artículo "${item.nombre_producto || item.name || 'Producto'}" cancelado del pedido`
+          );
+        }
 
-        setPedidoResumen((prev) => (prev ? {
-          ...prev,
-          detalles: restantes,
-          items: restantes,
-          total: nuevoTotal
-        } : null));
+        const itemsActuales = pedido.detalles || pedido.items || [];
+        if (itemsActuales.length <= 1) {
+          setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+          handleCerrarResumen();
+        } else {
+          const restantes = itemsActuales.filter((it) => it.id !== item.id);
+          const nuevoTotal = restantes.reduce((acc, it) => {
+            const c = Number(it.cantidad || it.quantity || 1);
+            const p = Number(it.precio_venta || it.price || 0);
+            return acc + c * p;
+          }, 0);
+
+          setPedidoResumen((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  detalles: restantes,
+                  items: restantes,
+                  total: nuevoTotal
+                }
+              : null
+          );
+
+          setComandas((prev) =>
+            prev.map((p) =>
+              p.id === pedido.id
+                ? { ...p, detalles: restantes, items: restantes, total: nuevoTotal }
+                : p
+            )
+          );
+        }
       }
-
-      await cargarDatos();
+      window.dispatchEvent(new CustomEvent('orders-updated'));
     } catch (err) {
-      console.error('Error al eliminar ítem del pedido:', err);
-      toast.error('No se pudo eliminar el artículo');
+      console.error('Error al procesar cancelación:', err);
+      toast.error('No se pudo procesar la cancelación');
+    } finally {
+      setCancelando(false);
+      setAccionCancelar(null);
+      setModalCancelarOpen(false);
     }
   };
 
@@ -317,24 +332,6 @@ export default function Home() {
 
   useEffect(() => {
     cargarDatos();
-
-    const handleSync = () => {
-      cargarDatos();
-    };
-
-    window.addEventListener('orders-updated', handleSync);
-    window.addEventListener('storage', handleSync);
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        cargarDatos();
-      }
-    }, 5000);
-
-    return () => {
-      window.removeEventListener('orders-updated', handleSync);
-      window.removeEventListener('storage', handleSync);
-      clearInterval(interval);
-    };
   }, [cargarDatos]);
 
   // Cálculos de Stock / Insumos para las 4 Tarjetas (sincronizado con InventoryPage)
@@ -591,6 +588,14 @@ export default function Home() {
         alImprimir={handleImprimirComanda}
         alCancelar={handleCancelarPedido}
         alEliminarItem={handleEliminarItem}
+      />
+
+      {/* Modal Unificado de Motivo de Cancelación */}
+      <ModalConfirmarCancelarPedido
+        open={modalCancelarOpen}
+        onOpenChange={setModalCancelarOpen}
+        onConfirmar={handleConfirmarCancelacion}
+        cargando={cancelando}
       />
 
       {/* Ticket de Impresión para PrintPortal */}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { OrderSummaryModal } from './OrderSummaryModal';
 import { RecipeDetailModal } from './RecipeDetailModal';
 import { OrderPrintTicket } from './OrderPrintTicket';
+import ModalConfirmarCancelarPedido from './ModalConfirmarCancelarPedido';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
@@ -127,6 +128,9 @@ export function OrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
+  const [accionCancelar, setAccionCancelar] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
 
   const statuses = [
     'Todos',
@@ -375,43 +379,75 @@ export function OrdersPage() {
     }
   };
 
-  // Cancelar pedido completo desde el modal
-  const handleCancelOrder = async (orderId) => {
-    try {
-      const esMerma = window.confirm(
-        '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
-      );
-      await pedidoService.cancelar(orderId, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
-      );
-      setSelectedOrderId(null);
-      window.dispatchEvent(new CustomEvent('orders-updated'));
-      toast.success(esMerma ? 'Pedido cancelado y registrado como MERMA' : 'Pedido cancelado exitosamente');
-    } catch {
-      toast.error('Error al cancelar el pedido');
-    }
+  // Abrir modal de motivo de cancelación para pedido completo
+  const handleCancelOrder = (orderId) => {
+    setAccionCancelar({ tipo: 'pedido', orderId });
+    setModalCancelarOpen(true);
   };
 
-  // Cancelar ítem específico de un pedido
-  const handleCancelOrderItem = async (orderId, itemId, itemName) => {
+  // Abrir modal de motivo de cancelación para ítem específico de un pedido
+  const handleCancelOrderItem = (orderId, itemId, itemName) => {
+    setAccionCancelar({ tipo: 'item', orderId, itemId, itemName });
+    setModalCancelarOpen(true);
+  };
+
+  // Confirmación desde el modal unificado de cancelación (ES MERMA / OTROS MOTIVOS)
+  const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
+    if (!accionCancelar) return;
+    setCancelando(true);
     try {
-      const order = orders.find((o) => o.id === orderId);
-      if (!order) return;
+      if (accionCancelar.tipo === 'pedido') {
+        const { orderId } = accionCancelar;
+        await pedidoService.cancelar(orderId, { esMerma, motivo });
+        setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
+        setSelectedOrderId(null);
+        window.dispatchEvent(new CustomEvent('orders-updated'));
+        toast.success(
+          esMerma
+            ? 'Pedido cancelado y registrado en Mermas'
+            : 'Pedido cancelado y restaurado en stock de productos'
+        );
+      } else if (accionCancelar.tipo === 'item') {
+        const { orderId, itemId, itemName } = accionCancelar;
+        await pedidoService.eliminarItem(orderId, itemId, { esMerma, motivo });
 
-      const updatedItems = order.items.filter((item) => item.id !== itemId);
-      const newTotal = updatedItems.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, items: updatedItems, total: newTotal } : o))
-      );
-
-      toast.success(`Artículo "${itemName}" cancelado del pedido`);
-    } catch {
-      toast.error('No se pudo cancelar el artículo del pedido');
+        const order = orders.find((o) => String(o.id) === String(orderId));
+        if (order) {
+          const updatedItems = (order.items || []).filter(
+            (item) => String(item.id) !== String(itemId)
+          );
+          if (updatedItems.length === 0) {
+            setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
+            setSelectedOrderId(null);
+          } else {
+            const newTotal = updatedItems.reduce(
+              (acc, item) =>
+                acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+              0
+            );
+            setOrders((prev) =>
+              prev.map((o) =>
+                String(o.id) === String(orderId)
+                  ? { ...o, items: updatedItems, total: newTotal }
+                  : o
+              )
+            );
+          }
+        }
+        window.dispatchEvent(new CustomEvent('orders-updated'));
+        toast.success(
+          esMerma
+            ? `Artículo "${itemName}" cancelado y registrado en Mermas`
+            : `Artículo "${itemName}" cancelado del pedido`
+        );
+      }
+    } catch (err) {
+      console.error('Error al procesar cancelación:', err);
+      toast.error('No se pudo procesar la cancelación');
+    } finally {
+      setCancelando(false);
+      setAccionCancelar(null);
+      setModalCancelarOpen(false);
     }
   };
 
@@ -661,6 +697,14 @@ export function OrdersPage() {
           onClose={() => setViewingRecipe(null)}
         />
       )}
+
+      {/* Modal Unificado de Motivo de Cancelación */}
+      <ModalConfirmarCancelarPedido
+        open={modalCancelarOpen}
+        onOpenChange={setModalCancelarOpen}
+        onConfirmar={handleConfirmarCancelacion}
+        cargando={cancelando}
+      />
 
       {/* Ticket de Impresión para PrintPortal */}
       {printingOrder && <OrderPrintTicket order={printingOrder} />}
