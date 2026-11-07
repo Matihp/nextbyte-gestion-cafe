@@ -563,12 +563,26 @@ export default function ReporteCaja() {
                 <h2 className="text-lg font-bold text-primary tracking-tight">
                   {getTituloTabla()}
                 </h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={recargar}
+                    disabled={cargando}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF7F5] hover:bg-[#F3E5DC]/50 text-primary border border-border/40 rounded-xl text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 shadow-2xs"
+                    title="Actualizar transacciones"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
+                    <span>Actualizar</span>
+                  </button>
+                </div>
               </div>
 
               {cargando ? (
                 <div className="flex-1 py-28 flex flex-col items-center justify-center text-primary gap-3">
-                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-xs font-medium">Cargando transacciones de caja...</p>
+                  <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-medium text-muted-foreground animate-pulse">
+                    Cargando transacciones de caja...
+                  </p>
                 </div>
               ) : error ? (
                 <div className="flex-1 py-20 flex flex-col items-center justify-center text-center gap-3">
@@ -639,7 +653,7 @@ export default function ReporteCaja() {
                                       rowSpan={items.length}
                                       className="py-3.5 pr-4 text-primary font-medium align-middle whitespace-nowrap"
                                     >
-                                      {formatearFechaDDMMAAAA(pedido.fecha)}
+                                      {formatearFechaDDMMAAAA(pedido.fecha || reporte.fecha || getHoyIso())}
                                     </td>
                                   )}
 
@@ -661,11 +675,14 @@ export default function ReporteCaja() {
                                     >
                                       <button
                                         onClick={() => handleAbrirDetalle(pedido)}
-                                        className="text-primary hover:text-accent font-bold hover:underline cursor-pointer"
+                                        className="text-primary hover:text-accent font-bold hover:underline cursor-pointer block"
                                         title="Ver detalle del pedido"
                                       >
-                                        #{pedido.id}
+                                        {String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`}
                                       </button>
+                                      <span className="text-[10px] text-muted-foreground whitespace-nowrap block">
+                                        {pedido.tipo_pedido || 'Mostrador'} • {pedido.metodo_pago || 'Efectivo'}
+                                      </span>
                                     </td>
                                   )}
 

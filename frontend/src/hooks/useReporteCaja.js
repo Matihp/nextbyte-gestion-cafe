@@ -73,6 +73,9 @@ export function useReporteCaja() {
   useEffect(() => {
     let activo = true;
 
+    setCargando(true);
+    setError(null);
+
     async function fetchInicial() {
       try {
         let params = {};
@@ -100,7 +103,9 @@ export function useReporteCaja() {
           setError(err.message || 'No se pudieron cargar los datos de caja.');
         }
       } finally {
-        if (activo) setCargando(false);
+        if (activo) {
+          setCargando(false);
+        }
       }
     }
 
