@@ -82,6 +82,28 @@ const formatearFechaDDMMAAAA = (fechaStr) => {
   return fechaStr;
 };
 
+const formatearHora = (fechaVal) => {
+  if (!fechaVal) return '';
+  const str = String(fechaVal);
+  if (str.includes('T') && str.includes(':')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+    } catch {}
+    const timePart = str.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (str.includes(' ') && str.includes(':')) {
+    const timePart = str.split(' ')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  return '';
+};
+
 export default function ReporteCaja() {
   const {
     modoFiltro,
@@ -657,7 +679,7 @@ export default function ReporteCaja() {
         filas.push(['Fecha', 'Hora', 'Producto', 'Categoría', 'Cantidad', 'Precio Costo', 'Costo Total', 'Motivo de Eliminación']);
         for (const m of mermasValidas) {
           const fecha = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-          const hora = m.created_at ? (String(m.created_at).split(' ')[1]?.slice(0, 5) || '-') : '-';
+          const hora = m.created_at ? (formatearHora(m.created_at) || '-') : '-';
           const cant = Number(m.cantidad) || 1;
           const pCosto = Number(m.precio_costo) || 0;
           const cTot = Number(m.costo_total) || (cant * pCosto);
@@ -693,11 +715,10 @@ export default function ReporteCaja() {
     }
   };
 
-  const handleFacturar = (pedidoId) => {
-    const pedidoNum = String(pedidoId).startsWith('#') ? pedidoId : `#${pedidoId}`;
+  const handleFacturar = () => {
     toast.info(
-      `Se deja implementado este botón para que, en próximas actualizaciones y mejoras, pueda asociarse a ARCA y obtener e imprimir el ticket fiscal correspondiente al pedido ${pedidoNum}.`,
-      { duration: 6500 }
+      'Se deja implementado este botón para que, en próximas actualizaciones y mejoras, pueda asociarse a ARCA.',
+      { duration: 5000 }
     );
   };
   const handleGenerarFactura = handleFacturar;
@@ -1730,7 +1751,7 @@ export default function ReporteCaja() {
                       ) : (
                         mermasValidas.map((m) => {
                           const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-                          const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                          const horaStr = formatearHora(m.created_at);
                           const cant = Number(m.cantidad) || 1;
                           const pCosto = Number(m.precio_costo) || 0;
                           const cTotal = Number(m.costo_total) || (cant * pCosto);
@@ -1742,7 +1763,11 @@ export default function ReporteCaja() {
                             >
                               <td className="py-3 px-4 text-primary font-medium whitespace-nowrap align-middle">
                                 <div className="text-xs font-semibold">{fechaStr}</div>
-                                {horaStr && <div className="text-[10px] text-muted-foreground">{horaStr} hs</div>}
+                                {horaStr ? (
+                                  <div className="text-[10px] text-muted-foreground">{horaStr} hs</div>
+                                ) : (
+                                  <div className="text-[10px] text-muted-foreground">-</div>
+                                )}
                               </td>
 
                               <td className="py-3 px-4 text-primary font-medium align-middle">

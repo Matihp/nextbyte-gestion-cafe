@@ -161,14 +161,18 @@ export default function Productos() {
     setIsRecipeManagerOpen(true);
   };
 
-  const handleDeleteProduct = async (product, reason = 'Merma') => {
+  const handleDeleteProduct = async (product, reason = 'Merma', cantidad = null, esTodos = false) => {
     try {
-      await productoService.eliminarProducto(product.id, reason);
-      toast.success(`Producto "${product.nombre}" eliminado`);
+      const res = await productoService.eliminarProducto(product.id, reason, cantidad);
+      if (res?.data?.parcial) {
+        toast.success(`Se descontaron ${cantidad} u. de "${product.nombre}" por ${reason}`);
+      } else {
+        toast.success(`Producto "${product.nombre}" eliminado`);
+      }
       setIsProductModalOpen(false);
       setEditingProduct(null);
       setProductoAEliminarDirecto(null);
-      cargarDatos();
+      await cargarDatos();
     } catch (error) {
       toast.error(error.message || 'Error al eliminar el producto');
     }

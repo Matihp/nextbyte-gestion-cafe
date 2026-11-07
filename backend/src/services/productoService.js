@@ -257,7 +257,7 @@ const update = async (id, datos) => {
   });
 };
 
-const remove = async (id, motivo = null) => {
+const remove = async (id, motivo = null, cantidad = null) => {
   const actual = await productoRepository.getById(id);
   if (!actual) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
@@ -288,7 +288,12 @@ const remove = async (id, motivo = null) => {
       }
     }
 
-    // Calcular el precio de costo del producto antes de eliminarlo
+    const stockActual = Number(actual.stock_actual) || 0;
+    const cantEliminar = cantidad !== null && cantidad !== undefined && Number(cantidad) > 0
+      ? Number(cantidad)
+      : (stockActual > 0 ? stockActual : 1);
+
+    // Calcular el precio de costo del producto antes de eliminarlo o reducir su stock
     const precioCosto = await calcularCostoProducto(actual.id, trx);
 
     try {
@@ -306,7 +311,7 @@ const remove = async (id, motivo = null) => {
         nombre_categoria: categoria ? categoria.nombre : null,
         motivo: motivoNormalizado,
         fecha: hoy(),
-        cantidad: actual.stock_actual > 0 ? actual.stock_actual : 1,
+        cantidad: cantEliminar,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -319,6 +324,17 @@ const remove = async (id, motivo = null) => {
       console.warn('Advertencia al registrar auditoría de producto eliminado:', e.message);
     }
 
+    // Si la cantidad a eliminar es menor al stock total registrado, se descuentan las unidades y se mantiene el producto en el catálogo
+    if (stockActual > 0 && cantEliminar < stockActual) {
+      const nuevoStock = stockActual - cantEliminar;
+      await trx('productos').where({ id }).update({
+        stock_actual: nuevoStock,
+        updated_at: new Date().toISOString()
+      });
+      return { id: actual.id, parcial: true, stock_restante: nuevoStock, cantidad_eliminada: cantEliminar };
+    }
+
+    // Si se eliminan todas las unidades o la cantidad supera/iguala al stock (o no hay stock):
     // Desasociar pedidos históricos terminados/cancelados para no romper foreign keys y preservar historial
     await trx('detalles_pedidos')
       .where({ producto_id: id })

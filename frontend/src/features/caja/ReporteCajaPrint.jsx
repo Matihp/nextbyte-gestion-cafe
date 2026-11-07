@@ -12,6 +12,28 @@ const formatearFechaDDMMAAAA = (fechaStr) => {
   return fechaStr;
 };
 
+const formatearHora = (fechaVal) => {
+  if (!fechaVal) return '';
+  const str = String(fechaVal);
+  if (str.includes('T') && str.includes(':')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+    } catch {}
+    const timePart = str.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (str.includes(' ') && str.includes(':')) {
+    const timePart = str.split(' ')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  return '';
+};
+
 const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
   if (s === 'en_empaque') return 'En empaque';
@@ -193,7 +215,7 @@ export function ReporteCajaPrint({
                 ) : (
                   mermas.map((m, idx) => {
                     const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-                    const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                    const horaStr = formatearHora(m.created_at);
                     const cant = Number(m.cantidad) || 1;
                     const pCosto = Number(m.precio_costo) || 0;
                     const cTotal = Number(m.costo_total) || (cant * pCosto);
