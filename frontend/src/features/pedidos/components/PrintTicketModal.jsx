@@ -6,6 +6,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { formatearIdPedido } from '@/utils/formatters';
 
 export function PrintTicketModal({ order, open, onConfirmPrint, onCancel }) {
   if (!order) return null;
@@ -24,7 +25,7 @@ export function PrintTicketModal({ order, open, onConfirmPrint, onCancel }) {
             Comanda enviada con éxito
           </DialogTitle>
           <p className="text-secondary font-bold text-lg mb-4">
-            ID: {order.id}
+            ID: {formatearIdPedido(order)}
           </p>
           <DialogDescription className="text-gray-600 text-sm">
             ¿Desea imprimir el comprobante del pedido?

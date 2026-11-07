@@ -51,7 +51,7 @@ module.exports = {
   getSaldoTotal: async (trx = null) => {
     const pedidosQ = trx ? trx('pedidos') : dbLocal('pedidos');
     const ventaRes = await pedidosQ
-      .whereIn('estado', ['completado', 'entregado'])
+      .whereNot('estado', 'cancelado')
       .select(dbLocal.raw('COALESCE(SUM(total), 0) as total_ventas'))
       .first();
 
@@ -82,6 +82,11 @@ module.exports = {
     dbLocal(MERMAS_TABLE)
       .whereIn('motivo', MOTIVOS_MERMA)
       .whereRaw(`strftime('%Y-%m', fecha) = ?`, [mes])
-      .select('*')
-      .orderBy('fecha', 'desc'),
+      .select(
+        '*',
+        dbLocal.raw('COALESCE(precio_costo, 0) as precio_costo'),
+        dbLocal.raw('ROUND(COALESCE(precio_costo, 0) * cantidad, 2) as costo_total')
+      )
+      .orderBy('fecha', 'desc')
+      .orderBy('created_at', 'desc'),
 };

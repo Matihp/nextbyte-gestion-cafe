@@ -210,8 +210,14 @@ async function obtenerReporteCaja(filtros = {}) {
     totalVentaGeneral += ventaItem;
 
     if (!pedidosMap.has(pedidoId)) {
+      const numPedido = fila.numero_pedido || 1;
+      const displayId = `#${String(numPedido).padStart(4, '0')}`;
       pedidosMap.set(pedidoId, {
         id: pedidoId,
+        numero_pedido: numPedido,
+        display_id: displayId,
+        displayId: displayId,
+        orderNumber: displayId,
         cliente: fila.cliente || 'Consumidor Final',
         fecha: fila.fecha,
         hora: fila.hora ? fila.hora.slice(0, 5) : '',

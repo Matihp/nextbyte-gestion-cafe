@@ -154,6 +154,7 @@ export function useReporteCaja() {
     let totalVenta = 0;
 
     for (const p of pedidosFiltrados) {
+      if (p.estado === 'cancelado') continue;
       subtotalCosto += Number(p.total_costo) || 0;
       totalVenta += Number(p.total_venta) || 0;
     }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/formatters';
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
@@ -331,7 +331,7 @@ export function ReporteCajaPrint({
                           )}
                           {esPrimer && (
                             <td rowSpan={items.length} className="py-2 px-2 font-bold text-black align-top">
-                              {String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`}
+                              {formatearIdPedido(pedido)}
                               <div className="text-[10px] font-normal text-gray-600">
                                 {pedido.tipo_pedido} • {pedido.metodo_pago}
                               </div>

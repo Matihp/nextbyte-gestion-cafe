@@ -9,6 +9,8 @@ const productoRepository = require('../repositories/productoRepository');
 const recetaRepository = require('../repositories/recetaRepository');
 const ingredienteRecetaRepository = require('../repositories/ingredienteRecetaRepository');
 const insumoRepository = require('../repositories/insumoRepository');
+const categoriaRepository = require('../repositories/categoriaRepository');
+const registroMermaRepository = require('../repositories/registroMermaRepository');
 
 const generarIdPedido = () => {
   const hex = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -108,8 +110,8 @@ const obtenerPorId = async (id) => {
   return pedido;
 };
 
-const cancelar = async (id) => {
-  const pedido = await pedidoRepository.getById(id);
+const cancelar = async (id, opciones = {}) => {
+  const pedido = await pedidoRepository.getWithDetails(id);
   if (!pedido) {
     throw new AppError('Pedido no encontrado', 404, 'NO_ENCONTRADO');
   }
@@ -119,10 +121,42 @@ const cancelar = async (id) => {
   }
 
   await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.CANCELADO);
+
+  // Si el usuario seleccionó que es MERMA, registrar cada ítem en registros_mermas
+  if (opciones.esMerma) {
+    const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+    for (const it of detalles) {
+      let nombreCategoria = null;
+      let precioCosto = Number(it.precio_costo || 0);
+
+      if (it.producto_id) {
+        const prod = await productoRepository.getById(it.producto_id);
+        if (prod) {
+          if (!precioCosto) precioCosto = Number(prod.precio_costo || 0);
+          if (prod.categoria_id) {
+            const cat = await categoriaRepository.getById(prod.categoria_id);
+            if (cat) nombreCategoria = cat.nombre;
+          }
+        }
+      }
+
+      await registroMermaRepository.create({
+        id: crypto.randomUUID(),
+        producto_id: it.producto_id || null,
+        nombre_producto: it.nombre_producto || 'Producto sin nombre',
+        nombre_categoria: nombreCategoria,
+        motivo: 'MERMA',
+        fecha: hoy(),
+        cantidad: Number(it.cantidad || 1),
+        precio_costo: precioCosto
+      });
+    }
+  }
+
   return pedidoRepository.getWithDetails(id);
 };
 
-const eliminarItem = async (pedidoId, detalleId) => {
+const eliminarItem = async (pedidoId, detalleId, opciones = {}) => {
   const pedido = await pedidoRepository.getWithDetails(pedidoId);
   if (!pedido) {
     throw new AppError('Pedido no encontrado', 404, 'NO_ENCONTRADO');
@@ -136,6 +170,34 @@ const eliminarItem = async (pedidoId, detalleId) => {
   const detalleExiste = detalles.find((d) => d.id === detalleId);
   if (!detalleExiste) {
     throw new AppError('El ítem no existe o no pertenece al pedido', 404, 'NO_ENCONTRADO');
+  }
+
+  // Si el usuario seleccionó que es MERMA, registrar el ítem eliminado en registros_mermas
+  if (opciones.esMerma) {
+    let nombreCategoria = null;
+    let precioCosto = Number(detalleExiste.precio_costo || 0);
+
+    if (detalleExiste.producto_id) {
+      const prod = await productoRepository.getById(detalleExiste.producto_id);
+      if (prod) {
+        if (!precioCosto) precioCosto = Number(prod.precio_costo || 0);
+        if (prod.categoria_id) {
+          const cat = await categoriaRepository.getById(prod.categoria_id);
+          if (cat) nombreCategoria = cat.nombre;
+        }
+      }
+    }
+
+    await registroMermaRepository.create({
+      id: crypto.randomUUID(),
+      producto_id: detalleExiste.producto_id || null,
+      nombre_producto: detalleExiste.nombre_producto || 'Producto sin nombre',
+      nombre_categoria: nombreCategoria,
+      motivo: 'MERMA',
+      fecha: hoy(),
+      cantidad: Number(detalleExiste.cantidad || 1),
+      precio_costo: precioCosto
+    });
   }
 
   await detallePedidoRepository.delete(detalleId);

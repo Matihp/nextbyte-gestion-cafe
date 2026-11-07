@@ -104,7 +104,7 @@ export const isCompletedOrderExpired = (order, completedTimesMap = {}) => {
   return false;
 };
 
-// Asignar y persistir números secuenciales (#0001 a #1000) por día
+// Asignar y persistir números secuenciales (#0001 a #9999) por día (reinicio a las 00:00 hs)
 export const assignDailyOrderNumbers = (orders = []) => {
   if (!Array.isArray(orders)) return [];
 
@@ -136,10 +136,20 @@ export const assignDailyOrderNumbers = (orders = []) => {
 
   sorted.forEach((order) => {
     const idKey = String(order.id);
-    if (!dayMap[idKey]) {
+    if (order.numero_pedido) {
+      const num = Number(order.numero_pedido);
+      const str = String(num).padStart(4, '0');
+      if (dayMap[idKey] !== str) {
+        dayMap[idKey] = str;
+        if (num > (dayMap.__last || 0) && num <= 9999) {
+          dayMap.__last = num;
+        }
+        changed = true;
+      }
+    } else if (!dayMap[idKey]) {
       let nextNum = Number(dayMap.__last || 0) + 1;
-      if (nextNum > 1000) {
-        nextNum = 1; // Reinicio en #0001 al llegar al #1000
+      if (nextNum > 9999) {
+        nextNum = 1; // Reinicio en #0001 al llegar al #9999
       }
       dayMap.__last = nextNum;
       dayMap[idKey] = String(nextNum).padStart(4, '0');
@@ -158,7 +168,9 @@ export const assignDailyOrderNumbers = (orders = []) => {
   return orders.map((order) => {
     const orderDate = toISODate(order.date || order.fecha || order.created_at) || today;
     const orderMap = seqStore[orderDate] || dayMap;
-    const numStr = orderMap[String(order.id)] || '0001';
+    const numStr = order.numero_pedido
+      ? String(order.numero_pedido).padStart(4, '0')
+      : (orderMap[String(order.id)] || '0001');
     const displayId = `#${numStr}`;
     return {
       ...order,
@@ -166,5 +178,19 @@ export const assignDailyOrderNumbers = (orders = []) => {
       displayId
     };
   });
+};
+
+// Obtener o formatear el displayId (#0001 a #9999) de un pedido
+export const getOrAssignOrderDisplayId = (order) => {
+  if (!order) return '#0001';
+  if (order.displayId) return order.displayId;
+  if (order.display_id) return order.display_id;
+  if (order.orderNumber) return order.orderNumber;
+  if (order.numero_pedido) {
+    return `#${String(order.numero_pedido).padStart(4, '0')}`;
+  }
+
+  const [assigned] = assignDailyOrderNumbers([order]);
+  return assigned?.displayId || `#0001`;
 };
 

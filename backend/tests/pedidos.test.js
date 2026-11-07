@@ -312,4 +312,31 @@ describe('Integración endpoints de pedidos', () => {
     expect(resBorrarSegundo.body.data.estado).toBe('cancelado');
     expect(resBorrarSegundo.body.data.detalles.length).toBe(0);
   });
+
+  it('PATCH /api/pedidos/:id/cancelar con esMerma: true registra los items en registros_mermas', async () => {
+    const pedidoCreado = await request(app)
+      .post('/api/pedidos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo_pedido: 'salon',
+        metodo_pago: 'efectivo',
+        items: [{ producto_id: 1, cantidad: 2 }]
+      });
+
+    const id = pedidoCreado.body.data.id;
+
+    const resCancelar = await request(app)
+      .patch(`/api/pedidos/${id}/cancelar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ esMerma: true, motivo: 'MERMA' });
+
+    expect(resCancelar.status).toBe(200);
+    expect(resCancelar.body.data.estado).toBe('cancelado');
+
+    const mermas = await dbLocal('registros_mermas').where({ producto_id: 1, motivo: 'MERMA' });
+    expect(mermas.length).toBeGreaterThanOrEqual(1);
+    const ultima = mermas[mermas.length - 1];
+    expect(Number(ultima.cantidad)).toBe(2);
+    expect(Number(ultima.precio_costo)).toBeGreaterThan(0);
+  });
 });

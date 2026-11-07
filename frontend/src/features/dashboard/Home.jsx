@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { inventarioService } from '@/services/inventarioService';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
 import { OrderPrintTicket } from '@/features/comandas/OrderPrintTicket';
 
@@ -74,7 +74,7 @@ function TarjetaPedido({ pedido, onVerResumen }) {
   return (
     <div className="bg-white border border-[#EAD5C8] rounded-xl p-4 space-y-2 hover:shadow-sm transition-shadow">
       <div className="flex justify-between items-center gap-2">
-        <span className="font-bold text-gray-900 text-sm tracking-tight">#{pedido.id}</span>
+        <span className="font-bold text-gray-900 text-sm tracking-tight">{formatearIdPedido(pedido)}</span>
         <span
           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getBadgeEstado(
             pedido.estado || pedido.status
@@ -154,30 +154,10 @@ export default function Home() {
     );
 
     try {
-      // Registrar merma para cada producto si el usuario aceptó
-      if (esMerma) {
-        const items = pedido.detalles || pedido.items || [];
-        for (const it of items) {
-          const prodId = it.producto_id || it.productId;
-          const cantidad = Number(it.cantidad || it.quantity || 1);
-          if (prodId) {
-            try {
-              await inventarioService.crearMerma({
-                producto_id: prodId,
-                cantidad,
-                motivo: 'Cancelación'
-              });
-            } catch (errMerma) {
-              console.warn('No se pudo registrar la merma del ítem:', it, errMerma);
-            }
-          }
-        }
-      }
+      // Cancelar pedido en backend pasando si los productos son MERMA
+      await pedidoService.cancelar(pedido.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
 
-      // Cancelar pedido en backend
-      await pedidoService.cancelar(pedido.id);
-
-      toast.success('Pedido cancelado exitosamente');
+      toast.success(esMerma ? 'Pedido cancelado y registrado en Mermas' : 'Pedido cancelado exitosamente');
       handleCerrarResumen();
       await cargarDatos();
     } catch (err) {
@@ -196,24 +176,9 @@ export default function Home() {
     );
 
     try {
-      const prodId = item.producto_id || item.productId;
-      const cantidad = Number(item.cantidad || item.quantity || 1);
-
-      if (esMerma && prodId) {
-        try {
-          await inventarioService.crearMerma({
-            producto_id: prodId,
-            cantidad,
-            motivo: 'Cancelación'
-          });
-        } catch (errMerma) {
-          console.warn('No se pudo registrar la merma del ítem:', errMerma);
-        }
-      }
-
       if (item.id) {
-        await pedidoService.eliminarItem(pedido.id, item.id);
-        toast.success(`Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado`);
+        await pedidoService.eliminarItem(pedido.id, item.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
+        toast.success(esMerma ? `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado y registrado en Mermas` : `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado`);
       }
 
       // Actualizar vista local
@@ -254,7 +219,7 @@ export default function Home() {
 
     return {
       ...ticketAImprimir,
-      displayId: `#${ticketAImprimir.id}`,
+      displayId: formatearIdPedido(ticketAImprimir),
       customer: ticketAImprimir.cliente || ticketAImprimir.customer || 'Consumidor Final',
       orderType: ticketAImprimir.tipo_pedido || ticketAImprimir.orderType || 'Mostrador',
       paymentMethod: ticketAImprimir.metodo_pago || ticketAImprimir.paymentMethod || 'Efectivo',

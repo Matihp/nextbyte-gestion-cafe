@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
 import reporteService from '@/services/reporteService';
 import cajaService from '@/services/cajaService';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ReporteCajaPrint } from './ReporteCajaPrint';
 import { DetallePedidoModal } from './DetallePedidoModal';
 import { ModalConfirmarEliminar } from './ModalConfirmarEliminar';
@@ -1076,7 +1076,7 @@ export default function ReporteCaja() {
                                         className="text-primary hover:text-accent font-bold hover:underline cursor-pointer block text-xs"
                                         title="Ver detalle del pedido"
                                       >
-                                        {String(pedido.id).startsWith('#') ? pedido.id : `#${pedido.id}`}
+                                        {formatearIdPedido(pedido)}
                                       </button>
                                       <span className="text-[10px] text-muted-foreground whitespace-nowrap block">
                                         {pedido.tipo_pedido || 'Mostrador'} • {pedido.metodo_pago || 'Efectivo'}

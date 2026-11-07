@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { normalizeOrderTypeDisplay } from './OrdersPage';
 import { formatDateDDMMAAAA } from './orderSequence';
 
@@ -50,7 +50,7 @@ export function OrderSummaryModal({
       <DialogContent className="sm:max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden p-0 gap-0 border-0 print:shadow-none print:border print:border-gray-300">
         <DialogHeader className="px-6 py-5 border-b border-gray-100 flex flex-row justify-between items-center bg-gray-50 space-y-0">
           <DialogTitle className="text-2xl font-bold text-[#4B2B1D]">
-            Resumen del Pedido {order.displayId || `#${order.id}`}
+            Resumen del Pedido {formatearIdPedido(order)}
           </DialogTitle>
         </DialogHeader>
 
