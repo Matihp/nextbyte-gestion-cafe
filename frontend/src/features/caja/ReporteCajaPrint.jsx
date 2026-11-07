@@ -315,7 +315,7 @@ export function ReporteCajaPrint({
                     <td className="py-1 px-1 text-[11px]">{m.fecha ? formatearFechaDDMMAAAA(m.fecha) : '-'}</td>
                     <td className="py-1 px-1 text-[11px]">{m.hora || '-'}</td>
                     <td className="py-1 px-1 text-[11px] font-semibold">{m.tipo}</td>
-                    <td className="py-1 px-1 text-[11px]">{m.detalle}</td>
+                    <td className="py-1 px-1 text-[11px] break-words whitespace-pre-wrap">{m.detalle}</td>
                     <td className="py-1 px-1 text-right text-[11px] font-semibold text-emerald-700">
                       {m.tipo === 'INGRESO' ? `+${formatearPrecio(m.monto)}` : '-'}
                     </td>

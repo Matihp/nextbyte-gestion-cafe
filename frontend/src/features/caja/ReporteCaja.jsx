@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Calendar as CalendarIcon,
   Search,
@@ -114,6 +114,7 @@ export default function ReporteCaja() {
   const [nuevoIngreso, setNuevoIngreso] = useState('');
   const [nuevoRetiro, setNuevoRetiro] = useState('');
   const [guardandoMovimiento, setGuardandoMovimiento] = useState(false);
+  const detalleTextareaRef = useRef(null);
 
   // Diálogo de confirmación para eliminar (Punto 3.5)
   const [movimientoAEliminar, setMovimientoAEliminar] = useState(null);
@@ -198,6 +199,15 @@ export default function ReporteCaja() {
   }, [movimientosP2, ventasMesP2]);
 
   // Manejo de inputs mutuamente excluyentes en la fila editable
+  const handleCambioDetalle = (e) => {
+    setNuevoDetalle(e.target.value);
+    const target = e.target;
+    if (target) {
+      target.style.height = 'auto';
+      target.style.height = `${Math.min(Math.max(target.scrollHeight, 34), 120)}px`;
+    }
+  };
+
   const handleCambioIngreso = (e) => {
     const val = e.target.value;
     setNuevoIngreso(val);
@@ -267,6 +277,9 @@ export default function ReporteCaja() {
       setNuevoDetalle('');
       setNuevoIngreso('');
       setNuevoRetiro('');
+      if (detalleTextareaRef.current) {
+        detalleTextareaRef.current.style.height = 'auto';
+      }
 
       await Promise.all([cargarDatosPestana2(), recargar()]);
     } catch (err) {
@@ -1119,7 +1132,7 @@ export default function ReporteCaja() {
                                     {m.tipo}
                                   </span>
                                 </td>
-                                <td className="py-2 pr-3 text-primary font-medium">
+                                <td className="py-2 pr-3 text-primary font-medium break-words whitespace-pre-wrap">
                                   {m.detalle}
                                 </td>
                                 <td className="py-2 pr-3 text-right font-bold text-emerald-700 whitespace-nowrap">
@@ -1281,77 +1294,77 @@ export default function ReporteCaja() {
 
                 {/* 3.1 Maquetación de la tabla de Ingresos/Retiros */}
                 <div className="overflow-x-auto border border-border/30 rounded-2xl">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left text-xs border-collapse table-fixed">
                     <thead>
                       <tr className="bg-[#FAF7F5] border-b border-border/20 text-muted-foreground font-semibold text-[11px]">
-                        <th className="py-3 px-4 font-semibold w-28">Fecha / Hora</th>
-                        <th className="py-3 px-4 font-semibold">Detalle</th>
-                        <th className="py-3 px-4 font-semibold text-right w-36">Ingreso $</th>
-                        <th className="py-3 px-4 font-semibold text-right w-36">Retiro $</th>
-                        <th className="py-3 px-4 text-center font-semibold w-28">Acciones</th>
+                        <th className="py-2.5 px-2.5 font-semibold w-28 whitespace-nowrap">Fecha / Hora</th>
+                        <th className="py-2.5 px-2.5 font-semibold">Detalle</th>
+                        <th className="py-2.5 px-2 font-semibold text-right w-28 whitespace-nowrap">Ingreso $</th>
+                        <th className="py-2.5 px-2 font-semibold text-right w-28 whitespace-nowrap">Retiro $</th>
+                        <th className="py-2.5 px-2 text-center font-semibold w-24 whitespace-nowrap">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {/* 3.2 Fila editable de nueva transacción */}
                       <tr className="bg-[#FAF7F5]/80 border-b-2 border-primary/20">
-                        <td className="py-2.5 px-4 text-primary font-medium whitespace-nowrap align-middle">
+                        <td className="py-2 px-2.5 text-primary font-medium whitespace-nowrap align-middle">
                           <span className="inline-block px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md">
-                            Nueva Operación
+                            Nueva Op.
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 align-middle">
-                          <input
-                            type="text"
+                        <td className="py-2 px-2.5 align-middle">
+                          <textarea
+                            ref={detalleTextareaRef}
+                            rows={1}
                             value={nuevoDetalle}
-                            onChange={(e) => setNuevoDetalle(e.target.value)}
+                            onChange={handleCambioDetalle}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleGuardarP2();
+                              }
+                            }}
+                            placeholder="Escribir detalle del movimiento (ej: Pago de flete, cambio...)"
+                            className="w-full bg-white border border-border/40 rounded-xl px-2.5 py-1.5 text-xs text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs resize-none overflow-y-auto min-h-[34px] max-h-28 break-words whitespace-pre-wrap leading-normal align-middle block"
+                          />
+                        </td>
+                        <td className="py-2 px-2 align-middle">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={nuevoIngreso}
+                            onChange={handleCambioIngreso}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleGuardarP2();
                             }}
-                            placeholder="Escribir detalle del movimiento (ej: Pago de flete, cambio...)"
-                            className="w-full bg-white border border-border/40 rounded-xl px-3 py-1.5 text-xs text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+                            placeholder="$ 0.00"
+                            className="w-full text-right bg-white border border-emerald-300 rounded-xl px-2 py-1.5 text-xs text-emerald-700 font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs placeholder:text-emerald-300"
                           />
                         </td>
-                        <td className="py-2.5 px-4 align-middle">
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={nuevoIngreso}
-                              onChange={handleCambioIngreso}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleGuardarP2();
-                              }}
-                              placeholder="$ 0.00"
-                              className="w-full text-right bg-white border border-emerald-300 rounded-xl px-2.5 py-1.5 text-xs text-emerald-700 font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs placeholder:text-emerald-300"
-                            />
-                          </div>
+                        <td className="py-2 px-2 align-middle">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={nuevoRetiro}
+                            onChange={handleCambioRetiro}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleGuardarP2();
+                            }}
+                            placeholder="$ 0.00"
+                            className="w-full text-right bg-white border border-red-300 rounded-xl px-2 py-1.5 text-xs text-red-600 font-semibold focus:outline-none focus:ring-1 focus:ring-red-500 shadow-2xs placeholder:text-red-300"
+                          />
                         </td>
-                        <td className="py-2.5 px-4 align-middle">
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={nuevoRetiro}
-                              onChange={handleCambioRetiro}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleGuardarP2();
-                              }}
-                              placeholder="$ 0.00"
-                              className="w-full text-right bg-white border border-red-300 rounded-xl px-2.5 py-1.5 text-xs text-red-600 font-semibold focus:outline-none focus:ring-1 focus:ring-red-500 shadow-2xs placeholder:text-red-300"
-                            />
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-4 text-center align-middle whitespace-nowrap">
+                        <td className="py-2 px-2 text-center align-middle whitespace-nowrap">
                           <button
                             type="button"
                             onClick={handleGuardarP2}
                             disabled={guardandoMovimiento}
-                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground hover:opacity-90 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                            className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 bg-primary text-primary-foreground hover:opacity-90 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
                           >
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            <span>{guardandoMovimiento ? 'Guardando...' : 'Guardar'}</span>
+                            <PlusCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{guardandoMovimiento ? '...' : 'Guardar'}</span>
                           </button>
                         </td>
                       </tr>
@@ -1386,15 +1399,15 @@ export default function ReporteCaja() {
                             key={m.id}
                             className="border-b border-border/10 last:border-b-0 hover:bg-muted/10 transition-colors"
                           >
-                            <td className="py-3 px-4 text-primary font-medium whitespace-nowrap align-middle">
+                            <td className="py-2.5 px-2.5 text-primary font-medium whitespace-nowrap align-top">
                               <div className="text-xs font-semibold">{formatearFechaDDMMAAAA(m.fecha)}</div>
                               <div className="text-[10px] text-muted-foreground">{m.hora || '-'}</div>
                             </td>
 
-                            <td className="py-3 px-4 text-primary font-medium align-middle">
-                              <div className="flex items-center gap-2">
+                            <td className="py-2.5 px-2.5 text-primary font-medium align-top break-words min-w-0">
+                              <div className="flex items-start gap-2 min-w-0">
                                 <span
-                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 mt-0.5 ${
                                     m.tipo === 'INGRESO'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : 'bg-red-100 text-red-800'
@@ -1402,19 +1415,21 @@ export default function ReporteCaja() {
                                 >
                                   {m.tipo}
                                 </span>
-                                <span className="font-semibold text-primary">{m.detalle}</span>
+                                <span className="font-semibold text-primary break-words whitespace-pre-wrap leading-relaxed min-w-0 flex-1">
+                                  {m.detalle}
+                                </span>
                               </div>
                             </td>
 
-                            <td className="py-3 px-4 text-right font-bold text-emerald-700 whitespace-nowrap align-middle">
+                            <td className="py-2.5 px-2 text-right font-bold text-emerald-700 whitespace-nowrap align-top">
                               {m.tipo === 'INGRESO' ? `+${formatearPrecio(m.monto)}` : '-'}
                             </td>
 
-                            <td className="py-3 px-4 text-right font-bold text-red-600 whitespace-nowrap align-middle">
+                            <td className="py-2.5 px-2 text-right font-bold text-red-600 whitespace-nowrap align-top">
                               {m.tipo === 'RETIRO' ? `-${formatearPrecio(m.monto)}` : '-'}
                             </td>
 
-                            <td className="py-3 px-4 text-center align-middle whitespace-nowrap">
+                            <td className="py-2.5 px-2 text-center align-top whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => handleSolicitarEliminar(m)}
@@ -1432,24 +1447,24 @@ export default function ReporteCaja() {
                     {/* 3.6 Fila inferior de totales calculados automáticamente */}
                     <tfoot>
                       <tr className="bg-[#FAF7F5] border-t-2 border-border/30 font-bold text-xs">
-                        <td colSpan={2} className="py-3 px-4 text-primary font-bold">
+                        <td colSpan={2} className="py-2.5 px-3 text-primary font-bold">
                           TOTALES DEL PERÍODO ({mesesInfo.seleccionado})
                         </td>
-                        <td className="py-3 px-4 text-right font-black text-emerald-700 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right font-black text-emerald-700 whitespace-nowrap">
                           +{formatearPrecio(totalesP2.totalIngresos)}
                         </td>
-                        <td className="py-3 px-4 text-right font-black text-red-600 whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-right font-black text-red-600 whitespace-nowrap">
                           -{formatearPrecio(totalesP2.totalRetiros)}
                         </td>
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <td className="py-2.5 px-2 text-center whitespace-nowrap">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            className={`inline-block px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                               totalesP2.saldoNeto >= 0
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-red-100 text-red-800'
                             }`}
                           >
-                            Neto: {formatearPrecio(totalesP2.saldoNeto)}
+                            {formatearPrecio(totalesP2.saldoNeto)}
                           </span>
                         </td>
                       </tr>
