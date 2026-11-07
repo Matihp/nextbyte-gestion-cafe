@@ -151,6 +151,15 @@ const cancelar = async (id, opciones = {}) => {
         precio_costo: precioCosto
       });
     }
+  } else {
+    // Si no es merma, vuelve al stock de productos (se restauran las unidades en la sección Productos)
+    const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+    for (const it of detalles) {
+      if (it.producto_id) {
+        const cant = Number(it.cantidad || 1);
+        await productoRepository.updateStock(it.producto_id, cant);
+      }
+    }
   }
 
   return pedidoRepository.getWithDetails(id);
@@ -198,6 +207,12 @@ const eliminarItem = async (pedidoId, detalleId, opciones = {}) => {
       cantidad: Number(detalleExiste.cantidad || 1),
       precio_costo: precioCosto
     });
+  } else {
+    // Si no es merma, vuelve al stock de productos
+    if (detalleExiste.producto_id) {
+      const cant = Number(detalleExiste.cantidad || 1);
+      await productoRepository.updateStock(detalleExiste.producto_id, cant);
+    }
   }
 
   await detallePedidoRepository.delete(detalleId);

@@ -193,16 +193,16 @@ export default function Home() {
     const confirma = window.confirm('¿Confirma que desea eliminar el pedido?');
     if (!confirma) return;
 
-    // 2. Preguntar si se registra como MERMA o vuelve a stock
+    // 2. Preguntar si se registra como MERMA o vuelve al stock de productos
     const esMerma = window.confirm(
-      '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
+      '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock de productos (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock de productos)\nCancelar = Vuelve al stock de productos'
     );
 
     try {
       // Cancelar pedido en backend pasando si los productos son MERMA
       await pedidoService.cancelar(pedido.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
 
-      toast.success(esMerma ? 'Pedido cancelado y registrado en Mermas' : 'Pedido cancelado exitosamente');
+      toast.success(esMerma ? 'Pedido cancelado y registrado en Mermas' : 'Pedido cancelado y restaurado en stock de productos');
       handleCerrarResumen();
       await cargarDatos();
     } catch (err) {
@@ -215,9 +215,13 @@ export default function Home() {
   const handleEliminarItem = async (pedido, item) => {
     if (!pedido || !item) return;
 
-    // Preguntar si va a merma o regresa al stock
+    // 1. Confirmar si desea eliminar el pedido (ítem del pedido)
+    const confirma = window.confirm('¿Confirma que desea eliminar el pedido?');
+    if (!confirma) return;
+
+    // 2. Preguntar si va a merma o regresa al stock de productos
     const esMerma = window.confirm(
-      '¿Desea registrar este producto como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
+      '¿Desea registrar este producto como MERMA (Aceptar) o RESTAURAR el stock de productos (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock de productos)\nCancelar = Vuelve al stock de productos'
     );
 
     try {
@@ -320,7 +324,11 @@ export default function Home() {
 
     window.addEventListener('orders-updated', handleSync);
     window.addEventListener('storage', handleSync);
-    const interval = setInterval(cargarDatos, 5000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        cargarDatos();
+      }
+    }, 5000);
 
     return () => {
       window.removeEventListener('orders-updated', handleSync);
