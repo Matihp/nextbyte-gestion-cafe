@@ -11,6 +11,7 @@ import {
   ChevronDown, 
   ChevronUp, 
   Trash2, 
+  Edit2,
   Eye, 
   EyeOff,
   AlertTriangle,
@@ -93,61 +94,29 @@ const emptyEmpForm = {
   permissions: { ...emptyPermissions },
 };
 
-import { ROLES_SISTEMA } from '@/constants/roles';
+import {
+  ROLES_SISTEMA,
+  isAdminRole,
+  isCustomerRole,
+  isCajaContingenciaRole,
+  isCajaDiariaRole,
+  isAdministracionRole,
+  hasFixedPermissionsRole,
+  isNonDeletableRole,
+  isFixedRole,
+  getRoleDisplayName
+} from '@/constants/roles';
 
-// ── Identificadores de Roles ──
-export const isAdminRole = (role) => {
-  if (!role) return false;
-  return Boolean(role.es_admin || role.isAdmin || role.id === ROLES_SISTEMA.ADMIN || role.id === 'role-admin');
-};
-
-export const isCustomerRole = (role) => {
-  if (!role) return false;
-  return role.id === ROLES_SISTEMA.PANTALLA_CLIENTE || role.id === 'role-customer';
-};
-
-export const isCajaContingenciaRole = (role) => {
-  if (!role) return false;
-  return role.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || role.id === 'role-caja-contingencia';
-};
-
-export const isCajaDiariaRole = (role) => {
-  if (!role) return false;
-  return role.id === ROLES_SISTEMA.CAJERO_SECUNDARIO || role.id === 'role-caja-diaria';
-};
-
-export const isAdministracionRole = (role) => {
-  if (!role) return false;
-  const name = String(role.nombre || role.name || '').trim().toLowerCase();
-  return name === 'administracion' || name === 'administración';
-};
-
-// Roles con permisos predeterminados e inalterables (nadie puede cambiarles los permisos)
-export const hasFixedPermissionsRole = (role) => {
-  return isAdminRole(role) || isCustomerRole(role) || isCajaContingenciaRole(role);
-};
-
-// Roles fijos del sistema que NO pueden ser eliminados por nadie
-export const isNonDeletableRole = (role) => {
-  return (
-    isAdminRole(role) ||
-    isCustomerRole(role) ||
-    isCajaContingenciaRole(role) ||
-    isCajaDiariaRole(role)
-  );
-};
-
-// Alias de retrocompatibilidad
-export const isFixedRole = (role) => hasFixedPermissionsRole(role);
-
-export const getRoleDisplayName = (role) => {
-  if (!role) return 'Sin rol';
-  if (isAdminRole(role)) return 'Admin';
-  if (isCustomerRole(role)) return 'Rol Pantalla Cliente';
-  if (isCajaContingenciaRole(role)) return 'Cajero Diario / Principal (opera sin internet)';
-  if (isCajaDiariaRole(role)) return 'Cajero Secundario (se bloquea en corte de internet)';
-  if (isAdministracionRole(role)) return 'Administración';
-  return role.nombre || role.name || 'Sin rol';
+export {
+  isAdminRole,
+  isCustomerRole,
+  isCajaContingenciaRole,
+  isCajaDiariaRole,
+  isAdministracionRole,
+  hasFixedPermissionsRole,
+  isNonDeletableRole,
+  isFixedRole,
+  getRoleDisplayName
 };
 
 // Permisos fijos garantizados e inalterables:
@@ -249,6 +218,9 @@ export function Configuracion() {
 
   // Tab de roles
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [editingRoleNameId, setEditingRoleNameId] = useState(null);
+  const [tempRoleName, setTempRoleName] = useState('');
+  const [savingRoleName, setSavingRoleName] = useState(false);
 
   // Modales de confirmación
   const [userToDelete, setUserToDelete] = useState(null);
@@ -274,11 +246,43 @@ export function Configuracion() {
 
       setRoles(rolesCargados);
       setUsers(usuariosCargados);
+      localStorage.setItem('nextbyte_roles', JSON.stringify(rolesCargados));
+      window.dispatchEvent(new CustomEvent('roles-updated', { detail: rolesCargados }));
       if (rolesCargados.length > 0 && !selectedRoleId) {
         setSelectedRoleId(rolesCargados[0].id);
       }
     } catch (err) {
       console.error('Error al cargar configuración:', err);
+    }
+  };
+
+  const handleSaveRoleName = async () => {
+    if (!editingRoleNameId || !tempRoleName.trim()) {
+      toast.error('El nombre del rol no puede estar vacío');
+      return;
+    }
+    const cleanName = tempRoleName.trim();
+    setSavingRoleName(true);
+    try {
+      const targetRole = roles.find((r) => r.id === editingRoleNameId);
+      await rolService.update(editingRoleNameId, {
+        ...(targetRole || {}),
+        nombre: cleanName
+      });
+      const updatedRoles = roles.map((r) =>
+        r.id === editingRoleNameId ? { ...r, nombre: cleanName, name: cleanName } : r
+      );
+      setRoles(updatedRoles);
+      localStorage.setItem('nextbyte_roles', JSON.stringify(updatedRoles));
+      window.dispatchEvent(new CustomEvent('roles-updated', { detail: updatedRoles }));
+      toast.success(`Rol renombrado a "${cleanName}"`);
+      setEditingRoleNameId(null);
+      setTempRoleName('');
+    } catch (err) {
+      console.error('Error al renombrar rol:', err);
+      toast.error(err.response?.data?.message || err.message || 'No se pudo actualizar el nombre del rol');
+    } finally {
+      setSavingRoleName(false);
     }
   };
 
@@ -1331,14 +1335,32 @@ export function Configuracion() {
                             )}
 
                             {!isUndeletable && (
-                              <button
-                                type="button"
-                                onClick={() => setRoleToDelete(role)}
-                                className="text-gray-400 hover:text-red-500 transition-colors ml-1 p-0.5 rounded cursor-pointer"
-                                title="Eliminar rol"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedRoleId(role.id);
+                                    setEditingRoleNameId(role.id);
+                                    setTempRoleName(role.nombre || role.name || '');
+                                  }}
+                                  className="text-gray-400 hover:text-[#9F4F2F] transition-colors ml-1 p-0.5 rounded cursor-pointer"
+                                  title="Renombrar rol"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRoleToDelete(role);
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 transition-colors ml-0.5 p-0.5 rounded cursor-pointer"
+                                  title="Eliminar rol"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
                             )}
                           </div>
 
@@ -1375,19 +1397,78 @@ export function Configuracion() {
                   Configura qué secciones puede ver cada rol
                 </p>
 
-                <div className="mb-5">
-                  <Label className="block text-sm font-medium text-gray-700 mb-2">Configurar rol:</Label>
-                  <select
-                    value={selectedRoleId}
-                    onChange={(e) => setSelectedRoleId(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {getRoleDisplayName(r)}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mb-5 flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <Label className="block text-sm font-medium text-gray-700 mb-2">Configurar rol:</Label>
+                    <select
+                      value={selectedRoleId}
+                      onChange={(e) => {
+                        setSelectedRoleId(e.target.value);
+                        setEditingRoleNameId(null);
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800"
+                    >
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {getRoleDisplayName(r)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!isNonDeletableRole(displayRole) && editingRoleNameId !== displayRole?.id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingRoleNameId(displayRole?.id);
+                        setTempRoleName(displayRole?.nombre || displayRole?.name || '');
+                      }}
+                      className="flex items-center gap-1.5 text-xs border-gray-300 text-gray-700 hover:bg-gray-50 h-[38px] cursor-pointer"
+                      title="Editar nombre del rol"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                      Renombrar
+                    </Button>
+                  )}
+
+                  {editingRoleNameId === displayRole?.id && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        value={tempRoleName}
+                        onChange={(e) => setTempRoleName(e.target.value)}
+                        placeholder="Nuevo nombre..."
+                        className="text-xs h-[38px] w-48"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRoleName();
+                          if (e.key === 'Escape') setEditingRoleNameId(null);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={savingRoleName}
+                        onClick={handleSaveRoleName}
+                        className="bg-[#9F4F2F] hover:bg-[#803F25] text-white text-xs h-[38px] cursor-pointer"
+                        title="Guardar nombre"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingRoleNameId(null)}
+                        className="text-xs h-[38px] cursor-pointer"
+                        title="Cancelar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">

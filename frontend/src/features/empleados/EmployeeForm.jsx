@@ -4,7 +4,14 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ROLES_SISTEMA } from '@/constants/roles';
+import {
+  ROLES_SISTEMA,
+  getRoleDisplayName,
+  isCajaContingenciaRole,
+  isAdminRole,
+  isAdministracionRole,
+  isCajaDiariaRole
+} from '@/constants/roles';
 
 export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -26,11 +33,6 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     password: '123456'
   });
 
-  const isCajaContingenciaRole = (role) => {
-    if (!role) return false;
-    return role.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || role.id === 'role-caja-contingencia';
-  };
-
   const isContingenciaYaAsignado = (role) => {
     if (!isCajaContingenciaRole(role)) return false;
     return existingEmployees.some((emp) => {
@@ -42,8 +44,27 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
       }
       const empRoleId = emp.roleId || emp.rol_id;
       const empRole = roles.find((r) => r.id === empRoleId);
-      return empRoleId === role.id || isCajaContingenciaRole(empRole) || empRoleId === '877890f1-ffc8-488b-a5c4-b1caff520383';
+      return empRoleId === role.id || isCajaContingenciaRole(empRole) || empRoleId === ROLES_SISTEMA.CAJERO_PRINCIPAL;
     });
+  };
+
+  const resolveRoleId = (rawRoleId) => {
+    if (!rawRoleId) return '';
+    const found = roles.find((r) => r.id === rawRoleId);
+    if (found) return found.id;
+    if (rawRoleId === 'role-administracion') {
+      return roles.find((r) => isAdministracionRole(r))?.id || rawRoleId;
+    }
+    if (rawRoleId === 'role-caja-contingencia') {
+      return roles.find((r) => isCajaContingenciaRole(r))?.id || rawRoleId;
+    }
+    if (rawRoleId === 'role-caja-diaria') {
+      return roles.find((r) => isCajaDiariaRole(r))?.id || rawRoleId;
+    }
+    if (rawRoleId === 'role-admin') {
+      return roles.find((r) => isAdminRole(r))?.id || rawRoleId;
+    }
+    return rawRoleId;
   };
 
   useEffect(() => {
@@ -61,13 +82,15 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
         workDays: initialData.workDays || initialData.work_days || [],
         workDayShifts: initialData.workDayShifts || initialData.work_day_shifts || initialData.dias_franco_turnos || {},
         photo: initialData.photo || initialData.foto || '',
-        roleId: initialData.roleId || initialData.rol_id || (roles[0]?.id || ''),
+        roleId: resolveRoleId(initialData.roleId || initialData.rol_id) || (roles[0]?.id || ''),
         password: initialData.password || '123456'
       });
     } else {
       setFormData((prev) => ({
         ...prev,
-        roleId: roles.find((r) => !r.isAdmin && !r.es_admin && !isContingenciaYaAsignado(r))?.id || roles[0]?.id || ''
+        roleId: prev.roleId && roles.some((r) => r.id === prev.roleId)
+          ? prev.roleId
+          : roles.find((r) => !isAdminRole(r) && !isContingenciaYaAsignado(r))?.id || roles[0]?.id || ''
       }));
     }
   }, [initialData, roles]);
@@ -249,9 +272,10 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                   >
                     {roles.map((role) => {
                       const yaAsignado = isContingenciaYaAsignado(role);
+                      const displayName = getRoleDisplayName(role);
                       return (
                         <option key={role.id} value={role.id} disabled={yaAsignado}>
-                          {role.nombre || role.name} {yaAsignado ? '(Ya asignado a otro usuario)' : ''}
+                          {displayName} {yaAsignado ? '(Ya asignado a otro usuario)' : ''}
                         </option>
                       );
                     })}

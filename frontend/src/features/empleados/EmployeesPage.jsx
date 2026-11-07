@@ -25,16 +25,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu';
-
-const INITIAL_ROLES = [
-  { id: 'role-admin', name: 'Admin', isAdmin: true },
-  { id: 'role-customer', name: 'Rol Pantalla Cliente', isAdmin: false },
-  { id: 'role-caja-contingencia', name: 'Cajero Diario / Principal (opera sin internet)', isAdmin: false },
-  { id: 'role-caja-diaria', name: 'Cajero Secundario (se bloquea en corte de internet)', isAdmin: false },
-  { id: 'role-cocina-cancela', name: 'Cocina/Cancela Pedido', isAdmin: false },
-  { id: 'role-cocina-no-cancela', name: 'Cocina/No Cancela Pedido', isAdmin: false },
-  { id: 'role-administracion', name: 'Administracion', isAdmin: false }
-];
+import { OFFICIAL_SYSTEM_ROLES } from '@/constants/roles';
 
 const INITIAL_EMPLOYEES = [];
 
@@ -69,11 +60,50 @@ export function EmployeesPage() {
   const [roles, setRoles] = useState(() => {
     try {
       const saved = localStorage.getItem('nextbyte_roles');
-      return saved ? JSON.parse(saved) : INITIAL_ROLES;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasLegacyDummyIds = parsed.some(
+            (r) => r.id === 'role-administracion' || r.id === 'role-caja-contingencia'
+          );
+          if (!hasLegacyDummyIds) return parsed;
+        }
+      }
+      return OFFICIAL_SYSTEM_ROLES;
     } catch {
-      return INITIAL_ROLES;
+      return OFFICIAL_SYSTEM_ROLES;
     }
   });
+
+  // Escuchar sincronización en tiempo real desde Configuración
+  useEffect(() => {
+    const handleRolesSync = (e) => {
+      const updated = e?.detail || JSON.parse(localStorage.getItem('nextbyte_roles') || '[]');
+      if (Array.isArray(updated) && updated.length > 0) {
+        setRoles(updated);
+      }
+    };
+
+    window.addEventListener('roles-updated', handleRolesSync);
+    window.addEventListener('storage', handleRolesSync);
+    return () => {
+      window.removeEventListener('roles-updated', handleRolesSync);
+      window.removeEventListener('storage', handleRolesSync);
+    };
+  }, []);
+
+  // Al entrar al formulario de creación/edición, refrescar roles siempre desde backend
+  useEffect(() => {
+    if (currentView === 'form') {
+      rolService.obtenerTodos().then((res) => {
+        const loaded = Array.isArray(res) ? res : res?.data?.data || res?.data || [];
+        if (Array.isArray(loaded) && loaded.length > 0) {
+          setRoles(loaded);
+          localStorage.setItem('nextbyte_roles', JSON.stringify(loaded));
+        }
+      }).catch(() => {});
+    }
+  }, [currentView]);
 
   const [employees, setEmployees] = useState(() => {
     try {
@@ -494,6 +524,7 @@ export function EmployeesPage() {
         {currentView === 'list' && (
           <EmployeeList
             employees={activeEmployees}
+            roles={roles}
             onEdit={handleEditEmployee}
             onDelete={handleDeleteEmployee}
           />

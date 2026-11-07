@@ -11,8 +11,9 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
+import { getRoleDisplayName } from '@/constants/roles';
 
-export function EmployeeList({ employees = [], onEdit, onDelete }) {
+export function EmployeeList({ employees = [], roles = [], onEdit, onDelete }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
@@ -111,7 +112,12 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F3E5DC] text-[#70422B]">
-                      {emp.roleId === 'role-admin' || emp.es_admin ? 'Administrador' : 'Empleado'}
+                      {(() => {
+                        const r = roles.find((item) => item.id === (emp.roleId || emp.rol_id));
+                        if (r) return getRoleDisplayName(r);
+                        if (emp.roleId === 'role-admin' || emp.es_admin) return 'Administrador';
+                        return 'Empleado';
+                      })()}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[150px] truncate" title={emp.phone || emp.telefono || '-'}>
