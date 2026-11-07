@@ -3,7 +3,17 @@ const { dbLocal } = require('../config/db');
 
 const TABLE = 'movimientos_caja';
 const MERMAS_TABLE = 'registros_mermas';
-const MOTIVOS_MERMA = ['VENCIDO', 'MERMA', 'EN FALTA'];
+const MOTIVOS_MERMA = [
+  'VENCIDO',
+  'MERMA',
+  'EN FALTA',
+  'Vencido',
+  'Merma',
+  'En falta',
+  'En Falta',
+  'Producto Vencido',
+  'PRODUCTO VENCIDO'
+];
 
 const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
 

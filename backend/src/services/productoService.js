@@ -263,36 +263,75 @@ const remove = async (id, motivo = null) => {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
   }
 
-  const detalles = await detallePedidoRepository.getByProductoId(id);
-  if (detalles && detalles.length > 0) {
+  // Verificar si el producto pertenece a algún pedido activo (en curso)
+  const pedidoActivo = await dbLocal('detalles_pedidos as dp')
+    .join('pedidos as p', 'dp.pedido_id', 'p.id')
+    .where('dp.producto_id', id)
+    .whereIn('p.estado', ['pendiente', 'en_preparacion', 'en_empaque'])
+    .first();
+
+  if (pedidoActivo) {
     throw new AppError('No se puede eliminar: el producto tiene pedidos asociados', 409, 'RELACION');
   }
 
-  if (motivo) {
+  return dbLocal.transaction(async (trx) => {
+    // Normalizar motivo para que coincida con auditoría de Caja y Estadísticas
+    let motivoNormalizado = 'Merma';
+    if (motivo) {
+      const mUpper = String(motivo).toUpperCase().trim();
+      if (mUpper.includes('VENCID')) {
+        motivoNormalizado = 'Vencido';
+      } else if (mUpper.includes('FALTA')) {
+        motivoNormalizado = 'En falta';
+      } else {
+        motivoNormalizado = 'Merma';
+      }
+    }
+
+    // Calcular el precio de costo del producto antes de eliminarlo
+    const precioCosto = await calcularCostoProducto(actual.id, trx);
+
     try {
       const categoria = actual.categoria_id
-        ? await categoriaRepository.getById(actual.categoria_id)
+        ? await trx('categorias').where({ id: actual.categoria_id }).first()
         : null;
       const crypto = require('crypto');
       const { hoy } = require('../utils/fechas');
-      await dbLocal('registros_mermas').insert({
+
+      const tieneColCosto = await trx.schema.hasColumn('registros_mermas', 'precio_costo');
+      const payloadMerma = {
         id: crypto.randomUUID(),
         producto_id: actual.id,
         nombre_producto: actual.nombre,
         nombre_categoria: categoria ? categoria.nombre : null,
-        motivo: String(motivo).trim(),
+        motivo: motivoNormalizado,
         fecha: hoy(),
         cantidad: actual.stock_actual > 0 ? actual.stock_actual : 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      });
+      };
+      if (tieneColCosto) {
+        payloadMerma.precio_costo = precioCosto;
+      }
+
+      await trx('registros_mermas').insert(payloadMerma);
     } catch (e) {
       console.warn('Advertencia al registrar auditoría de producto eliminado:', e.message);
     }
-  }
 
-  await productoRepository.delete(id);
-  return { id: actual.id };
+    // Desasociar pedidos históricos terminados/cancelados para no romper foreign keys y preservar historial
+    await trx('detalles_pedidos')
+      .where({ producto_id: id })
+      .update({ producto_id: null });
+
+    // Eliminar recetas asociadas
+    await trx('recetas').where({ producto_id: id }).delete();
+
+    // Eliminar producto
+    await trx('productos').where({ id }).delete();
+
+    return { id: actual.id };
+  });
 };
 
 module.exports = {

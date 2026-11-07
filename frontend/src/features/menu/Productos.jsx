@@ -22,6 +22,7 @@ import ProductoCard from './components/ProductoCard';
 import ProductoFiltros from './components/ProductoFiltros';
 import ProductoModal from './components/ProductoModal';
 import ProductosModalEditarEliminar from './components/ProductosModalEditarEliminar';
+import ModalConfirmarEliminarProducto from './components/ModalConfirmarEliminarProducto';
 import CategoriasModal from './components/CategoriasModal';
 import RecetasModal from './components/RecetasModal';
 import { normalizeText } from './utils/categoriasHelper';
@@ -45,6 +46,7 @@ export default function Productos() {
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isRecipeManagerOpen, setIsRecipeManagerOpen] = useState(false);
   const [initialRecipeEditId, setInitialRecipeEditId] = useState(null);
+  const [productoAEliminarDirecto, setProductoAEliminarDirecto] = useState(null);
 
   const [isProductsMenuOpen, setIsProductsMenuOpen] = useState(false);
 
@@ -165,6 +167,7 @@ export default function Productos() {
       toast.success(`Producto "${product.nombre}" eliminado`);
       setIsProductModalOpen(false);
       setEditingProduct(null);
+      setProductoAEliminarDirecto(null);
       cargarDatos();
     } catch (error) {
       toast.error(error.message || 'Error al eliminar el producto');
@@ -309,7 +312,18 @@ export default function Productos() {
         recipes={recetas}
         onSave={cargarDatos}
         onViewRecipe={handleViewRecipe}
-        onDelete={(prod) => handleDeleteProduct(prod, 'Merma')}
+        onDelete={(prod) => {
+          setIsProductModalOpen(false);
+          setProductoAEliminarDirecto(prod);
+        }}
+      />
+
+      {/* Modal de Confirmación y Motivo para eliminación directa desde ProductoModal */}
+      <ModalConfirmarEliminarProducto
+        open={Boolean(productoAEliminarDirecto)}
+        onOpenChange={(val) => !val && setProductoAEliminarDirecto(null)}
+        producto={productoAEliminarDirecto}
+        onConfirmar={handleDeleteProduct}
       />
 
       {/* Modal Editar / Eliminar Productos (Lista con Motivo de Eliminación) */}

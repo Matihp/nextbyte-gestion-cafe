@@ -14,6 +14,7 @@ import {
   TableCell
 } from '@/components/ui/table';
 import { X, Edit, Trash2 } from 'lucide-react';
+import ModalConfirmarEliminarProducto from './ModalConfirmarEliminarProducto';
 
 export default function ProductosModalEditarEliminar({
   open,
@@ -113,50 +114,13 @@ export default function ProductosModalEditarEliminar({
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Motivo de Eliminación (Fiel a Cafeteria_1) */}
-      <Dialog open={Boolean(deletingProduct)} onOpenChange={(val) => !val && setDeletingProduct(null)}>
-        <DialogContent className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border border-gray-100 p-0">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-900">Motivo de eliminación</h3>
-            <button
-              type="button"
-              onClick={() => setDeletingProduct(null)}
-              className="text-gray-400 hover:text-gray-600 cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="p-6 space-y-3">
-            <p className="text-sm text-gray-600 mb-4">
-              Seleccione la razón por la que elimina este producto:
-            </p>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmDelete('Producto Vencido')}
-              className="w-full py-3 px-4 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-lg text-sm font-bold transition-colors border border-orange-200 cursor-pointer text-center"
-            >
-              Producto Vencido
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmDelete('Merma')}
-              className="w-full py-3 px-4 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-bold transition-colors border border-red-200 cursor-pointer text-center"
-            >
-              Merma
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmDelete('En Falta')}
-              className="w-full py-3 px-4 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-bold transition-colors border border-gray-200 cursor-pointer text-center"
-            >
-              En Falta
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Modal de Confirmación y Motivo de Eliminación (2 pasos: Confirmar -> Tipificar) */}
+      <ModalConfirmarEliminarProducto
+        open={Boolean(deletingProduct)}
+        onOpenChange={(val) => !val && setDeletingProduct(null)}
+        producto={deletingProduct}
+        onConfirmar={handleConfirmDelete}
+      />
     </>
   );
 }

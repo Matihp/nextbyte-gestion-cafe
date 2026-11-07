@@ -293,4 +293,84 @@ describe('Pruebas de integracion - API /api/productos', () => {
     const resBuscar = await request(app).get(`/api/productos/${id}`);
     expect(resBuscar.status).toBe(404);
   });
+
+  it('permite eliminar un producto si solo tiene pedidos completados o cancelados y registra auditoría en mermas', async () => {
+    const resCrear = await request(app)
+      .post('/api/productos')
+      .send({
+        categoria_id: categoriaCafesId,
+        nombre: 'Frappuccino Especial',
+        precio_venta: 2500
+      });
+
+    const productoId = resCrear.body.data.id;
+
+    // Crear pedido completado y pedido cancelado asociados al producto
+    await dbLocal('pedidos').insert([
+      {
+        id: 'PED-COMPLETO-01',
+        cliente: 'Lucas',
+        total: 2500,
+        estado: 'completado',
+        tipo_pedido: 'salon',
+        fecha: '2026-11-06'
+      },
+      {
+        id: 'PED-CANCELADO-01',
+        cliente: 'Ana',
+        total: 2500,
+        estado: 'cancelado',
+        tipo_pedido: 'salon',
+        fecha: '2026-11-06'
+      }
+    ]);
+
+    await dbLocal('detalles_pedidos').insert([
+      {
+        id: 'DET-COMPLETO-01',
+        pedido_id: 'PED-COMPLETO-01',
+        producto_id: productoId,
+        nombre_producto: 'Frappuccino Especial',
+        cantidad: 1,
+        precio_venta: 2500,
+        precio_costo: 1000
+      },
+      {
+        id: 'DET-CANCELADO-01',
+        pedido_id: 'PED-CANCELADO-01',
+        producto_id: productoId,
+        nombre_producto: 'Frappuccino Especial',
+        cantidad: 1,
+        precio_venta: 2500,
+        precio_costo: 1000
+      }
+    ]);
+
+    // Eliminar con motivo 'Vencido'
+    const resDelete = await request(app)
+      .delete(`/api/productos/${productoId}`)
+      .send({ motivo: 'Vencido' });
+
+    expect(resDelete.status).toBe(200);
+    expect(resDelete.body.success).toBe(true);
+
+    // Verificar que el producto fue eliminado de la tabla productos
+    const resBuscar = await request(app).get(`/api/productos/${productoId}`);
+    expect(resBuscar.status).toBe(404);
+
+    // Verificar que se guardó en registros_mermas con motivo 'Vencido'
+    const merma = await dbLocal('registros_mermas')
+      .where({ nombre_producto: 'Frappuccino Especial' })
+      .first();
+    expect(merma).toBeDefined();
+    expect(merma.motivo).toBe('Vencido');
+
+    // Verificar que los detalles de pedidos completados/cancelados siguen existiendo con nombre_producto intacto
+    const detalleHist = await dbLocal('detalles_pedidos')
+      .where({ id: 'DET-COMPLETO-01' })
+      .first();
+    expect(detalleHist).toBeDefined();
+    expect(detalleHist.nombre_producto).toBe('Frappuccino Especial');
+    expect(detalleHist.producto_id).toBeNull();
+  });
 });
