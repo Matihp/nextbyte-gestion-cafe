@@ -5,10 +5,7 @@ const AppError = require('../utils/AppError');
 const { dbLocal } = require('../config/db');
 const pedidoRepository = require('../repositories/pedidoRepository');
 const detallePedidoRepository = require('../repositories/detallePedidoRepository');
-const recetaRepository = require('../repositories/recetaRepository');
-const ingredienteRecetaRepository = require('../repositories/ingredienteRecetaRepository');
-const insumoRepository = require('../repositories/insumoRepository');
-const productoRepository = require('../repositories/productoRepository');
+
 const registroVentaRepository = require('../repositories/registroVentaRepository');
 
 const TRANSICIONES_PERMITIDAS = {
@@ -157,16 +154,25 @@ const obtenerActivas = async (opciones = {}) => {
     ? ['pendiente', 'en_preparacion', 'en_empaque', 'completado']
     : ESTADOS_ACTIVOS;
   const pedidos = await pedidoRepository.getByEstados(estados);
-  const pedidosConDetalles = await Promise.all(
-    pedidos.map(async (pedido) => {
-      const detalles = await detallePedidoRepository.getByPedidoId(pedido.id);
-      return {
-        ...pedido,
-        detalles
-      };
-    })
-  );
-  return pedidosConDetalles;
+  if (!pedidos || pedidos.length === 0) {
+    return [];
+  }
+
+  const pedidoIds = pedidos.map((p) => p.id);
+  const todosLosDetalles = await detallePedidoRepository.getByPedidoIds(pedidoIds);
+
+  const detallesPorPedido = new Map();
+  for (const det of todosLosDetalles) {
+    if (!detallesPorPedido.has(det.pedido_id)) {
+      detallesPorPedido.set(det.pedido_id, []);
+    }
+    detallesPorPedido.get(det.pedido_id).push(det);
+  }
+
+  return pedidos.map((pedido) => ({
+    ...pedido,
+    detalles: detallesPorPedido.get(pedido.id) || []
+  }));
 };
 
 const cambiarEstado = async (id, nuevoEstado) => {
@@ -175,134 +181,94 @@ const cambiarEstado = async (id, nuevoEstado) => {
     throw new AppError('El estado proporcionado no es válido', 400, 'VALIDACION');
   }
 
-  const pedido = await pedidoRepository.getById(id);
-  if (!pedido) {
-    throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
-  }
-
   if (nuevoEstado === ESTADOS_PEDIDO.ENTREGADO) {
-    return await entregar(id);
+    return entregar(id);
   }
 
-  if (!puedeTransicionar(pedido.estado, nuevoEstado)) {
-    throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
-  }
-
-  await pedidoRepository.updateStatus(id, nuevoEstado);
-  return await pedidoRepository.getWithDetails(id);
+  return dbLocal.transaction(async (trx) => {
+    const pedido = await pedidoRepository.getById(id, trx, true);
+    if (!pedido) {
+      throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+    }
+    if (!puedeTransicionar(pedido.estado, nuevoEstado)) {
+      throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
+    }
+    await actualizarEstado(pedido, nuevoEstado, trx);
+    return pedidoRepository.getWithDetails(pedido.id, trx);
+  });
 };
 
-const entregar = async (id) => {
-  const pedido = await pedidoRepository.getById(id);
+const actualizarEstado = async (pedido, estado, trx) => {
+  const afectados = await pedidoRepository.updateIfEstado(pedido.id, pedido.estado, { estado }, trx);
+  if (afectados !== 1) {
+    throw new AppError('El pedido cambió de estado; vuelva a consultar', 409, 'TRANSICION_INVALIDA');
+  }
+};
+
+const entregar = async (id) => dbLocal.transaction(async (trx) => {
+  const pedido = await pedidoRepository.getWithDetails(id, trx, true);
   if (!pedido) {
     throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
   }
-
+  if (pedido.estado === ESTADOS_PEDIDO.ENTREGADO) {
+    return pedido;
+  }
   if (pedido.estado === ESTADOS_PEDIDO.CANCELADO) {
     throw new AppError('No se puede entregar un pedido cancelado', 409, 'ESTADO_INVALIDO');
   }
 
+  // Si aún no estaba completado, avanzar y registrar la venta si no existía
   if (pedido.estado !== ESTADOS_PEDIDO.COMPLETADO) {
     if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
-      await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.EN_EMPAQUE);
+      await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.EN_EMPAQUE, trx);
     }
-    await completar(id);
-  }
-
-  await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.ENTREGADO);
-  return await pedidoRepository.getWithDetails(id);
-};
-
-const completar = async (id) => {
-  return await dbLocal.transaction(async (trx) => {
-    const pedido = await pedidoRepository.getWithDetails(id, trx);
-    if (!pedido) {
-      throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
-    }
-
-    if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
-      throw new AppError(`No se puede completar un pedido en estado ${pedido.estado}`, 409, 'TRANSICION_INVALIDA');
-    }
-
     const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
-    const recetasPorProducto = new Map();
-    const productosSinReceta = new Map();
-
-    for (const detalle of detalles) {
-      const productoId = detalle.producto_id;
-      if (!recetasPorProducto.has(productoId)) {
-        const receta = await recetaRepository.getByProductoId(productoId, trx);
-        if (receta) {
-          const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id, trx);
-          recetasPorProducto.set(productoId, ingredientes);
-        } else {
-          recetasPorProducto.set(productoId, null);
-        }
-      }
-
-      if (!recetasPorProducto.get(productoId)) {
-        const cantActual = productosSinReceta.get(productoId) || 0;
-        productosSinReceta.set(productoId, cantActual + Number(detalle.cantidad || 0));
-      }
-    }
-
-    const consumoInsumos = calcularConsumoInsumos(detalles, recetasPorProducto);
-
-    const stockPorInsumo = new Map();
-    const entidadesInsumos = new Map();
-    for (const [insumoId] of consumoInsumos) {
-      const insumo = await insumoRepository.getById(insumoId, trx);
-      if (insumo) {
-        stockPorInsumo.set(Number(insumoId), {
-          cantidad_disponible: Number(insumo.cantidad_disponible || 0),
-          nombre: insumo.nombre
-        });
-        entidadesInsumos.set(Number(insumoId), insumo);
-      } else {
-        stockPorInsumo.set(Number(insumoId), {
-          cantidad_disponible: 0,
-          nombre: `Insumo ${insumoId}`
-        });
-      }
-    }
-
-    const faltantes = detectarFaltantes(consumoInsumos, stockPorInsumo);
-    if (faltantes.length > 0) {
-      const primerFaltante = faltantes[0];
-      throw new AppError(`Stock insuficiente de ${primerFaltante.nombre}`, 409, 'STOCK_INSUFICIENTE');
-    }
-
-    for (const [productoId, cantRequerida] of productosSinReceta) {
-      const prod = await productoRepository.getById(productoId, trx);
-      if (!prod || Number(prod.stock_actual || 0) < cantRequerida) {
-        throw new AppError(`Stock insuficiente de ${prod ? prod.nombre : 'producto'}`, 409, 'STOCK_INSUFICIENTE');
-      }
-    }
-
-    const insumosDescontados = [];
-    for (const [insumoId, cantidad] of consumoInsumos) {
-      await insumoRepository.descontarStock(insumoId, cantidad, trx);
-      const insumo = entidadesInsumos.get(Number(insumoId));
-      insumosDescontados.push({
-        insumo_id: Number(insumoId),
-        nombre: insumo ? insumo.nombre : `Insumo ${insumoId}`,
-        cantidad: Number(cantidad)
-      });
-    }
-
-    for (const [productoId, cantidad] of productosSinReceta) {
-      await productoRepository.updateStock(productoId, -Number(cantidad), trx);
-    }
-
-    await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.COMPLETADO, trx);
-
-    const ventaExistente = await registroVentaRepository.buscarPorPedidoId(id, trx);
+    const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
     if (!ventaExistente) {
       const totalCosto = calcularTotalCosto(detalles);
       await registroVentaRepository.guardar(
         {
           id: crypto.randomUUID(),
-          pedido_id: id,
+          pedido_id: pedido.id,
+          fecha: hoy(),
+          total_venta: Number(pedido.total || 0),
+          total_costo: totalCosto
+        },
+        trx
+      );
+    }
+    await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.COMPLETADO, trx);
+  }
+
+  await actualizarEstado({ ...pedido, estado: ESTADOS_PEDIDO.COMPLETADO }, ESTADOS_PEDIDO.ENTREGADO, trx);
+  return pedidoRepository.getWithDetails(pedido.id, trx);
+});
+
+const completar = async (id) => {
+  return await dbLocal.transaction(async (trx) => {
+    const pedido = await pedidoRepository.getWithDetails(id, trx, true);
+    if (!pedido) {
+      throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+    }
+
+    if ([ESTADOS_PEDIDO.COMPLETADO, ESTADOS_PEDIDO.ENTREGADO].includes(pedido.estado)) {
+      return { ...pedido, pedido, insumos_descontados: [] };
+    }
+    if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
+      throw new AppError(`No se puede completar un pedido en estado ${pedido.estado}`, 409, 'TRANSICION_INVALIDA');
+    }
+
+    // Las unidades se reservaron al crear; los insumos se consumieron al fabricar.
+    const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+    await actualizarEstado(pedido, ESTADOS_PEDIDO.COMPLETADO, trx);
+
+    const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
+    if (!ventaExistente) {
+      const totalCosto = calcularTotalCosto(detalles);
+      await registroVentaRepository.guardar(
+        {
+          id: crypto.randomUUID(),
+          pedido_id: pedido.id,
           fecha: hoy(),
           total_venta: Number(pedido.total || 0),
           total_costo: totalCosto
@@ -311,11 +277,11 @@ const completar = async (id) => {
       );
     }
 
-    const pedidoActualizado = await pedidoRepository.getWithDetails(id, trx);
+    const pedidoActualizado = await pedidoRepository.getWithDetails(pedido.id, trx);
     return {
       ...pedidoActualizado,
       pedido: pedidoActualizado,
-      insumos_descontados: insumosDescontados
+      insumos_descontados: []
     };
   });
 };

@@ -1,87 +1,74 @@
 const { dbLocal } = require('../config/db');
 const productoRepository = require('../repositories/productoRepository');
 const categoriaRepository = require('../repositories/categoriaRepository');
-const detallePedidoRepository = require('../repositories/detallePedidoRepository');
-const recetaRepository = require('../repositories/recetaRepository');
-const ingredienteRecetaRepository = require('../repositories/ingredienteRecetaRepository');
-const insumoRepository = require('../repositories/insumoRepository');
 const AppError = require('../utils/AppError');
 const { validarProducto } = require('../dtos/producto.dto');
 
 const calcularCostoProducto = async (productoId, trx = null) => {
-  const prod = await (trx ? trx('productos').where({ id: productoId }).first() : dbLocal('productos').where({ id: productoId }).first());
-  let receta = null;
-  if (prod && prod.receta_id) {
-    receta = await recetaRepository.getById(prod.receta_id, trx);
-  }
-  if (!receta) {
-    receta = await recetaRepository.getByProductoId(productoId, trx);
-  }
-  if (!receta) return 0;
-  const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id, trx);
-  if (!ingredientes || ingredientes.length === 0) return 0;
-  let total = 0;
-  for (const ing of ingredientes) {
-    const insumo = await insumoRepository.getById(ing.insumo_id, trx);
-    if (insumo) {
-      total += Number(insumo.precio_costo || 0) * Number(ing.cantidad || 0);
-    }
-  }
-  return Number(total.toFixed(2));
+  const prod = await productoRepository.getByIdWithDetails(productoId, trx);
+  return prod ? Number(prod.precio_costo) || 0 : 0;
 };
 
 const getAll = async (filtros = {}) => {
   const categoriaId = filtros.categoria_id ? Number(filtros.categoria_id) : null;
-  const productos = categoriaId
-    ? await productoRepository.getByCategoria(categoriaId)
-    : await productoRepository.getAll();
-
-  const categorias = await categoriaRepository.getAll();
-  const categoriasMap = new Map(categorias.map((c) => [c.id, c.nombre]));
-
-  // Cargar insumos y recetas para calcular precio_costo dinámicamente
-  const [recetas, ingredientesRecetas, insumos] = await Promise.all([
-    dbLocal('recetas').select('*').catch(() => []),
-    dbLocal('ingredientes_recetas').select('*').catch(() => []),
-    dbLocal('insumos').select('*').catch(() => [])
-  ]);
-
-  const insumosMap = new Map(insumos.map((i) => [Number(i.id), Number(i.precio_costo || 0)]));
-  const recetaPorProducto = new Map(recetas.map((r) => [Number(r.producto_id), r.id]));
-  const costoPorReceta = new Map();
-
-  for (const ing of ingredientesRecetas) {
-    const costoUnit = insumosMap.get(Number(ing.insumo_id)) || 0;
-    const subtotal = costoUnit * Number(ing.cantidad || 0);
-    const recId = Number(ing.receta_id);
-    costoPorReceta.set(recId, (costoPorReceta.get(recId) || 0) + subtotal);
-  }
-
-  return productos.map((p) => {
-    const recetaId = p.receta_id ? Number(p.receta_id) : recetaPorProducto.get(Number(p.id));
-    const precioCosto = recetaId ? Number((costoPorReceta.get(recetaId) || 0).toFixed(2)) : 0;
-    return {
-      ...p,
-      precio_costo: precioCosto,
-      categoria_nombre: categoriasMap.get(p.categoria_id) || null
-    };
-  });
+  const productos = await productoRepository.getAllWithDetails(categoriaId);
+  return productos.map((p) => ({ ...p, precio_costo: Number(p.precio_costo) || 0 }));
 };
 
 const getById = async (id) => {
-  const producto = await productoRepository.getById(id);
+  const producto = await productoRepository.getByIdWithDetails(id);
   if (!producto) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
   }
+  return { ...producto, precio_costo: Number(producto.precio_costo) || 0 };
+};
 
-  const categoria = await categoriaRepository.getById(producto.categoria_id);
-  const precioCosto = await calcularCostoProducto(id);
+// Igual que la lectura de costos: referencia explícita, o receta por producto si es null.
+const resolverReceta = async (recetaId, productoId, trx) => {
+  if (recetaId != null) {
+    if (!Number.isSafeInteger(Number(recetaId)) || Number(recetaId) <= 0) {
+      throw new AppError('La receta debe tener un ID válido', 400, 'VALIDACION');
+    }
+    const receta = await trx('recetas').where({ id: recetaId }).first();
+    if (!receta) {
+      throw new AppError('La receta no existe', 404, 'NO_ENCONTRADO');
+    }
+    return receta;
+  }
+  return productoId ? trx('recetas').where({ producto_id: productoId }).first() : null;
+};
 
-  return {
-    ...producto,
-    precio_costo: precioCosto,
-    categoria_nombre: categoria ? categoria.nombre : null
-  };
+const consumirIngredientes = async (receta, unidades, trx) => {
+  if (!receta || unidades <= 0) return;
+  const ingredientes = await trx('ingredientes_recetas').where({ receta_id: receta.id });
+  const consumo = new Map();
+  for (const ing of ingredientes) {
+    const cantidad = Number(ing.cantidad);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      throw new AppError('La receta contiene cantidades inválidas', 409, 'RECETA_INVALIDA');
+    }
+    const insumoId = Number(ing.insumo_id);
+    consumo.set(insumoId, (consumo.get(insumoId) || 0) + cantidad * unidades);
+  }
+  // Agrupar insumos repetidos y ordenar reduce conflictos entre reposiciones concurrentes.
+  for (const [insumoId, consumoTotal] of [...consumo].sort((a, b) => a[0] - b[0])) {
+    const cantidad = Number(consumoTotal.toFixed(4));
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      throw new AppError('El consumo de la receta es inválido', 409, 'RECETA_INVALIDA');
+    }
+    const afectados = await trx('insumos').where({ id: insumoId })
+      .where('cantidad_disponible', '>=', cantidad)
+      .decrement('cantidad_disponible', cantidad)
+      .update({ ultima_actualizacion: trx.fn.now() });
+    if (afectados !== 1) {
+      const insumo = await trx('insumos').where({ id: insumoId }).first();
+      throw new AppError(
+        `No hay suficiente stock de insumos en el inventario para fabricar esta cantidad: ${insumo?.nombre || 'Insumo'}`,
+        409,
+        'STOCK_INSUFICIENTE'
+      );
+    }
+  }
 };
 
 const create = async (datos) => {
@@ -94,257 +81,153 @@ const create = async (datos) => {
   if (!categoria) {
     throw new AppError('La categoría no existe', 404, 'NO_ENCONTRADO');
   }
-
   const productos = await productoRepository.getByCategoria(datos.categoria_id);
   const nombreNormalizado = datos.nombre.trim().toLowerCase();
   const existente = productos.find((p) => p.nombre.trim().toLowerCase() === nombreNormalizado);
-
   if (existente) {
     throw new AppError('Ya existe un producto con ese nombre en esta categoría', 409, 'DUPLICADO');
   }
 
-  const nuevoStock =
-    datos.stock_actual !== undefined && datos.stock_actual !== null && datos.stock_actual !== ''
-      ? Number(datos.stock_actual)
-      : 0;
-
+  const nuevoStock = datos.stock_actual !== undefined && datos.stock_actual !== null && datos.stock_actual !== ''
+    ? Number(datos.stock_actual) : 0;
   return dbLocal.transaction(async (trx) => {
-    // Si se crea con stock > 0 y se especificó una receta asociada, validar y descontar insumos
-    if (nuevoStock > 0 && datos.receta_id) {
-      const receta = await trx('recetas')
-        .where({ id: datos.receta_id })
-        .orWhere({ producto_id: datos.receta_id })
-        .first();
-
-      if (receta) {
-        const ingredientes = await trx('ingredientes_recetas').where({ receta_id: receta.id });
-        for (const ing of ingredientes) {
-          const insumo = await insumoRepository.getById(ing.insumo_id, trx);
-          const cantidadRequerida = Number((Number(ing.cantidad) * nuevoStock).toFixed(4));
-          const disponible = Number(insumo ? insumo.cantidad_disponible : 0);
-          if (disponible < cantidadRequerida) {
-            const faltante = Number((cantidadRequerida - disponible).toFixed(3));
-            throw new AppError(
-              `No hay suficiente stock de insumos en el inventario para fabricar esta cantidad. Faltan ${faltante} ${insumo?.unidad_medida || 'un'} de "${insumo?.nombre || 'Insumo'}" (Disponible: ${disponible} ${insumo?.unidad_medida || 'un'})`,
-              409,
-              'STOCK_INSUFICIENTE'
-            );
-          }
-        }
-
-        // Si todos alcanzan, descontar insumos de inventario
-        for (const ing of ingredientes) {
-          const cantidadRequerida = Number((Number(ing.cantidad) * nuevoStock).toFixed(4));
-          await insumoRepository.descontarStock(ing.insumo_id, cantidadRequerida, trx);
-        }
-      }
-    }
-
+    const recetaId = datos.receta_id ? Number(datos.receta_id) : null;
+    const receta = await resolverReceta(recetaId, null, trx);
+    await consumirIngredientes(receta, nuevoStock, trx);
     const payload = {
       categoria_id: Number(datos.categoria_id),
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
-      receta_id: datos.receta_id ? Number(datos.receta_id) : null,
+      receta_id: recetaId,
       imagen: datos.imagen ? datos.imagen.trim() : null
     };
-
     const resultado = await trx('productos').insert(payload);
-    const id = Array.isArray(resultado) ? resultado[0] : resultado;
-    const creado = await trx('productos').where({ id }).first();
-
-    const precioCosto = await calcularCostoProducto(id, trx);
-
-    return {
-      ...creado,
-      precio_costo: precioCosto,
-      categoria_nombre: categoria.nombre
-    };
+    const id = Array.isArray(resultado) ? (resultado[0]?.id || resultado[0]) : resultado;
+    const creado = await productoRepository.getByIdWithDetails(id, trx);
+    return { ...creado, precio_costo: Number(creado.precio_costo) || 0 };
   });
 };
 
 const update = async (id, datos) => {
-  const actual = await productoRepository.getById(id);
-  if (!actual) {
-    throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
-  }
-
   const errores = validarProducto(datos);
   if (errores.length > 0) {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const categoria = await categoriaRepository.getById(datos.categoria_id);
-  if (!categoria) {
-    throw new AppError('La categoría no existe', 404, 'NO_ENCONTRADO');
-  }
-
-  const productos = await productoRepository.getByCategoria(datos.categoria_id);
-  const nombreNormalizado = datos.nombre.trim().toLowerCase();
-  const duplicado = productos.find(
-    (p) => p.nombre.trim().toLowerCase() === nombreNormalizado && Number(p.id) !== Number(id)
-  );
-
-  if (duplicado) {
-    throw new AppError('Ya existe un producto con ese nombre en esta categoría', 409, 'DUPLICADO');
-  }
-
-  const nuevoStock =
-    datos.stock_actual !== undefined && datos.stock_actual !== null && datos.stock_actual !== ''
-      ? Number(datos.stock_actual)
-      : actual.stock_actual;
-
-  const stockDiff = nuevoStock - Number(actual.stock_actual || 0);
-
   return dbLocal.transaction(async (trx) => {
-    // Si se incrementó el stock (stockDiff > 0), verificar receta y descontar insumos
-    if (stockDiff > 0) {
-      const recetaIdTarget = datos.receta_id || actual.receta_id;
-      let receta = null;
-      if (recetaIdTarget) {
-        receta = await trx('recetas').where({ id: recetaIdTarget }).first();
-      }
-      if (!receta) {
-        receta = await trx('recetas').where({ producto_id: id }).first();
-      }
-
-      if (receta) {
-        const ingredientes = await trx('ingredientes_recetas').where({ receta_id: receta.id });
-        for (const ing of ingredientes) {
-          const insumo = await insumoRepository.getById(ing.insumo_id, trx);
-          const cantidadRequerida = Number((Number(ing.cantidad) * stockDiff).toFixed(4));
-          const disponible = Number(insumo ? insumo.cantidad_disponible : 0);
-          if (disponible < cantidadRequerida) {
-            const faltante = Number((cantidadRequerida - disponible).toFixed(3));
-            throw new AppError(
-              `No hay suficiente stock de insumos en el inventario para fabricar esta cantidad. Faltan ${faltante} ${insumo?.unidad_medida || 'un'} de "${insumo?.nombre || 'Insumo'}" (Disponible: ${disponible} ${insumo?.unidad_medida || 'un'})`,
-              409,
-              'STOCK_INSUFICIENTE'
-            );
-          }
-        }
-
-        // Si todos alcanzan, descontar de cada insumo
-        for (const ing of ingredientes) {
-          const cantidadRequerida = Number((Number(ing.cantidad) * stockDiff).toFixed(4));
-          await insumoRepository.descontarStock(ing.insumo_id, cantidadRequerida, trx);
-        }
-      }
+    const actual = await trx('productos').where({ id }).forUpdate().first();
+    if (!actual) {
+      throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
+    }
+    const categoria = await categoriaRepository.getById(datos.categoria_id, trx);
+    if (!categoria) {
+      throw new AppError('La categoría no existe', 404, 'NO_ENCONTRADO');
+    }
+    const productos = await trx('productos').where({ categoria_id: datos.categoria_id });
+    const nombreNormalizado = datos.nombre.trim().toLowerCase();
+    const duplicado = productos.find(
+      (p) => p.nombre.trim().toLowerCase() === nombreNormalizado && Number(p.id) !== Number(id)
+    );
+    if (duplicado) {
+      throw new AppError('Ya existe un producto con ese nombre en esta categoría', 409, 'DUPLICADO');
     }
 
+    const nuevoStock = datos.stock_actual !== undefined && datos.stock_actual !== null && datos.stock_actual !== ''
+      ? Number(datos.stock_actual) : Number(actual.stock_actual);
+    const stockDiff = nuevoStock - Number(actual.stock_actual || 0);
+    const recetaId = datos.receta_id !== undefined
+      ? (datos.receta_id ? Number(datos.receta_id) : null) : actual.receta_id;
+    const receta = await resolverReceta(recetaId, actual.id, trx);
     const payload = {
       categoria_id: Number(datos.categoria_id),
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
-      receta_id: datos.receta_id !== undefined ? (datos.receta_id ? Number(datos.receta_id) : null) : actual.receta_id,
-      imagen: datos.imagen !== undefined ? (datos.imagen ? datos.imagen.trim() : null) : actual.imagen
+      receta_id: recetaId,
+      imagen: datos.imagen !== undefined ? (datos.imagen ? datos.imagen.trim() : null) : actual.imagen,
+      updated_at: trx.fn.now()
     };
-
-    await trx('productos').where({ id }).update(payload);
-    const actualizado = await trx('productos').where({ id }).first();
-    const precioCosto = await calcularCostoProducto(id, trx);
-
-    return {
-      ...actualizado,
-      precio_costo: precioCosto,
-      categoria_nombre: categoria.nombre
-    };
+    const afectados = await trx('productos').where({ id, stock_actual: actual.stock_actual }).update(payload);
+    if (afectados !== 1) {
+      throw new AppError('El stock del producto cambió; vuelva a consultar', 409, 'STOCK_INVALIDO');
+    }
+    await consumirIngredientes(receta, stockDiff, trx);
+    const actualizado = await productoRepository.getByIdWithDetails(id, trx);
+    return { ...actualizado, precio_costo: Number(actualizado.precio_costo) || 0 };
   });
 };
 
-const remove = async (id, motivo = null, cantidad = null) => {
-  const actual = await productoRepository.getById(id);
+const remove = async (id, motivo = null, cantidad = null) => dbLocal.transaction(async (trx) => {
+  const actual = await trx('productos').where({ id }).forUpdate().first();
   if (!actual) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
   }
-
-  // Verificar si el producto pertenece a algún pedido activo (en curso)
-  const pedidoActivo = await dbLocal('detalles_pedidos as dp')
+  const pedidoActivo = await trx('detalles_pedidos as dp')
     .join('pedidos as p', 'dp.pedido_id', 'p.id')
     .where('dp.producto_id', id)
     .whereIn('p.estado', ['pendiente', 'en_preparacion', 'en_empaque'])
     .first();
-
   if (pedidoActivo) {
     throw new AppError('No se puede eliminar: el producto tiene pedidos asociados', 409, 'RELACION');
   }
 
-  return dbLocal.transaction(async (trx) => {
-    // Normalizar motivo para que coincida con auditoría de Caja y Estadísticas
-    let motivoNormalizado = 'Merma';
-    if (motivo) {
-      const mUpper = String(motivo).toUpperCase().trim();
-      if (mUpper.includes('VENCID')) {
-        motivoNormalizado = 'Vencido';
-      } else if (mUpper.includes('FALTA')) {
-        motivoNormalizado = 'En falta';
-      } else {
-        motivoNormalizado = 'Merma';
-      }
+  let motivoNormalizado = 'Merma';
+  if (motivo) {
+    const mUpper = String(motivo).toUpperCase().trim();
+    if (mUpper.includes('VENCID')) motivoNormalizado = 'Vencido';
+    else if (mUpper.includes('FALTA')) motivoNormalizado = 'En falta';
+  }
+  const stockActual = Number(actual.stock_actual) || 0;
+  const cantEliminar = cantidad !== null && cantidad !== undefined && Number(cantidad) > 0
+    ? Number(cantidad) : (stockActual > 0 ? stockActual : 1);
+  if (!Number.isSafeInteger(cantEliminar)) {
+    throw new AppError('La cantidad debe ser un entero mayor a cero', 400, 'VALIDACION');
+  }
+  if (cantidad != null && Number(cantidad) > stockActual) {
+    throw new AppError('Stock insuficiente del producto', 409, 'STOCK_INSUFICIENTE');
+  }
+  const precioCosto = await calcularCostoProducto(actual.id, trx);
+  const categoria = actual.categoria_id
+    ? await trx('categorias').where({ id: actual.categoria_id }).first() : null;
+  const crypto = require('crypto');
+  const { hoy } = require('../utils/fechas');
+  const tieneColCosto = await trx.schema.hasColumn('registros_mermas', 'precio_costo');
+  const payloadMerma = {
+    id: crypto.randomUUID(),
+    producto_id: actual.id,
+    nombre_producto: actual.nombre,
+    nombre_categoria: categoria ? categoria.nombre : null,
+    motivo: motivoNormalizado,
+    fecha: hoy(),
+    cantidad: cantEliminar,
+    created_at: trx.fn.now(),
+    updated_at: trx.fn.now()
+  };
+  if (tieneColCosto) payloadMerma.precio_costo = precioCosto;
+  // Si falla la auditoría también debe revertirse la modificación del inventario.
+  await trx('registros_mermas').insert(payloadMerma);
+
+  if (stockActual > 0 && cantEliminar < stockActual) {
+    const afectados = await trx('productos').where({ id, stock_actual: actual.stock_actual })
+      .where('stock_actual', '>=', cantEliminar)
+      .decrement('stock_actual', cantEliminar)
+      .update({ updated_at: trx.fn.now() });
+    if (afectados !== 1) {
+      throw new AppError('El stock del producto cambió; vuelva a consultar', 409, 'STOCK_INVALIDO');
     }
+    return { id: actual.id, parcial: true, stock_restante: stockActual - cantEliminar, cantidad_eliminada: cantEliminar };
+  }
 
-    const stockActual = Number(actual.stock_actual) || 0;
-    const cantEliminar = cantidad !== null && cantidad !== undefined && Number(cantidad) > 0
-      ? Number(cantidad)
-      : (stockActual > 0 ? stockActual : 1);
-
-    // Calcular el precio de costo del producto antes de eliminarlo o reducir su stock
-    const precioCosto = await calcularCostoProducto(actual.id, trx);
-
-    try {
-      const categoria = actual.categoria_id
-        ? await trx('categorias').where({ id: actual.categoria_id }).first()
-        : null;
-      const crypto = require('crypto');
-      const { hoy } = require('../utils/fechas');
-
-      const tieneColCosto = await trx.schema.hasColumn('registros_mermas', 'precio_costo');
-      const payloadMerma = {
-        id: crypto.randomUUID(),
-        producto_id: actual.id,
-        nombre_producto: actual.nombre,
-        nombre_categoria: categoria ? categoria.nombre : null,
-        motivo: motivoNormalizado,
-        fecha: hoy(),
-        cantidad: cantEliminar,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      if (tieneColCosto) {
-        payloadMerma.precio_costo = precioCosto;
-      }
-
-      await trx('registros_mermas').insert(payloadMerma);
-    } catch (e) {
-      console.warn('Advertencia al registrar auditoría de producto eliminado:', e.message);
-    }
-
-    // Si la cantidad a eliminar es menor al stock total registrado, se descuentan las unidades y se mantiene el producto en el catálogo
-    if (stockActual > 0 && cantEliminar < stockActual) {
-      const nuevoStock = stockActual - cantEliminar;
-      await trx('productos').where({ id }).update({
-        stock_actual: nuevoStock,
-        updated_at: new Date().toISOString()
-      });
-      return { id: actual.id, parcial: true, stock_restante: nuevoStock, cantidad_eliminada: cantEliminar };
-    }
-
-    // Si se eliminan todas las unidades o la cantidad supera/iguala al stock (o no hay stock):
-    // Desasociar pedidos históricos terminados/cancelados para no romper foreign keys y preservar historial
-    await trx('detalles_pedidos')
-      .where({ producto_id: id })
-      .update({ producto_id: null });
-
-    // Eliminar recetas asociadas
-    await trx('recetas').where({ producto_id: id }).delete();
-
-    // Eliminar producto
-    await trx('productos').where({ id }).delete();
-
-    return { id: actual.id };
-  });
-};
+  // Preservar el historial aunque se quite el producto del catálogo.
+  await trx('detalles_pedidos').where({ producto_id: id }).update({ producto_id: null });
+  await trx('recetas').where({ producto_id: id }).delete();
+  const eliminados = await trx('productos').where({ id, stock_actual: actual.stock_actual }).delete();
+  if (eliminados !== 1) {
+    throw new AppError('El stock del producto cambió; vuelva a consultar', 409, 'STOCK_INVALIDO');
+  }
+  return { id: actual.id };
+});
 
 module.exports = {
   getAll,

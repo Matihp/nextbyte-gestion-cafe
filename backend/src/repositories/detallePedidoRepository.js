@@ -25,6 +25,12 @@ module.exports = {
     return qb.where({ pedido_id: pedidoId }).orderBy('created_at', 'asc');
   },
 
+  getByPedidoIds: (pedidoIds, trx = null) => {
+    if (!pedidoIds || pedidoIds.length === 0) return Promise.resolve([]);
+    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
+    return qb.whereIn('pedido_id', pedidoIds).orderBy('created_at', 'asc');
+  },
+
   getByProductoId: (productoId, trx = null) => {
     const qb = trx ? trx(TABLE) : dbLocal(TABLE);
     return qb.where({ producto_id: productoId }).orderBy('created_at', 'asc');

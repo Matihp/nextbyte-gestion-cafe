@@ -1,10 +1,23 @@
-const { TIPOS_PEDIDO, METODOS_PAGO } = require('../utils/constantes');
+const { TIPOS_PEDIDO, METODOS_PAGO, ESTADOS_PEDIDO } = require('../utils/constantes');
 
 const tiposValidos = [...new Set([...TIPOS_PEDIDO, 'salon'])];
 
 const validarPedido = (body = {}) => {
   const errores = [];
-  const { tipo_pedido, metodo_pago, direccion, telefono, items } = body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return ['El pedido debe ser un objeto'];
+  }
+  const { tipo_pedido, metodo_pago, direccion, telefono, items, estado } = body;
+
+  if (estado !== undefined && ![ESTADOS_PEDIDO.PENDIENTE, ESTADOS_PEDIDO.EN_PREPARACION].includes(estado)) {
+    errores.push('El estado inicial debe ser pendiente o en_preparacion');
+  }
+  if (direccion != null && typeof direccion !== 'string') {
+    errores.push('La dirección debe ser una cadena de texto');
+  }
+  if (telefono != null && typeof telefono !== 'string') {
+    errores.push('El teléfono debe ser una cadena de texto');
+  }
 
   if (!tipo_pedido || !tiposValidos.includes(tipo_pedido)) {
     errores.push('El tipo de pedido es inválido');
@@ -32,16 +45,16 @@ const validarPedido = (body = {}) => {
   let productoRepetido = false;
 
   for (const item of items) {
-    if (!item || item.producto_id === undefined || item.producto_id === null || item.producto_id === '') {
+    if (!item || !['number', 'string'].includes(typeof item.producto_id) || !Number.isSafeInteger(Number(item.producto_id)) || Number(item.producto_id) <= 0) {
       errores.push('Cada ítem debe tener un producto_id válido');
     } else {
-      if (productosVistos.has(item.producto_id)) {
+      if (productosVistos.has(Number(item.producto_id))) {
         productoRepetido = true;
       }
-      productosVistos.add(item.producto_id);
+      productosVistos.add(Number(item.producto_id));
     }
 
-    if (!item || !Number.isInteger(item.cantidad) || item.cantidad <= 0) {
+    if (!item || !Number.isSafeInteger(item.cantidad) || item.cantidad <= 0) {
       errores.push('La cantidad de cada ítem debe ser un entero mayor a cero');
     }
   }

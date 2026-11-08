@@ -7,6 +7,34 @@ const consulta = (trx) => (trx ? trx(TABLE) : dbLocal(TABLE));
 module.exports = {
   getByRecetaId: (recetaId, trx = null) => consulta(trx).where({ receta_id: recetaId }),
 
+  getByRecetaIdWithDetails: (recetaId, trx = null) => {
+    const db = trx || dbLocal;
+    return db('ingredientes_recetas as ir')
+      .join('insumos as i', 'ir.insumo_id', 'i.id')
+      .where('ir.receta_id', recetaId)
+      .select(
+        'ir.insumo_id',
+        'ir.cantidad',
+        'i.nombre as insumo_nombre',
+        'i.unidad_medida',
+        'i.precio_costo'
+      );
+  },
+
+  getAllWithDetails: (trx = null) => {
+    const db = trx || dbLocal;
+    return db('ingredientes_recetas as ir')
+      .join('insumos as i', 'ir.insumo_id', 'i.id')
+      .select(
+        'ir.receta_id',
+        'ir.insumo_id',
+        'ir.cantidad',
+        'i.nombre as insumo_nombre',
+        'i.unidad_medida',
+        'i.precio_costo'
+      );
+  },
+
   getByInsumoId: (insumoId, trx = null) => consulta(trx).where({ insumo_id: insumoId }),
   
   create: (data) => dbLocal(TABLE).insert(data),

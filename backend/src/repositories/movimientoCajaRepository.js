@@ -81,7 +81,7 @@ module.exports = {
   getMermasMes: (mes) =>
     dbLocal(MERMAS_TABLE)
       .whereIn('motivo', MOTIVOS_MERMA)
-      .whereRaw(`strftime('%Y-%m', fecha) = ?`, [mes])
+      .whereBetween('fecha', [`${mes}-01`, `${mes}-31`])
       .select(
         '*',
         dbLocal.raw('COALESCE(precio_costo, 0) as precio_costo'),

@@ -68,13 +68,16 @@ module.exports = {
     return rows.map(enrichOrder);
   },
 
-  getById: async (id, trx = null) => {
-    const qb = trx ? trx(TABLE) : dbLocal(TABLE);
-    let order = await qb.where({ id }).first();
+  getById: async (id, trx = null, bloquear = false) => {
+    const consulta = () => {
+      const qb = (trx || dbLocal)(TABLE);
+      return bloquear && trx ? qb.forUpdate() : qb;
+    };
+    let order = await consulta().where({ id }).first();
     if (!order && String(id).startsWith('#')) {
       const num = parseInt(String(id).replace('#', ''), 10);
       if (!isNaN(num)) {
-        order = await (trx ? trx(TABLE) : dbLocal(TABLE))
+        order = await consulta()
           .where({ numero_pedido: num })
           .orderBy('created_at', 'desc')
           .first();
@@ -83,8 +86,8 @@ module.exports = {
     return enrichOrder(order);
   },
 
-  getWithDetails: async (id, trx = null) => {
-    const order = await module.exports.getById(id, trx);
+  getWithDetails: async (id, trx = null, bloquear = false) => {
+    const order = await module.exports.getById(id, trx, bloquear);
     if (!order) return null;
 
     const details = await detallePedidoRepository.getByPedidoId(order.id, trx);
@@ -182,10 +185,15 @@ module.exports = {
       .where({ id })
       .update({
         ...data,
-        updated_at: dbLocal.fn.now()
+        updated_at: (trx || dbLocal).fn.now()
       });
     return module.exports.getById(id, trx);
   },
+
+  // Devuelve filas afectadas: el llamador debe abortar si perdió el CAS.
+  updateIfEstado: (id, estadoEsperado, data, trx) => trx(TABLE)
+    .where({ id, estado: estadoEsperado })
+    .update({ ...data, updated_at: trx.fn.now() }),
 
   updateStatus: (id, newStatus, trx = null) => module.exports.update(id, { estado: newStatus }, trx),
 

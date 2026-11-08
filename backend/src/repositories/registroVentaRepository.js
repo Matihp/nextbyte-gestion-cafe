@@ -33,8 +33,8 @@ async function listar() {
 async function obtenerVentasDia(fecha) {
   const resultado = await dbLocal(TABLA + ' as rv')
     .join('pedidos as p', 'rv.pedido_id', 'p.id')
-    .where('p.estado', 'completado')
-    .whereRaw("strftime('%Y-%m-%d', rv.fecha) = ?", [fecha])
+    .whereIn('p.estado', ['completado', 'entregado'])
+    .where('rv.fecha', fecha)
     .select(
       dbLocal.raw('COUNT(rv.id) as cantidad_pedidos'),
       dbLocal.raw('SUM(rv.total_venta) as total_venta'),
@@ -57,8 +57,8 @@ async function obtenerVentasDia(fecha) {
 async function obtenerVentasRango(desde, hasta) {
   const filas = await dbLocal(TABLA + ' as rv')
     .join('pedidos as p', 'rv.pedido_id', 'p.id')
-    .where('p.estado', 'completado')
-    .whereRaw("strftime('%Y-%m-%d', rv.fecha) BETWEEN ? AND ?", [desde, hasta])
+    .whereIn('p.estado', ['completado', 'entregado'])
+    .whereBetween('rv.fecha', [desde, hasta])
     .select(
       dbLocal.raw("strftime('%Y-%m-%d', rv.fecha) as fecha"),
       dbLocal.raw('COUNT(rv.id) as cantidad_pedidos'),
@@ -79,8 +79,8 @@ async function obtenerVentasRango(desde, hasta) {
 async function obtenerTopProductos(desde, hasta, limite = 5) {
   const filas = await dbLocal('detalles_pedidos as dp')
     .join('pedidos as p', 'dp.pedido_id', 'p.id')
-    .where('p.estado', 'completado')
-    .whereRaw("strftime('%Y-%m-%d', p.fecha) BETWEEN ? AND ?", [desde, hasta])
+    .whereIn('p.estado', ['completado', 'entregado'])
+    .whereBetween('p.fecha', [desde, hasta])
     .select(
       'dp.producto_id',
       'dp.nombre_producto',
@@ -102,8 +102,8 @@ async function obtenerTopProductos(desde, hasta, limite = 5) {
 async function obtenerTotalesGanancias(desde, hasta) {
   const resultado = await dbLocal(TABLA + ' as rv')
     .join('pedidos as p', 'rv.pedido_id', 'p.id')
-    .where('p.estado', 'completado')
-    .whereRaw("strftime('%Y-%m-%d', rv.fecha) BETWEEN ? AND ?", [desde, hasta])
+    .whereIn('p.estado', ['completado', 'entregado'])
+    .whereBetween('rv.fecha', [desde, hasta])
     .select(
       dbLocal.raw('COALESCE(SUM(rv.total_venta), 0) as total_venta'),
       dbLocal.raw('COALESCE(SUM(rv.total_costo), 0) as total_costo')
@@ -118,7 +118,7 @@ async function obtenerTotalesGanancias(desde, hasta) {
 
 async function obtenerMermasPorRango(desde, hasta) {
   const filas = await dbLocal('registros_mermas')
-    .whereRaw("strftime('%Y-%m-%d', fecha) BETWEEN ? AND ?", [desde, hasta])
+    .whereBetween('fecha', [desde, hasta])
     .select(
       'producto_id',
       'nombre_producto',
@@ -157,6 +157,7 @@ async function contarInsumosEnAlerta() {
 async function obtenerVentasPorFranjaHoraria() {
   return await dbLocal(TABLA + ' as rv')
     .join('pedidos as p', 'rv.pedido_id', 'p.id')
+    .whereIn('p.estado', ['completado', 'entregado'])
     .select(
       dbLocal.raw("strftime('%H:00', p.hora) as hora"),
       'p.tipo_pedido'
@@ -170,6 +171,8 @@ async function obtenerVentasPorCategoria() {
   return await dbLocal('detalles_pedidos as dp')
     .join('productos as p', 'dp.producto_id', 'p.id')
     .join('categorias as c', 'p.categoria_id', 'c.id')
+    .join('pedidos as pedido', 'dp.pedido_id', 'pedido.id')
+    .whereIn('pedido.estado', ['completado', 'entregado'])
     .select('c.nombre as categoria')
     .sum('dp.cantidad as cantidadVendida')
     .groupBy('c.id', 'c.nombre')
@@ -177,42 +180,67 @@ async function obtenerVentasPorCategoria() {
 }
 
 async function obtenerTransaccionesCaja(filtros = {}) {
-  let query = dbLocal('pedidos as p')
-    .join('detalles_pedidos as dp', 'p.id', 'dp.pedido_id')
-    .select(
-      'p.id as pedido_id',
-      'p.numero_pedido',
-      'p.cliente',
-      'p.fecha',
-      'p.hora',
-      'p.tipo_pedido',
-      'p.metodo_pago',
-      'p.estado',
-      'dp.id as detalle_id',
-      'dp.producto_id',
-      'dp.nombre_producto',
-      'dp.cantidad',
-      'dp.precio_costo',
-      'dp.precio_venta',
-      dbLocal.raw('ROUND(dp.cantidad * dp.precio_costo, 2) as costo_total'),
-      dbLocal.raw('ROUND(dp.cantidad * dp.precio_venta, 2) as venta_total')
-    )
-    .whereNot('p.estado', 'cancelado');
+  let query = dbLocal('pedidos')
+    .whereNot('estado', 'cancelado');
 
   if (filtros.fecha) {
-    query = query.where('p.fecha', filtros.fecha);
+    query = query.where('fecha', filtros.fecha);
   } else if (filtros.desde && filtros.hasta) {
-    query = query.whereBetween('p.fecha', [filtros.desde, filtros.hasta]);
+    query = query.whereBetween('fecha', [filtros.desde, filtros.hasta]);
   } else if (filtros.desde) {
-    query = query.where('p.fecha', '>=', filtros.desde);
+    query = query.where('fecha', '>=', filtros.desde);
   } else if (filtros.hasta) {
-    query = query.where('p.fecha', '<=', filtros.hasta);
+    query = query.where('fecha', '<=', filtros.hasta);
   }
 
-  return await query
-    .orderBy('p.fecha', 'desc')
-    .orderBy('p.hora', 'asc')
-    .orderBy('p.id', 'asc');
+  const pedidos = await query
+    .orderBy('fecha', 'desc')
+    .orderBy('hora', 'asc')
+    .orderBy('id', 'asc');
+
+  if (!pedidos || pedidos.length === 0) return [];
+
+  const pedidoIds = pedidos.map((p) => p.id);
+  const detalles = await dbLocal('detalles_pedidos')
+    .whereIn('pedido_id', pedidoIds);
+
+  const detallesPorPedido = new Map();
+  for (const d of detalles) {
+    if (!detallesPorPedido.has(d.pedido_id)) {
+      detallesPorPedido.set(d.pedido_id, []);
+    }
+    detallesPorPedido.get(d.pedido_id).push(d);
+  }
+
+  const filas = [];
+  for (const p of pedidos) {
+    const items = detallesPorPedido.get(p.id) || [];
+    for (const dp of items) {
+      const cant = Number(dp.cantidad) || 0;
+      const pCosto = Number(dp.precio_costo) || 0;
+      const pVenta = Number(dp.precio_venta) || 0;
+      filas.push({
+        pedido_id: p.id,
+        numero_pedido: p.numero_pedido,
+        cliente: p.cliente,
+        fecha: p.fecha,
+        hora: p.hora,
+        tipo_pedido: p.tipo_pedido,
+        metodo_pago: p.metodo_pago,
+        estado: p.estado,
+        detalle_id: dp.id,
+        producto_id: dp.producto_id,
+        nombre_producto: dp.nombre_producto,
+        cantidad: cant,
+        precio_costo: pCosto,
+        precio_venta: pVenta,
+        costo_total: Math.round(cant * pCosto * 100) / 100,
+        venta_total: Math.round(cant * pVenta * 100) / 100
+      });
+    }
+  }
+
+  return filas;
 }
 
 module.exports = {

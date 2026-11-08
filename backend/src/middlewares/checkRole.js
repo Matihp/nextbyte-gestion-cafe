@@ -27,7 +27,7 @@ const obtenerUsuario = (req) => {
 };
 
 const checkRoleOffline = (req, res, next) => {
-  if (req.isOnline) {
+  if (req.databaseMode === 'cloud' || req.databaseMode === 'local' || req.isOnline) {
     return next();
   }
 

@@ -12,7 +12,9 @@ const getById = async (req, res) => {
 };
 
 const create = async (req, res) => {
-  const data = await pedidoService.crear(req.body);
+  const data = await pedidoService.crear(req.body, {
+    idempotencyKey: req.get('Idempotency-Key')
+  });
   return ok(res, data, 201);
 };
 

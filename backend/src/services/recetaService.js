@@ -6,19 +6,18 @@ const productoRepository = require('../repositories/productoRepository');
 const AppError = require('../utils/AppError');
 const { validarReceta, detectarRepetidos } = require('../dtos/receta.dto');
 
-const formatearIngredientes = (ingredientes, insumosMap) => {
+const mapearIngredientes = (ingredientes = []) => {
   let costoTotal = 0;
   const lista = ingredientes.map((item) => {
-    const insumo = insumosMap.get(Number(item.insumo_id));
-    const pCosto = insumo ? Number(insumo.precio_costo || 0) : 0;
-    const subtotal = Number((pCosto * Number(item.cantidad)).toFixed(2));
+    const pCosto = Number(item.precio_costo || 0);
+    const subtotal = Number((pCosto * Number(item.cantidad || 0)).toFixed(2));
     costoTotal += subtotal;
     return {
       insumo_id: Number(item.insumo_id),
-      insumo_nombre: insumo ? insumo.nombre : null,
-      unidad_medida: insumo ? insumo.unidad_medida : null,
+      insumo_nombre: item.insumo_nombre || null,
+      unidad_medida: item.unidad_medida || null,
       precio_costo: pCosto,
-      cantidad: Number(item.cantidad),
+      cantidad: Number(item.cantidad || 0),
       subtotal_costo: subtotal
     };
   });
@@ -27,21 +26,22 @@ const formatearIngredientes = (ingredientes, insumosMap) => {
 
 const getAll = async () => {
   const recetas = await recetaRepository.getAll();
-  const insumos = await insumoRepository.getAll();
-  const insumosMap = new Map(insumos.map((i) => [Number(i.id), i]));
-  const todosIngredientes = await dbLocal('ingredientes_recetas').select('*');
+  if (!recetas || recetas.length === 0) return [];
+
+  const todosIngredientes = await ingredienteRecetaRepository.getAllWithDetails();
 
   const ingPorReceta = new Map();
   for (const item of todosIngredientes) {
-    if (!ingPorReceta.has(Number(item.receta_id))) {
-      ingPorReceta.set(Number(item.receta_id), []);
+    const recId = Number(item.receta_id);
+    if (!ingPorReceta.has(recId)) {
+      ingPorReceta.set(recId, []);
     }
-    ingPorReceta.get(Number(item.receta_id)).push(item);
+    ingPorReceta.get(recId).push(item);
   }
 
   return recetas.map((r) => {
     const ings = ingPorReceta.get(Number(r.id)) || [];
-    const { lista, costoTotal } = formatearIngredientes(ings, insumosMap);
+    const { lista, costoTotal } = mapearIngredientes(ings);
     return {
       id: r.id,
       producto_id: r.producto_id,
@@ -58,10 +58,8 @@ const getById = async (id) => {
     throw new AppError('Receta no encontrada', 404, 'NO_ENCONTRADO');
   }
 
-  const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id);
-  const insumos = await insumoRepository.getAll();
-  const insumosMap = new Map(insumos.map((i) => [Number(i.id), i]));
-  const { lista, costoTotal } = formatearIngredientes(ingredientes, insumosMap);
+  const ingredientes = await ingredienteRecetaRepository.getByRecetaIdWithDetails(receta.id);
+  const { lista, costoTotal } = mapearIngredientes(ingredientes);
 
   return {
     id: receta.id,
@@ -94,10 +92,8 @@ const getByProductoId = async (productoId) => {
     };
   }
 
-  const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id);
-  const insumos = await insumoRepository.getAll();
-  const insumosMap = new Map(insumos.map((i) => [Number(i.id), i]));
-  const { lista, costoTotal } = formatearIngredientes(ingredientes, insumosMap);
+  const ingredientes = await ingredienteRecetaRepository.getByRecetaIdWithDetails(receta.id);
+  const { lista, costoTotal } = mapearIngredientes(ingredientes);
 
   return {
     id: receta.id,
@@ -115,13 +111,13 @@ const crearReceta = async (datos) => {
   }
 
   return dbLocal.transaction(async (trx) => {
-    const insumosMap = new Map();
+    const insumoIds = datos.ingredientes.map((item) => Number(item.insumo_id));
+    const insumos = await insumoRepository.getByIds(insumoIds, trx);
+    const insumosSet = new Set(insumos.map((i) => Number(i.id)));
     for (const item of datos.ingredientes) {
-      const insumo = await insumoRepository.getById(item.insumo_id, trx);
-      if (!insumo) {
+      if (!insumosSet.has(Number(item.insumo_id))) {
         throw new AppError(`El insumo ${item.insumo_id} no existe`, 404, 'NO_ENCONTRADO');
       }
-      insumosMap.set(Number(item.insumo_id), insumo);
     }
 
     const resultado = await recetaRepository.create(
@@ -141,7 +137,8 @@ const crearReceta = async (datos) => {
     }));
 
     await ingredienteRecetaRepository.createMany(ingredientesPayload, trx);
-    const { lista, costoTotal } = formatearIngredientes(datos.ingredientes, insumosMap);
+    const ingredientesGuardados = await ingredienteRecetaRepository.getByRecetaIdWithDetails(recetaId, trx);
+    const { lista, costoTotal } = mapearIngredientes(ingredientesGuardados);
 
     return {
       id: recetaId,
@@ -173,13 +170,13 @@ const guardar = async (idOrProductoId, datos) => {
       }
     }
 
-    const insumosMap = new Map();
+    const insumoIds = datos.ingredientes.map((item) => Number(item.insumo_id));
+    const insumos = await insumoRepository.getByIds(insumoIds, trx);
+    const insumosSet = new Set(insumos.map((i) => Number(i.id)));
     for (const item of datos.ingredientes) {
-      const insumo = await insumoRepository.getById(item.insumo_id, trx);
-      if (!insumo) {
+      if (!insumosSet.has(Number(item.insumo_id))) {
         throw new AppError(`El insumo ${item.insumo_id} no existe`, 404, 'NO_ENCONTRADO');
       }
-      insumosMap.set(Number(item.insumo_id), insumo);
     }
 
     if (receta) {
@@ -210,7 +207,8 @@ const guardar = async (idOrProductoId, datos) => {
     }));
 
     await ingredienteRecetaRepository.createMany(ingredientesPayload, trx);
-    const { lista, costoTotal } = formatearIngredientes(datos.ingredientes, insumosMap);
+    const ingredientesGuardados = await ingredienteRecetaRepository.getByRecetaIdWithDetails(receta.id, trx);
+    const { lista, costoTotal } = mapearIngredientes(ingredientesGuardados);
 
     return {
       id: receta.id,

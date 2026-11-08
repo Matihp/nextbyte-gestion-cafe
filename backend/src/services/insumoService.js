@@ -26,7 +26,7 @@ const obtenerTodos = async () => {
 };
 
 const obtenerAlertas = async () => {
-  const insumos = await insumoRepository.getAll();
+  const insumos = await insumoRepository.getAlertas();
   return insumos
     .map(enriquecerInsumo)
     .filter((insumo) => insumo.estado_stock === 'critico' || insumo.estado_stock === 'bajo');
@@ -46,10 +46,7 @@ const crear = async (datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const insumos = await insumoRepository.getAll();
-  const existente = insumos.find(
-    (i) => i.nombre.trim().toLowerCase() === datos.nombre.trim().toLowerCase()
-  );
+  const existente = await insumoRepository.getByNombre(datos.nombre);
   if (existente) {
     throw new AppError('Ya existe un insumo con ese nombre', 409, 'DUPLICADO');
   }
@@ -80,10 +77,7 @@ const actualizar = async (id, datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const insumos = await insumoRepository.getAll();
-  const existente = insumos.find(
-    (i) => i.nombre.trim().toLowerCase() === datos.nombre.trim().toLowerCase() && i.id !== Number(id)
-  );
+  const existente = await insumoRepository.getByNombre(datos.nombre, id);
   if (existente) {
     throw new AppError('Ya existe un insumo con ese nombre', 409, 'DUPLICADO');
   }

@@ -25,7 +25,7 @@ const crear = async (datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const producto = await productoRepository.getById(datos.producto_id);
+  const producto = await productoRepository.getByIdWithDetails(datos.producto_id);
   if (!producto) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
   }
@@ -33,10 +33,6 @@ const crear = async (datos) => {
   if (!puedeDescontar(producto.stock_actual, datos.cantidad)) {
     throw new AppError('No hay stock suficiente para registrar la merma', 409, 'STOCK_INSUFICIENTE');
   }
-
-  const categoria = producto.categoria_id
-    ? await categoriaRepository.getById(producto.categoria_id)
-    : null;
 
   return dbLocal.transaction(async (trx) => {
     await productoRepository.updateStock(producto.id, -Number(datos.cantidad), trx);
@@ -46,10 +42,11 @@ const crear = async (datos) => {
         id: crypto.randomUUID(),
         producto_id: producto.id,
         nombre_producto: producto.nombre,
-        nombre_categoria: categoria ? categoria.nombre : null,
+        nombre_categoria: producto.categoria_nombre || null,
         motivo: datos.motivo.trim(),
         fecha: datos.fecha || hoy(),
         cantidad: Number(datos.cantidad),
+        precio_costo: Number(producto.precio_costo) || 0,
       },
       trx
     );

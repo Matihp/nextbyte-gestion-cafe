@@ -20,7 +20,26 @@ const ajustarStock = async (id, variacion, trx) => {
 module.exports = {
   getAll: () => dbLocal(TABLE).select("*").orderBy("nombre", "asc"),
 
+  getAlertas: () =>
+    dbLocal(TABLE)
+      .whereRaw("cantidad_disponible <= (stock_minimo * 1.5)")
+      .orderBy("nombre", "asc"),
+
   getById: (id, trx = null) => consulta(trx).where({ id }).first(),
+
+  getByIds: (ids, trx = null) => {
+    if (!ids || ids.length === 0) return Promise.resolve([]);
+    return consulta(trx).whereIn("id", ids);
+  },
+
+  getByNombre: (nombre, excludeId = null, trx = null) => {
+    if (!nombre) return Promise.resolve(null);
+    let q = consulta(trx).whereRaw("LOWER(TRIM(nombre)) = LOWER(TRIM(?))", [nombre]);
+    if (excludeId) {
+      q = q.whereNot("id", Number(excludeId));
+    }
+    return q.first();
+  },
 
   create: async (data) => {
     const [id] = await dbLocal(TABLE).insert({

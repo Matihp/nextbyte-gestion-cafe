@@ -1,7 +1,8 @@
 const {
   isOnline,
   hasPendingLocalSync,
-  getLastSyncTime
+  getLastSyncTime,
+  databaseMode
 } = require('../config/db');
 const syncService = require('../services/syncService');
 const syncJob = require('../jobs/syncJob');
@@ -17,7 +18,9 @@ const getStatus = async (req, res, next) => {
       success: true,
       data: {
         isOnline: online,
-        modo: online ? 'Online (Turso Cloud)' : 'Offline (SQLite Contingencia)',
+        databaseMode,
+        modo: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : online ? 'Online (Turso Cloud)' : 'Turso no disponible (sin fallback)',
+        syncEnabled: false,
         hayPendientes,
         pendientesCount: countPendientes,
         ultimoSync
@@ -31,7 +34,7 @@ const getStatus = async (req, res, next) => {
 const ejecutarSync = async (req, res, next) => {
   try {
     const resultado = await syncJob.sincronizar();
-    return res.json({
+    return res.status(resultado.success ? 200 : 409).json({
       success: Boolean(resultado.success),
       data: resultado
     });

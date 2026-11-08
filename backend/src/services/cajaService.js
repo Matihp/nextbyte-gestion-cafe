@@ -1,7 +1,6 @@
 const { dbLocal } = require('../config/db');
 const movimientoCajaRepository = require('../repositories/movimientoCajaRepository');
-const recetaRepository = require('../repositories/recetaRepository');
-const ingredienteRecetaRepository = require('../repositories/ingredienteRecetaRepository');
+const productoRepository = require('../repositories/productoRepository');
 const insumoRepository = require('../repositories/insumoRepository');
 const AppError = require('../utils/AppError');
 
@@ -99,64 +98,35 @@ const getMermasMes = async (mes) => {
   }
 
   const mermas = await movimientoCajaRepository.getMermasMes(mes);
-  const insumos = await insumoRepository.getAll().catch(() => []);
-  const insumosMap = new Map(insumos.map((i) => [Number(i.id), i]));
+  if (!mermas || mermas.length === 0) return [];
 
-  return Promise.all(
-    mermas.map(async (m) => {
-      let precioCosto = Number(m.precio_costo) || 0;
-      if (!precioCosto && m.producto_id) {
-        try {
-          const receta = await recetaRepository.getByProductoId(m.producto_id);
-          if (receta) {
-            const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id);
-            if (Array.isArray(ingredientes) && ingredientes.length > 0) {
-              let suma = 0;
-              for (const ing of ingredientes) {
-                const insumo = insumosMap.get(Number(ing.insumo_id));
-                const pCosto = Number(insumo?.precio_costo || 0);
-                suma += Number(ing.cantidad || 0) * pCosto;
-              }
-              if (suma > 0) precioCosto = Number(suma.toFixed(2));
-            }
-          }
-        } catch (_) {}
-
-        if (!precioCosto) {
-          try {
-            const detalle = await dbLocal('detalles_pedidos')
-              .where({ producto_id: m.producto_id })
-              .where('precio_costo', '>', 0)
-              .orderBy('created_at', 'desc')
-              .first();
-            if (detalle && Number(detalle.precio_costo) > 0) {
-              precioCosto = Number(detalle.precio_costo);
-            }
-          } catch (_) {}
-        }
-      }
-
-      if (!precioCosto && m.nombre_producto) {
-        const nombreNorm = m.nombre_producto.trim().toLowerCase();
-        for (const [, insumo] of insumosMap.entries()) {
-          if (insumo.nombre && insumo.nombre.trim().toLowerCase() === nombreNorm) {
-            if (Number(insumo.precio_costo) > 0) {
-              precioCosto = Number(insumo.precio_costo);
-              break;
-            }
-          }
-        }
-      }
-
-      const cantidad = Number(m.cantidad) || 1;
-      const costoTotal = Number((cantidad * precioCosto).toFixed(2));
-      return {
-        ...m,
-        precio_costo: precioCosto,
-        costo_total: costoTotal
-      };
-    })
+  // Recolectar productos de mermas que no tengan precio_costo
+  const prodsSinCosto = mermas.filter(
+    (m) => !(Number(m.precio_costo) > 0) && m.producto_id
   );
+
+  const costoPorProducto = new Map();
+  if (prodsSinCosto.length > 0) {
+    const prods = await productoRepository.getAllWithDetails();
+    for (const p of prods) {
+      costoPorProducto.set(Number(p.id), Number(p.precio_costo || 0));
+    }
+  }
+
+  return mermas.map((m) => {
+    let precioCosto = Number(m.precio_costo) || 0;
+    if (!precioCosto && m.producto_id) {
+      precioCosto = costoPorProducto.get(Number(m.producto_id)) || 0;
+    }
+
+    const cantidad = Number(m.cantidad) || 1;
+    const costoTotal = Number((cantidad * precioCosto).toFixed(2));
+    return {
+      ...m,
+      precio_costo: precioCosto,
+      costo_total: costoTotal
+    };
+  });
 };
 
 module.exports = {

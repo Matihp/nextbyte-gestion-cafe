@@ -5,9 +5,12 @@ const AppError = require('../utils/AppError');
 const { validarProveedor, normalizarIdsInsumos } = require('../dtos/proveedor.dto');
 
 const resolverInsumos = async (ids = []) => {
-  const insumos = await Promise.all(
-    ids.map(async (id) => {
-      const insumo = await insumoRepository.getById(id);
+  if (!ids || ids.length === 0) return [];
+  const rows = await insumoRepository.getByIds(ids);
+  const rowsMap = new Map(rows.map((r) => [Number(r.id), r]));
+  return ids
+    .map((id) => {
+      const insumo = rowsMap.get(Number(id));
       if (!insumo) return null;
       return {
         id: insumo.id,
@@ -15,8 +18,7 @@ const resolverInsumos = async (ids = []) => {
         unidad_medida: insumo.unidad_medida,
       };
     })
-  );
-  return insumos.filter(Boolean);
+    .filter(Boolean);
 };
 
 const formatearProveedor = async (proveedor) => {
@@ -30,9 +32,11 @@ const formatearProveedor = async (proveedor) => {
 };
 
 const validarExistenciaInsumos = async (ids = []) => {
+  if (!ids || ids.length === 0) return;
+  const encontrados = await insumoRepository.getByIds(ids);
+  const encontradosSet = new Set(encontrados.map((i) => Number(i.id)));
   for (const id of ids) {
-    const insumo = await insumoRepository.getById(id);
-    if (!insumo) {
+    if (!encontradosSet.has(Number(id))) {
       throw new AppError(`El insumo ${id} no existe`, 404, 'NO_ENCONTRADO');
     }
   }
@@ -40,7 +44,38 @@ const validarExistenciaInsumos = async (ids = []) => {
 
 const obtenerTodos = async () => {
   const proveedores = await proveedorRepository.getAll();
-  return Promise.all(proveedores.map(formatearProveedor));
+  if (!proveedores || proveedores.length === 0) return [];
+
+  const todosInsumoIds = new Set();
+  for (const p of proveedores) {
+    if (Array.isArray(p.insumos_asignados_ids)) {
+      for (const id of p.insumos_asignados_ids) {
+        todosInsumoIds.add(Number(id));
+      }
+    }
+  }
+
+  const insumosRows = todosInsumoIds.size > 0
+    ? await insumoRepository.getByIds(Array.from(todosInsumoIds))
+    : [];
+  const insumosMap = new Map(insumosRows.map((i) => [Number(i.id), {
+    id: i.id,
+    nombre: i.nombre,
+    unidad_medida: i.unidad_medida
+  }]));
+
+  return proveedores.map((proveedor) => {
+    const ids = proveedor.insumos_asignados_ids || [];
+    const insumos = ids
+      .map((id) => insumosMap.get(Number(id)))
+      .filter(Boolean);
+
+    return {
+      ...proveedor,
+      insumos_asignados_ids: ids,
+      insumos
+    };
+  });
 };
 
 const obtenerPorId = async (id) => {

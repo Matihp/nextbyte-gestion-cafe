@@ -26,10 +26,7 @@ const create = async (datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const categorias = await categoriaRepository.getAll();
-  const nombreNormalizado = normalizarNombre(datos.nombre);
-  const existente = categorias.find((c) => normalizarNombre(c.nombre) === nombreNormalizado);
-
+  const existente = await categoriaRepository.getByNombre(datos.nombre);
   if (existente) {
     throw new AppError('Ya existe una categoría con ese nombre', 409, 'DUPLICADO');
   }
@@ -54,12 +51,7 @@ const update = async (id, datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const categorias = await categoriaRepository.getAll();
-  const nombreNormalizado = normalizarNombre(datos.nombre);
-  const duplicada = categorias.find(
-    (c) => normalizarNombre(c.nombre) === nombreNormalizado && Number(c.id) !== Number(id)
-  );
-
+  const duplicada = await categoriaRepository.getByNombre(datos.nombre, id);
   if (duplicada) {
     throw new AppError('Ya existe una categoría con ese nombre', 409, 'DUPLICADO');
   }
@@ -79,8 +71,8 @@ const remove = async (id) => {
     throw new AppError('Categoría no encontrada', 404, 'NO_ENCONTRADO');
   }
 
-  const productos = await productoRepository.getByCategoria(id);
-  if (productos && productos.length > 0) {
+  const tieneProductos = await categoriaRepository.hasProductos(id);
+  if (tieneProductos) {
     throw new AppError('No se puede eliminar: la categoría tiene productos', 409, 'RELACION');
   }
 
