@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import ImageWithFallback from './ImageWithFallback';
 import { obtenerImagenProducto } from '../utils/imagenesCafe';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function ProductoCard({ producto, tieneReceta = false, estrellas = 0, onEditar }) {
   const stock = Number(producto.stock_actual || 0);
@@ -32,7 +33,7 @@ export default function ProductoCard({ producto, tieneReceta = false, estrellas 
             {producto.nombre}
           </h3>
           <p className="text-base font-extrabold text-[#4B2B1D] mb-1.5">
-            ${Math.round(Number(producto.precio_venta || 0)).toLocaleString('es-AR')}
+            {formatearPrecio(producto.precio_venta)}
           </p>
           <span className="inline-block px-2 py-0.5 bg-[#F3E5DC] text-[#4B2B1D] text-[10px] font-semibold rounded-full">
             {producto.categoria_nombre || 'Sin Categoría'}

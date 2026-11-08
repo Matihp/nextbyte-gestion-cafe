@@ -13,6 +13,7 @@ import inventarioService from '@/services/inventarioService';
 import { toast } from 'sonner';
 import { X, ExternalLink, Trash2, Loader2 } from 'lucide-react';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function ProductoModal({
   open,
@@ -305,7 +306,7 @@ export default function ProductoModal({
                 Precio (Costo)
               </Label>
               <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 text-sm">
-                ${calculatedCost.toFixed(2)}
+                {formatearPrecio(calculatedCost)}
                 <span className="text-xs ml-2 text-gray-400">
                   {selectedRecipeId ? '(Calculado desde la receta)' : '(Requiere cargar receta)'}
                 </span>

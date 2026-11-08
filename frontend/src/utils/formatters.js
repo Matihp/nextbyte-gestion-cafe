@@ -1,10 +1,10 @@
 export function formatearPrecio(monto) {
-  const numero = Number(monto) || 0;
+  const numero = Math.round(Number(monto) || 0);
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
   }).format(numero);
 }
 
@@ -12,23 +12,59 @@ export function formatearFecha(fecha) {
   if (!fecha) return '-';
   const d = new Date(fecha);
   if (isNaN(d.getTime())) return '-';
-  return new Intl.DateTimeFormat('es-AR', {
+  const fechaPart = new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires'
   }).format(d);
+  const horaPart = new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Argentina/Buenos_Aires'
+  }).format(d);
+  return `${fechaPart} ${horaPart}`;
 }
 
 export function formatearSoloFecha(fecha) {
   if (!fecha) return '-';
+  const str = String(fecha).trim();
+  // Si viene en formato YYYY-MM-DD
+  const matchYmd = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (matchYmd) {
+    const [, y, m, d] = matchYmd;
+    return `${d}/${m}/${y.slice(-2)}`;
+  }
+  // Si ya es DD/MM/AAAA o DD/MM/AA
+  const matchDma = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (matchDma) {
+    const [, d, m, y] = matchDma;
+    return `${d}/${m}/${y.slice(-2)}`;
+  }
   const d = new Date(fecha);
   if (isNaN(d.getTime())) return '-';
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric'
+    year: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires'
+  }).format(d);
+}
+
+export function formatearHora(fecha) {
+  if (!fecha) return '';
+  const str = String(fecha).trim();
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+    return str.slice(0, 5);
+  }
+  const d = new Date(fecha);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Argentina/Buenos_Aires'
   }).format(d);
 }
 

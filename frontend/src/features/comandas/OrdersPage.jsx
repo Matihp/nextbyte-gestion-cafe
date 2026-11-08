@@ -14,8 +14,6 @@ import { formatearPrecio } from '@/utils/formatters';
 import { useAuth } from '@/hooks/useAuth';
 import {
   formatDateDDMMAAAA,
-  isOrderFromToday,
-  isCompletedOrderExpired,
   assignDailyOrderNumbers
 } from './orderSequence';
 
@@ -145,7 +143,7 @@ export function OrdersPage() {
     setLoading(true);
     try {
       const [activasRes, todosRes] = await Promise.allSettled([
-        comandaService.obtenerActivas(),
+        comandaService.obtenerActivas({ incluir_completados: true }),
         pedidoService.obtenerTodos()
       ]);
 
@@ -197,7 +195,16 @@ export function OrdersPage() {
           }));
 
           const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
-          const timeStr = o.hora || (o.created_at ? new Date(o.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '');
+          const timeStr =
+            o.hora ||
+            (o.created_at
+              ? new Date(o.created_at).toLocaleTimeString('es-AR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                  timeZone: 'America/Argentina/Buenos_Aires'
+                })
+              : '');
 
           return {
             id: String(o.id),
@@ -282,21 +289,15 @@ export function OrdersPage() {
     [orders, selectedOrderId]
   );
 
-  // Filtrado dinámico con reglas de negocio:
-  // 1. Desaparecen pedidos de días anteriores (reinicio a las 00:00 hs)
-  // 2. Pedidos en estado "Completado" desaparecen luego de 1 hora
+  // Filtrado dinámico:
+  // REGLA: Los pedidos NO se van de la pantalla Comandas hasta que se les dé el estado de Entregado (o Cancelado).
+  // No se van ni aunque pasen las horas ni aunque sea otro día. Solo desaparecen al pasar a "Entregado".
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return orders.filter((order) => {
       // REGLA: Los pedidos entregados o cancelados no deben verse en la sección Comandas
       const st = String(order.status || '').toLowerCase().trim();
       if (st === 'entregado' || st === 'cancelado') return false;
-
-      // REGLA 1: Solo pedidos del día actual
-      if (!isOrderFromToday(order)) return false;
-
-      // REGLA 2: Completados desaparecen tras 1 hora
-      if (isCompletedOrderExpired(order, completedTimes)) return false;
 
       // Búsqueda por número (#0001), ID backend (PED-...) o nombre de cliente
       const idMatch = String(order.id).toLowerCase().includes(term);
@@ -311,7 +312,7 @@ export function OrdersPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [orders, searchTerm, statusFilter, completedTimes]);
+  }, [orders, searchTerm, statusFilter]);
 
   // Cambio de estado
   const handleStatusChange = async (orderId, newStatusDisplay) => {

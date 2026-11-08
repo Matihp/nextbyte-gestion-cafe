@@ -4,24 +4,32 @@ import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/form
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
-  const soloFecha = String(fechaStr).split('T')[0];
+  const str = String(fechaStr).trim();
+  const soloFecha = str.split('T')[0];
   const partes = soloFecha.split('-');
   if (partes.length === 3) {
-    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`;
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0].slice(-2)}`;
+  }
+  const dma = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (dma) {
+    return `${dma[1]}/${dma[2]}/${dma[3].slice(-2)}`;
   }
   return fechaStr;
 };
 
 const formatearHora = (fechaVal) => {
   if (!fechaVal) return '';
-  const str = String(fechaVal);
+  const str = String(fechaVal).trim();
   if (str.includes('T') && str.includes(':')) {
     try {
       const d = new Date(str);
       if (!isNaN(d.getTime())) {
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `${hh}:${mm}`;
+        return new Intl.DateTimeFormat('es-AR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'America/Argentina/Buenos_Aires'
+        }).format(d);
       }
     } catch {}
     const timePart = str.split('T')[1];
@@ -30,6 +38,9 @@ const formatearHora = (fechaVal) => {
   if (str.includes(' ') && str.includes(':')) {
     const timePart = str.split(' ')[1];
     return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+    return str.slice(0, 5);
   }
   return '';
 };

@@ -74,45 +74,50 @@ function TarjetaPedido({ pedido, onVerResumen, onMarcarEntregado, entregandoId }
 
   return (
     <div className="bg-white border border-[#EAD5C8] rounded-xl p-3.5 space-y-2.5 hover:shadow-sm transition-shadow">
+      {/* Fila 1: ID, Cliente y Botón de Entregado */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="font-extrabold text-[#4B2B1D] text-sm tracking-tight font-mono shrink-0">
             {formatearIdPedido(pedido)}
           </span>
-          <span
-            className="text-xs font-bold text-gray-800 truncate"
-            title={pedido.cliente || pedido.customer || 'Consumidor Final'}
-          >
-            {clienteFormateado}
-          </span>
-          <span
-            className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
-              pedido.estado || pedido.status
-            )}`}
-          >
-            {formatEstadoNombre(pedido.estado || pedido.status)}
-          </span>
+          {clienteFormateado ? (
+            <span
+              className="text-xs font-bold text-gray-800 truncate"
+              title={pedido.cliente || pedido.customer || 'Consumidor Final'}
+            >
+              {clienteFormateado}
+            </span>
+          ) : null}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="font-bold text-gray-900 text-sm whitespace-nowrap">
-            {formatearPrecio(pedido.total)}
-          </span>
+        <button
+          type="button"
+          disabled={isEntregando}
+          onClick={() => onMarcarEntregado && onMarcarEntregado(pedido)}
+          title="Pedido Entregado"
+          className="p-1 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          {isEntregando ? (
+            <span className="w-5 h-5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Check className="w-5 h-5 stroke-[2.5]" />
+          )}
+        </button>
+      </div>
 
-          <button
-            type="button"
-            disabled={isEntregando}
-            onClick={() => onMarcarEntregado && onMarcarEntregado(pedido)}
-            title="Pedido Entregado"
-            className="p-1 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-          >
-            {isEntregando ? (
-              <span className="w-5 h-5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Check className="w-5 h-5 stroke-[2.5]" />
-            )}
-          </button>
-        </div>
+      {/* Fila 2: Estado del pedido y Precio */}
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <span
+          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
+            pedido.estado || pedido.status
+          )}`}
+        >
+          {formatEstadoNombre(pedido.estado || pedido.status)}
+        </span>
+
+        <span className="font-bold text-gray-900 text-sm whitespace-nowrap">
+          {formatearPrecio(pedido.total)}
+        </span>
       </div>
 
       <button
@@ -332,6 +337,12 @@ export default function Home() {
 
   useEffect(() => {
     cargarDatos();
+    window.addEventListener('orders-updated', cargarDatos);
+    window.addEventListener('storage', cargarDatos);
+    return () => {
+      window.removeEventListener('orders-updated', cargarDatos);
+      window.removeEventListener('storage', cargarDatos);
+    };
   }, [cargarDatos]);
 
   // Cálculos de Stock / Insumos para las 4 Tarjetas (sincronizado con InventoryPage)

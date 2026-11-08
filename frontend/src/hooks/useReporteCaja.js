@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import reporteService from '../services/reporteService';
 import cajaService from '../services/cajaService';
+import { formatearPrecio, formatearSoloFecha } from '../utils/formatters';
 
 export const getHoyIso = () => {
   const d = new Date();
@@ -205,11 +206,7 @@ export function useReporteCaja() {
 
     if (tipo === 'RETIRO' && numMonto > saldoDisponible) {
       throw new Error(
-        `Fondos insuficientes en la Caja. Saldo actual disponible: $${saldoDisponible.toLocaleString('es-AR', {
-          minimumFractionDigits: 2
-        })}. No se puede realizar un retiro de $${numMonto.toLocaleString('es-AR', {
-          minimumFractionDigits: 2
-        })}.`
+        `Fondos insuficientes en la Caja. Saldo actual disponible: ${formatearPrecio(saldoDisponible)}. No se puede realizar un retiro de ${formatearPrecio(numMonto)}.`
       );
     }
 
@@ -240,10 +237,7 @@ export function useReporteCaja() {
       const montoIngreso = Number(movimiento.monto) || 0;
       if (saldoDisponible - montoIngreso < 0) {
         throw new Error(
-          `No se puede eliminar este ingreso: dejaría el saldo de la caja en negativo. Saldo actual: $${saldoDisponible.toLocaleString(
-            'es-AR',
-            { minimumFractionDigits: 2 }
-          )}.`
+          `No se puede eliminar este ingreso: dejaría el saldo de la caja en negativo. Saldo actual: ${formatearPrecio(saldoDisponible)}.`
         );
       }
     }
@@ -284,21 +278,22 @@ export function useReporteCaja() {
           }];
 
       const pedidoIdFormateado = String(p.id).startsWith('#') ? p.id : `#${p.id}`;
-      const fechaPedido = p.fecha || (modoFiltro === 'fecha' ? fechaEspecifica : getHoyIso());
+      const fechaPedido = formatearSoloFecha(p.fecha || (modoFiltro === 'fecha' ? fechaEspecifica : getHoyIso()));
+      const horaPedido = p.hora ? p.hora.slice(0, 5) : '';
 
       for (const item of items) {
         filas.push([
           fechaPedido,
-          p.hora || '',
+          horaPedido,
           pedidoIdFormateado,
           p.tipo_pedido || 'Mostrador',
           p.metodo_pago || 'Efectivo',
           `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
           item.cantidad,
-          item.precio_costo,
-          item.precio_venta,
-          item.costo_total,
-          item.venta_total,
+          Math.round(Number(item.precio_costo) || 0),
+          Math.round(Number(item.precio_venta) || 0),
+          Math.round(Number(item.costo_total) || 0),
+          Math.round(Number(item.venta_total) || 0),
           formatEstado(p.estado)
         ]);
       }
@@ -318,7 +313,7 @@ export function useReporteCaja() {
       '',
       '',
       '',
-      totales.subtotalCosto,
+      Math.round(Number(totales.subtotalCosto) || 0),
       '',
       ''
     ]);
@@ -335,7 +330,7 @@ export function useReporteCaja() {
       '',
       '',
       '',
-      totales.totalVenta,
+      Math.round(Number(totales.totalVenta) || 0),
       ''
     ]);
 
@@ -345,20 +340,21 @@ export function useReporteCaja() {
       filas.push(['--- MOVIMIENTOS DE CAJA CHICA (INGRESOS / RETIROS) ---', '', '', '', '', '', '', '', '', '', '', '']);
       filas.push(['Fecha', 'Hora', 'Tipo', 'Detalle', '', '', '', '', '', 'Ingreso', 'Retiro', '']);
       for (const m of movimientos) {
+        const monto = Number(m.monto) || 0;
         filas.push([
-          m.fecha || '',
-          m.hora || '',
+          m.fecha ? formatearSoloFecha(m.fecha) : '',
+          m.hora ? m.hora.slice(0, 5) : '',
           m.tipo,
           `"${(m.detalle || '').replace(/"/g, '""')}"`,
           '', '', '', '', '',
-          m.tipo === 'INGRESO' ? m.monto : '',
-          m.tipo === 'RETIRO' ? m.monto : '',
+          m.tipo === 'INGRESO' ? Math.round(monto) : '',
+          m.tipo === 'RETIRO' ? Math.round(monto) : '',
           ''
         ]);
       }
-      filas.push(['TOTAL INGRESOS (+)', '', '', '', '', '', '', '', '', totalesMovimientos.totalIngresos, '', '']);
-      filas.push(['TOTAL RETIROS (-)', '', '', '', '', '', '', '', '', '', totalesMovimientos.totalRetiros, '']);
-      filas.push(['SALDO FINAL DE CAJA (Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', totalesMovimientos.saldoFinal, '']);
+      filas.push(['TOTAL INGRESOS (+)', '', '', '', '', '', '', '', '', Math.round(Number(totalesMovimientos.totalIngresos) || 0), '', '']);
+      filas.push(['TOTAL RETIROS (-)', '', '', '', '', '', '', '', '', '', Math.round(Number(totalesMovimientos.totalRetiros) || 0), '']);
+      filas.push(['SALDO FINAL DE CAJA (Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', Math.round(Number(totalesMovimientos.saldoFinal) || 0), '']);
     }
 
     const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');

@@ -1,11 +1,12 @@
 const crypto = require('crypto');
 const { dbLocal } = require('../config/db');
 const detallePedidoRepository = require('./detallePedidoRepository');
+const { hoy, ahora } = require('../utils/fechas');
 
 const TABLE = 'pedidos';
 
-const getTodayDate = () => new Date().toISOString().split('T')[0];
-const getTodayTime = () => new Date().toTimeString().split(' ')[0];
+const getTodayDate = () => hoy();
+const getTodayTime = () => ahora();
 
 const enrichOrder = (order) => {
   if (!order) return null;

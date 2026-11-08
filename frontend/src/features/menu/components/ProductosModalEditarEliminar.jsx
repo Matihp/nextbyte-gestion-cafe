@@ -16,6 +16,7 @@ import {
 import { X, Edit, Trash2 } from 'lucide-react';
 import ModalConfirmarEliminarProducto from './ModalConfirmarEliminarProducto';
 import ImageWithFallback from './ImageWithFallback';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function ProductosModalEditarEliminar({
   open,
@@ -105,7 +106,7 @@ export default function ProductosModalEditarEliminar({
                           </span>
                         </TableCell>
                         <TableCell className="px-5 py-3 text-gray-900 font-medium whitespace-nowrap">
-                          ${Number(product.precio_venta || 0).toFixed(2)}
+                          {formatearPrecio(product.precio_venta)}
                         </TableCell>
                         <TableCell className="px-5 py-3 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">

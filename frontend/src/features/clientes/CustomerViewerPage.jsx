@@ -48,7 +48,7 @@ export function CustomerViewerPage() {
   const fetchOrders = useCallback(async () => {
     try {
       const [activasRes, todosRes] = await Promise.allSettled([
-        comandaService.obtenerActivas(),
+        comandaService.obtenerActivas({ incluir_completados: true }),
         pedidoService.obtenerTodos()
       ]);
 
@@ -100,7 +100,9 @@ export function CustomerViewerPage() {
             (o.created_at
               ? new Date(o.created_at).toLocaleTimeString('es-AR', {
                   hour: '2-digit',
-                  minute: '2-digit'
+                  minute: '2-digit',
+                  hour12: false,
+                  timeZone: 'America/Argentina/Buenos_Aires'
                 })
               : '');
 

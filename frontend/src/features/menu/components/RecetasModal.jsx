@@ -12,6 +12,7 @@ import productoService from '@/services/productoService';
 import inventarioService from '@/services/inventarioService';
 import { toast } from 'sonner';
 import { X, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function RecetasModal({
   open,
@@ -307,7 +308,7 @@ export default function RecetasModal({
                         <h3 className="font-semibold text-gray-900">{recipe.nombre}</h3>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {recipe.ingredientes?.length || 0} {recipe.ingredientes?.length === 1 ? 'ingrediente' : 'ingredientes'}
-                          {recipe.costo_total !== undefined && ` • Costo: $${Number(recipe.costo_total).toLocaleString('es-AR')}`}
+                          {recipe.costo_total !== undefined && ` • Costo: ${formatearPrecio(recipe.costo_total)}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
