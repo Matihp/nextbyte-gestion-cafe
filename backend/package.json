@@ -10,8 +10,8 @@
     "migrate:turso": "knex migrate:latest --env turso",
     "seed": "knex seed:run",
     "seed:turso": "knex seed:run --env turso",
-    "migrate:data-to-turso": "node scripts/migrar-datos-a-turso.js",
-    "reset-db": "node scripts/reset-db.js"
+    "reset-db": "node scripts/reset-db.js",
+    "seed:ejemplos": "node scripts/cargar-ejemplos.js"
   },
   "jest": {
     "testEnvironment": "node",
