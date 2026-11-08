@@ -17,6 +17,7 @@ import { ImageUpload } from '@/components/ui/image-upload';
 export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -154,7 +155,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     } else {
       setFormData((prev) => ({
         ...prev,
-        password: prev.password || '123456',
+        password: '',
         roleId:
           prev.roleId && roles.some((r) => r.id === prev.roleId)
             ? prev.roleId
@@ -172,6 +173,14 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
         setEmailError('Ya existe un empleado registrado con este email');
       } else {
         setEmailError('');
+      }
+    }
+
+    if (name === 'password') {
+      if (value && value.trim().length > 0 && value.trim().length < 6) {
+        setPasswordError('El mínimo es de 6 caracteres');
+      } else {
+        setPasswordError('');
       }
     }
   };
@@ -204,6 +213,18 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     if (isDuplicateEmail(formData.email)) {
       setEmailError('Ya existe un empleado registrado con este email');
       toast.error('Ya existe un empleado registrado con ese email.');
+      return;
+    }
+
+    if (!initialData && (!formData.password || formData.password.trim().length < 6)) {
+      setPasswordError('El mínimo es de 6 caracteres');
+      toast.error('La contraseña debe tener como mínimo 6 caracteres.');
+      return;
+    }
+
+    if (initialData && formData.password && formData.password.trim().length > 0 && formData.password.trim().length < 6) {
+      setPasswordError('El mínimo es de 6 caracteres');
+      toast.error('La contraseña debe tener como mínimo 6 caracteres.');
       return;
     }
 
@@ -409,10 +430,8 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                    {initialData
-                      ? 'Contraseña'
-                      : 'Contraseña * (mínimo 6 caracteres)'}
+                  <Label htmlFor="password" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                    {initialData ? 'Contraseña' : 'Contraseña *'}
                   </Label>
                   <div className="relative mt-1">
                     <Input
@@ -423,17 +442,20 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                       minLength={!initialData || formData.password ? 6 : undefined}
                       value={formData.password}
                       onChange={handleChange}
-                      placeholder={initialData ? 'Dejar en blanco para mantener' : ''}
-                      className="pr-10"
+                      placeholder={initialData ? 'Dejar en blanco' : '******'}
+                      className={`pr-10 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden ${passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {passwordError && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{passwordError}</p>
+                  )}
                 </div>
               </div>
 

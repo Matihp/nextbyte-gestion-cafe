@@ -263,3 +263,9 @@
     margin: 10mm 15mm;
   }
 }
+
+/* Ocultar icono de revelar contraseña nativo del navegador (Edge / Windows) */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none !important;
+}
