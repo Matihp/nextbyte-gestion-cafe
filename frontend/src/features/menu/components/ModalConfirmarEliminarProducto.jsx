@@ -1,14 +1,11 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, X, ArrowLeft, Loader2 } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 
 export default function ModalConfirmarEliminarProducto({
   open,
@@ -17,138 +14,219 @@ export default function ModalConfirmarEliminarProducto({
   onConfirmar,
   cargando = false
 }) {
-  const [paso, setPaso] = useState('confirmar'); // 'confirmar' | 'motivo'
+  const [motivoSeleccionado, setMotivoSeleccionado] = useState(null);
+  const [cantidad, setCantidad] = useState('1');
+  const [esTodos, setEsTodos] = useState(false);
+  const [errorStock, setErrorStock] = useState('');
+
+  const stockDisponible = Math.max(0, Number(producto?.stock_actual ?? producto?.stock ?? 0));
 
   useEffect(() => {
     if (open) {
-      setPaso('confirmar');
+      setMotivoSeleccionado(null);
+      setErrorStock('');
+      if (stockDisponible > 0) {
+        setCantidad('1');
+        setEsTodos(false);
+      } else {
+        setCantidad('1');
+        setEsTodos(true);
+      }
     }
-  }, [open, producto]);
+  }, [open, producto, stockDisponible]);
 
-  const handleSeleccionarMotivo = async (motivo) => {
-    if (!producto || !onConfirmar) return;
-    await onConfirmar(producto, motivo);
+  const handleSeleccionarMotivo = (idMotivo) => {
+    setMotivoSeleccionado(idMotivo);
+    setErrorStock('');
+    if (stockDisponible > 0) {
+      setCantidad('1');
+      setEsTodos(false);
+    } else {
+      setCantidad('1');
+      setEsTodos(true);
+    }
+  };
+
+  const handleSelectTodos = () => {
+    setEsTodos(true);
+    setCantidad(stockDisponible > 0 ? String(stockDisponible) : '1');
+    setErrorStock('');
+  };
+
+  const handleCantidadChange = (e) => {
+    const val = e.target.value;
+    setCantidad(val);
+
+    const num = Number(val);
+    if (!val || isNaN(num) || num <= 0) {
+      setErrorStock('Ingrese una cantidad válida mayor a 0');
+      setEsTodos(false);
+      return;
+    }
+
+    if (stockDisponible > 0 && num > stockDisponible) {
+      setErrorStock(`No podrán eliminarse esa cantidad ya que hay ${stockDisponible} disponibles`);
+      setEsTodos(false);
+      return;
+    }
+
+    setErrorStock('');
+    if (stockDisponible > 0 && num === stockDisponible) {
+      setEsTodos(true);
+    } else {
+      setEsTodos(false);
+    }
+  };
+
+  const handleConfirmar = async () => {
+    if (!producto || !onConfirmar || !motivoSeleccionado) return;
+    if (errorStock) return;
+
+    const numCantidad = esTodos
+      ? (stockDisponible > 0 ? stockDisponible : 1)
+      : (Number(cantidad) || 1);
+
+    await onConfirmar(producto, motivoSeleccionado, numCantidad, esTodos || (stockDisponible > 0 && numCantidad >= stockDisponible));
     onOpenChange(false);
   };
 
+  const motivos = [
+    {
+      id: 'Vencido',
+      label: 'Vencido',
+      colorDefault: 'border-2 border-[#FBD38D] bg-[#FFF9F2] text-[#C05621] hover:bg-amber-100/70 hover:border-amber-400',
+      colorSelected: 'bg-[#C05621] text-white border-2 border-[#9C4215] shadow-md ring-2 ring-amber-300/80 scale-[1.02] font-black'
+    },
+    {
+      id: 'Merma',
+      label: 'Merma',
+      colorDefault: 'border-2 border-[#FEB2B2] bg-[#FFF5F5] text-[#C53030] hover:bg-red-100/70 hover:border-red-400',
+      colorSelected: 'bg-red-600 text-white border-2 border-red-700 shadow-md ring-2 ring-red-300/80 scale-[1.02] font-black'
+    },
+    {
+      id: 'En falta',
+      label: 'En falta',
+      colorDefault: 'border-2 border-[#E2E8F0] bg-[#F7FAFC] text-[#2D3748] hover:bg-gray-100/70 hover:border-gray-400',
+      colorSelected: 'bg-gray-900 text-white border-2 border-black shadow-md ring-2 ring-gray-400/80 scale-[1.02] font-black'
+    }
+  ];
+
+  const motivoActivo = motivos.find((m) => m.id === motivoSeleccionado);
+
+  const botonConfirmarDeshabilitado =
+    !motivoSeleccionado ||
+    cargando ||
+    Boolean(errorStock) ||
+    (!esTodos && (!cantidad || Number(cantidad) <= 0));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="bg-white rounded-xl shadow-xl max-w-sm sm:max-w-sm w-full overflow-hidden border border-gray-100 p-0">
-        {paso === 'confirmar' ? (
-          <div>
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <DialogTitle className="text-lg font-bold text-gray-900">
-                  ¿Eliminar producto?
-                </DialogTitle>
-              </div>
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-3">
-              <DialogDescription className="text-sm text-gray-600 leading-relaxed">
-                ¿Estás seguro de que deseas eliminar el producto{' '}
-                <strong className="text-gray-900 font-bold">"{producto?.nombre}"</strong>?
-              </DialogDescription>
-              <p className="text-xs text-muted-foreground">
-                Esta acción dará de baja el producto del catálogo y a continuación se solicitará tipificar el motivo para la auditoría de caja y estadísticas.
-              </p>
-            </div>
-
-            <DialogFooter className="p-4 bg-gray-50 border-t border-gray-100 flex flex-row justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={cargando}
-                className="cursor-pointer"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setPaso('motivo')}
-                disabled={cargando}
-                className="bg-red-600 hover:bg-red-700 text-white font-medium cursor-pointer"
-              >
-                Confirmar
-              </Button>
-            </DialogFooter>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-white rounded-2xl shadow-xl max-w-xs sm:max-w-sm w-full overflow-hidden border border-gray-100 p-0"
+      >
+        <div>
+          {/* Cabecera */}
+          <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/40">
+            <DialogTitle className="text-lg font-bold text-gray-900 tracking-tight">
+              Motivo de eliminación
+            </DialogTitle>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-        ) : (
-          <div>
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaso('confirmar')}
-                  className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
-                  title="Volver"
+
+          {/* Cuerpo */}
+          <div className="py-6 px-6 flex flex-col items-center gap-4">
+            {!motivoSeleccionado ? (
+              /* Mostrar los 3 motivos cuando ninguno ha sido seleccionado */
+              motivos.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => handleSeleccionarMotivo(m.id)}
+                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${m.colorDefault} shadow-2xs`}
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <DialogTitle className="text-lg font-bold text-gray-900">
-                  Motivo de eliminación
-                </DialogTitle>
+                  {m.label}
+                </div>
+              ))
+            ) : (
+              /* Cuando se seleccionó un motivo: desaparecen los otros, el seleccionado se ubica arriba bien resaltado */
+              <div className="w-full flex flex-col items-center gap-4">
+                <div
+                  onClick={() => setMotivoSeleccionado(null)}
+                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${motivoActivo?.colorSelected}`}
+                >
+                  {motivoActivo?.label}
+                </div>
+
+                {/* Sección Cantidad de unidades y botón TODOS */}
+                <div className="w-full max-w-[280px] flex flex-col gap-2 pt-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-gray-700 tracking-tight whitespace-nowrap">
+                      CANTIDAD DE UNIDADES:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="1"
+                        max={stockDisponible > 0 ? stockDisponible : undefined}
+                        value={cantidad}
+                        onChange={handleCantidadChange}
+                        className="w-14 h-9 px-1.5 text-center text-xs font-bold border border-gray-300 rounded-none bg-white focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSelectTodos}
+                        className={`h-9 px-2.5 text-xs font-bold uppercase rounded-none transition-all cursor-pointer select-none ${
+                          esTodos
+                            ? 'bg-[#4B2B1D] text-white border-2 border-[#361F14] shadow-sm font-black ring-2 ring-amber-300/70 scale-[1.02]'
+                            : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-2xs'
+                        }`}
+                      >
+                        TODOS
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Mensaje de validación de stock disponible */}
+                  {errorStock && (
+                    <p className="text-[11px] font-semibold text-red-600 text-center mt-1 leading-snug">
+                      {errorStock}
+                    </p>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="text-gray-400 hover:text-gray-600 rounded-lg p-1 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-3">
-              <DialogDescription className="text-sm text-gray-600 mb-4">
-                Seleccione la razón por la que elimina este producto:
-              </DialogDescription>
-
-              <button
-                type="button"
-                disabled={cargando}
-                onClick={() => handleSeleccionarMotivo('Vencido')}
-                className="w-full py-3 px-4 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-lg text-sm font-bold transition-colors border border-orange-200 cursor-pointer text-center flex items-center justify-center gap-2"
-              >
-                {cargando && <Loader2 className="w-4 h-4 animate-spin" />}
-                Vencido
-              </button>
-
-              <button
-                type="button"
-                disabled={cargando}
-                onClick={() => handleSeleccionarMotivo('Merma')}
-                className="w-full py-3 px-4 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-bold transition-colors border border-red-200 cursor-pointer text-center flex items-center justify-center gap-2"
-              >
-                {cargando && <Loader2 className="w-4 h-4 animate-spin" />}
-                Merma
-              </button>
-
-              <button
-                type="button"
-                disabled={cargando}
-                onClick={() => handleSeleccionarMotivo('En falta')}
-                className="w-full py-3 px-4 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-bold transition-colors border border-gray-200 cursor-pointer text-center flex items-center justify-center gap-2"
-              >
-                {cargando && <Loader2 className="w-4 h-4 animate-spin" />}
-                En falta
-              </button>
-            </div>
+            )}
           </div>
-        )}
+
+          {/* Footer: Botones Cancelar a la izquierda y Confirmar a la derecha */}
+          <div className="p-4 bg-gray-50/70 border-t border-gray-100 flex items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={cargando}
+              className="px-5 py-2 rounded-lg cursor-pointer font-semibold text-xs sm:text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmar}
+              disabled={botonConfirmarDeshabilitado}
+              className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs sm:text-sm rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {cargando && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Confirmar
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
-

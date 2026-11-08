@@ -53,10 +53,11 @@ export default function Productos() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [prodsRes, catsRes, topProdsRes] = await Promise.all([
+      const [prodsRes, catsRes, topProdsRes, recetasRes] = await Promise.all([
         productoService.obtenerProductos(),
         productoService.obtenerCategorias(),
-        reporteService.obtenerTopProductos().catch(() => [])
+        reporteService.obtenerTopProductos().catch(() => []),
+        productoService.obtenerTodasLasRecetas().catch(() => [])
       ]);
 
       const topProdsMap = new Map(
@@ -70,21 +71,8 @@ export default function Productos() {
 
       setProductos(prodsList);
       setCategorias(Array.isArray(catsRes) ? catsRes : []);
-
-      // Cargar recetas asociadas para los productos
-      if (prodsList.length > 0) {
-        const recetasCheck = await Promise.all(
-          prodsList.map((p) =>
-            productoService
-              .obtenerReceta(p.id)
-              .then((r) => (r && r.ingredientes && r.ingredientes.length > 0 ? r : null))
-              .catch(() => null)
-          )
-        );
-        setRecetas(recetasCheck.filter(Boolean));
-      } else {
-        setRecetas([]);
-      }
+      const listaRecetas = Array.isArray(recetasRes?.data) ? recetasRes.data : (Array.isArray(recetasRes) ? recetasRes : []);
+      setRecetas(listaRecetas);
     } catch (error) {
       toast.error(error.message || 'Error al cargar productos y categorías');
     } finally {
@@ -161,14 +149,18 @@ export default function Productos() {
     setIsRecipeManagerOpen(true);
   };
 
-  const handleDeleteProduct = async (product, reason = 'Merma') => {
+  const handleDeleteProduct = async (product, reason = 'Merma', cantidad = null, esTodos = false) => {
     try {
-      await productoService.eliminarProducto(product.id, reason);
-      toast.success(`Producto "${product.nombre}" eliminado`);
+      const res = await productoService.eliminarProducto(product.id, reason, cantidad);
+      if (res?.data?.parcial) {
+        toast.success(`Se descontaron ${cantidad} u. de "${product.nombre}" por ${reason}`);
+      } else {
+        toast.success(`Producto "${product.nombre}" eliminado`);
+      }
       setIsProductModalOpen(false);
       setEditingProduct(null);
       setProductoAEliminarDirecto(null);
-      cargarDatos();
+      await cargarDatos();
     } catch (error) {
       toast.error(error.message || 'Error al eliminar el producto');
     }

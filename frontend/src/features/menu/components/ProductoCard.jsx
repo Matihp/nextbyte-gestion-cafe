@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import ImageWithFallback from './ImageWithFallback';
 import { obtenerImagenProducto } from '../utils/imagenesCafe';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function ProductoCard({ producto, tieneReceta = false, estrellas = 0, onEditar }) {
   const stock = Number(producto.stock_actual || 0);
@@ -27,18 +28,16 @@ export default function ProductoCard({ producto, tieneReceta = false, estrellas 
       </div>
 
       <div className="p-3 flex-1 flex flex-col">
-        <div className="flex items-start justify-between mb-2 gap-2">
-          <div className="min-w-0">
-            <h3 className="text-base mb-1 font-bold leading-tight text-gray-900 truncate" title={producto.nombre}>
-              {producto.nombre}
-            </h3>
-            <span className="inline-block px-2 py-0.5 bg-[#F3E5DC] text-[#4B2B1D] text-[10px] font-semibold rounded-full">
-              {producto.categoria_nombre || 'Sin Categoría'}
-            </span>
-          </div>
-          <p className="text-lg font-bold text-[#4B2B1D] shrink-0">
-            ${Number(producto.precio_venta || 0).toFixed(2)}
+        <div className="mb-2">
+          <h3 className="text-base mb-0.5 font-bold leading-tight text-gray-900 truncate" title={producto.nombre}>
+            {producto.nombre}
+          </h3>
+          <p className="text-base font-extrabold text-[#4B2B1D] mb-1.5">
+            {formatearPrecio(producto.precio_venta)}
           </p>
+          <span className="inline-block px-2 py-0.5 bg-[#F3E5DC] text-[#4B2B1D] text-[10px] font-semibold rounded-full">
+            {producto.categoria_nombre || 'Sin Categoría'}
+          </span>
         </div>
 
         <div className="flex text-yellow-400 mt-auto border-t border-gray-100 pt-2">
@@ -54,12 +53,6 @@ export default function ProductoCard({ producto, tieneReceta = false, estrellas 
             </svg>
           ))}
         </div>
-
-        {tieneReceta && (
-          <p className="text-xs text-[#9F4F2F] mt-2 bg-[#F3E5DC] px-2 py-1 rounded inline-block font-medium self-start">
-            Tiene receta asociada
-          </p>
-        )}
       </div>
     </Card>
   );

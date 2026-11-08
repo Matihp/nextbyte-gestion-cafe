@@ -9,7 +9,14 @@ const AppError = require('../utils/AppError');
 const { validarProducto } = require('../dtos/producto.dto');
 
 const calcularCostoProducto = async (productoId, trx = null) => {
-  const receta = await recetaRepository.getByProductoId(productoId, trx);
+  const prod = await (trx ? trx('productos').where({ id: productoId }).first() : dbLocal('productos').where({ id: productoId }).first());
+  let receta = null;
+  if (prod && prod.receta_id) {
+    receta = await recetaRepository.getById(prod.receta_id, trx);
+  }
+  if (!receta) {
+    receta = await recetaRepository.getByProductoId(productoId, trx);
+  }
   if (!receta) return 0;
   const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id, trx);
   if (!ingredientes || ingredientes.length === 0) return 0;
@@ -51,7 +58,7 @@ const getAll = async (filtros = {}) => {
   }
 
   return productos.map((p) => {
-    const recetaId = recetaPorProducto.get(Number(p.id));
+    const recetaId = p.receta_id ? Number(p.receta_id) : recetaPorProducto.get(Number(p.id));
     const precioCosto = recetaId ? Number((costoPorReceta.get(recetaId) || 0).toFixed(2)) : 0;
     return {
       ...p,
@@ -138,19 +145,13 @@ const create = async (datos) => {
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
+      receta_id: datos.receta_id ? Number(datos.receta_id) : null,
       imagen: datos.imagen ? datos.imagen.trim() : null
     };
 
     const resultado = await trx('productos').insert(payload);
     const id = Array.isArray(resultado) ? resultado[0] : resultado;
     const creado = await trx('productos').where({ id }).first();
-
-    if (datos.receta_id) {
-      await trx('recetas')
-        .where({ id: datos.receta_id })
-        .orWhere({ producto_id: datos.receta_id })
-        .update({ producto_id: id });
-    }
 
     const precioCosto = await calcularCostoProducto(id, trx);
 
@@ -198,12 +199,13 @@ const update = async (id, datos) => {
   return dbLocal.transaction(async (trx) => {
     // Si se incrementó el stock (stockDiff > 0), verificar receta y descontar insumos
     if (stockDiff > 0) {
-      let receta = await trx('recetas').where({ producto_id: id }).first();
-      if (!receta && datos.receta_id) {
-        receta = await trx('recetas')
-          .where({ id: datos.receta_id })
-          .orWhere({ producto_id: datos.receta_id })
-          .first();
+      const recetaIdTarget = datos.receta_id || actual.receta_id;
+      let receta = null;
+      if (recetaIdTarget) {
+        receta = await trx('recetas').where({ id: recetaIdTarget }).first();
+      }
+      if (!receta) {
+        receta = await trx('recetas').where({ producto_id: id }).first();
       }
 
       if (receta) {
@@ -230,18 +232,12 @@ const update = async (id, datos) => {
       }
     }
 
-    if (datos.receta_id) {
-      await trx('recetas')
-        .where({ id: datos.receta_id })
-        .orWhere({ producto_id: datos.receta_id })
-        .update({ producto_id: id });
-    }
-
     const payload = {
       categoria_id: Number(datos.categoria_id),
       nombre: datos.nombre.trim(),
       precio_venta: Number(Number(datos.precio_venta).toFixed(2)),
       stock_actual: nuevoStock,
+      receta_id: datos.receta_id !== undefined ? (datos.receta_id ? Number(datos.receta_id) : null) : actual.receta_id,
       imagen: datos.imagen !== undefined ? (datos.imagen ? datos.imagen.trim() : null) : actual.imagen
     };
 
@@ -257,7 +253,7 @@ const update = async (id, datos) => {
   });
 };
 
-const remove = async (id, motivo = null) => {
+const remove = async (id, motivo = null, cantidad = null) => {
   const actual = await productoRepository.getById(id);
   if (!actual) {
     throw new AppError('Producto no encontrado', 404, 'NO_ENCONTRADO');
@@ -288,7 +284,12 @@ const remove = async (id, motivo = null) => {
       }
     }
 
-    // Calcular el precio de costo del producto antes de eliminarlo
+    const stockActual = Number(actual.stock_actual) || 0;
+    const cantEliminar = cantidad !== null && cantidad !== undefined && Number(cantidad) > 0
+      ? Number(cantidad)
+      : (stockActual > 0 ? stockActual : 1);
+
+    // Calcular el precio de costo del producto antes de eliminarlo o reducir su stock
     const precioCosto = await calcularCostoProducto(actual.id, trx);
 
     try {
@@ -306,7 +307,7 @@ const remove = async (id, motivo = null) => {
         nombre_categoria: categoria ? categoria.nombre : null,
         motivo: motivoNormalizado,
         fecha: hoy(),
-        cantidad: actual.stock_actual > 0 ? actual.stock_actual : 1,
+        cantidad: cantEliminar,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -319,6 +320,17 @@ const remove = async (id, motivo = null) => {
       console.warn('Advertencia al registrar auditoría de producto eliminado:', e.message);
     }
 
+    // Si la cantidad a eliminar es menor al stock total registrado, se descuentan las unidades y se mantiene el producto en el catálogo
+    if (stockActual > 0 && cantEliminar < stockActual) {
+      const nuevoStock = stockActual - cantEliminar;
+      await trx('productos').where({ id }).update({
+        stock_actual: nuevoStock,
+        updated_at: new Date().toISOString()
+      });
+      return { id: actual.id, parcial: true, stock_restante: nuevoStock, cantidad_eliminada: cantEliminar };
+    }
+
+    // Si se eliminan todas las unidades o la cantidad supera/iguala al stock (o no hay stock):
     // Desasociar pedidos históricos terminados/cancelados para no romper foreign keys y preservar historial
     await trx('detalles_pedidos')
       .where({ producto_id: id })

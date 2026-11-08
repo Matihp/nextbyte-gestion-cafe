@@ -9,5 +9,6 @@ router.use(authRequired);
 router.get('/activas', comandaController.obtenerActivas);
 router.patch('/:id/estado', comandaController.cambiarEstado);
 router.patch('/:id/completar', comandaController.completar);
+router.patch('/:id/entregar', comandaController.entregar);
 
 module.exports = router;

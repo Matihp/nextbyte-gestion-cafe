@@ -1,11 +1,12 @@
 const crypto = require('crypto');
 const { dbLocal } = require('../config/db');
 const detallePedidoRepository = require('./detallePedidoRepository');
+const { hoy, ahora } = require('../utils/fechas');
 
 const TABLE = 'pedidos';
 
-const getTodayDate = () => new Date().toISOString().split('T')[0];
-const getTodayTime = () => new Date().toTimeString().split(' ')[0];
+const getTodayDate = () => hoy();
+const getTodayTime = () => ahora();
 
 const enrichOrder = (order) => {
   if (!order) return null;
@@ -139,8 +140,8 @@ module.exports = {
     return module.exports.getById(payload.id, trx);
   },
 
-  createWithDetails: async (orderData, items = []) => {
-    return await dbLocal.transaction(async (trx) => {
+  createWithDetails: async (orderData, items = [], externalTrx = null) => {
+    const fn = async (trx) => {
       let computedTotal = Number(orderData.total || 0);
       if (!computedTotal && items.length > 0) {
         computedTotal = items.reduce((acc, item) => {
@@ -167,7 +168,12 @@ module.exports = {
       }
 
       return await module.exports.getWithDetails(orderHeader.id, trx);
-    });
+    };
+
+    if (externalTrx) {
+      return await fn(externalTrx);
+    }
+    return await dbLocal.transaction(fn);
   },
 
   update: async (id, data, trx = null) => {

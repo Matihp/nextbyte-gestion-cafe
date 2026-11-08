@@ -563,7 +563,7 @@ export function RotationGrid({
                   </h1>
                   <span className="text-lg font-medium text-gray-500 mx-2">-</span>
                   <span className="text-sm font-semibold text-gray-600">
-                    Desde: {currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })} (Próximos 7 días)
+                    Desde: {currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })} (Próximos 7 días)
                   </span>
                 </div>
                 {printChunks.length > 1 && (

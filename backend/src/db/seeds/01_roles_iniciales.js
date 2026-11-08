@@ -44,7 +44,7 @@ exports.seed = async function (knex) {
     },
     {
       id: '9e1baa24-3686-4923-b847-fb4c7b863fc6',
-      nombre: 'Administracion',
+      nombre: 'Tareas Administrativas',
       es_admin: false,
       permisos: JSON.stringify(['dashboard', 'employees', 'suppliers', 'salesReport', 'analytics'])
     }

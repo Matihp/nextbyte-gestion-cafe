@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getStatusColor, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
-import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido, formatearSoloFecha } from '@/utils/formatters';
 
 export function OrderDetailModal({ order, open, onClose }) {
   if (!order) return null;
@@ -58,7 +58,7 @@ export function OrderDetailModal({ order, open, onClose }) {
             {order.date && (
               <div>
                 <p className="text-xs text-gray-400 font-medium">Fecha</p>
-                <p className="font-medium text-gray-700">{order.date}</p>
+                <p className="font-medium text-gray-700">{formatearSoloFecha(order.date)}</p>
               </div>
             )}
           </div>

@@ -1,11 +1,12 @@
 import api from './api';
 
 export const comandaService = {
-  obtenerActivas: () => api.get('/comandas/activas'),
+  obtenerActivas: (params) => api.get('/comandas/activas', { params }),
   cambiarEstado: (id, estado) => api.patch(`/comandas/${id}/estado`, { estado }),
   completar: (id) => api.patch(`/comandas/${id}/completar`),
+  entregar: (id) => api.patch(`/comandas/${id}/entregar`),
 
-  getActivas: () => api.get('/comandas/activas')
+  getActivas: (params) => api.get('/comandas/activas', { params })
 };
 
 export default comandaService;

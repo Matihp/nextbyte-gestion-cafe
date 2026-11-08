@@ -84,11 +84,15 @@ export default function Pedidos() {
 
   const addToCart = (product) => {
     const max = getMaxStock(product);
+    if (max <= 0) {
+      toast.error(`El producto "${product.nombre || product.name}" está agotado`);
+      return;
+    }
     const existing = cart.find((item) => item.productId === product.id);
     const currentQty = existing ? existing.quantity : 0;
 
     if (currentQty + 1 > max) {
-      toast.error(`No hay stock suficiente. Máximo disponible: ${max}`);
+      toast.error(`No hay productos suficientes de "${product.nombre || product.name}". Solo hay ${max} disponibles.`);
       return;
     }
 
@@ -131,7 +135,7 @@ export default function Pedidos() {
 
       const newQty = existing.quantity + delta;
       if (newQty > max) {
-        toast.error(`No hay stock suficiente. Máximo disponible: ${max}`);
+        toast.error(`No hay productos suficientes de "${product.nombre || product.name}". Solo hay ${max} disponibles.`);
         return prev;
       }
 
@@ -204,6 +208,17 @@ export default function Pedidos() {
       }
     }
 
+    // Validación de stock antes de enviar
+    for (const item of cart) {
+      const prod = products.find((p) => p.id === item.productId);
+      const max = prod ? getMaxStock(prod) : 0;
+      if (item.quantity > max) {
+        toast.error(`No hay productos suficientes de "${item.name}". Solo hay ${max} disponibles.`);
+        setIsModalOpen(false);
+        return;
+      }
+    }
+
     try {
       setCargandoEnvio(true);
       setIsModalOpen(false);
@@ -218,6 +233,7 @@ export default function Pedidos() {
           producto_id: Number(item.productId),
           cantidad: Number(item.quantity),
         })),
+        estado: 'en_preparacion'
       };
 
       const respuesta = await pedidoService.crear(payload);
@@ -252,12 +268,21 @@ export default function Pedidos() {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
+          timeZone: 'America/Argentina/Buenos_Aires',
         }),
       };
 
+      setCart([]);
+      setCustomerName('');
+      setAddress('');
+      setPhone('');
+      setOrderType('Mostrador');
+      setPaymentMethod('Efectivo');
+      setCustomPaymentMethod('');
+      setStep('building');
       setPrintPromptOrder(ordenParaTicket);
 
-      cargarDatos();
+      await cargarDatos();
     } catch (error) {
       toast.error(error.message || 'Error al enviar la comanda');
     } finally {

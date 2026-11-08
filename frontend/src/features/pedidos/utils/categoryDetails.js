@@ -69,9 +69,9 @@ export function getCategoryDetails(categoryName) {
 
 export function formatDate(dateStr) {
   if (!dateStr) return '';
-  const parts = dateStr.split('-');
+  const parts = String(dateStr).split('-');
   if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return `${parts[2]}/${parts[1]}/${parts[0].slice(-2)}`;
   }
   return dateStr;
 }

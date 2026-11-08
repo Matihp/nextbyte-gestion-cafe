@@ -13,7 +13,8 @@ const registroVentaRepository = require('../repositories/registroVentaRepository
 
 const TRANSICIONES_PERMITIDAS = {
   [ESTADOS_PEDIDO.PENDIENTE]: [ESTADOS_PEDIDO.EN_PREPARACION],
-  [ESTADOS_PEDIDO.EN_PREPARACION]: [ESTADOS_PEDIDO.EN_EMPAQUE]
+  [ESTADOS_PEDIDO.EN_PREPARACION]: [ESTADOS_PEDIDO.EN_EMPAQUE],
+  [ESTADOS_PEDIDO.COMPLETADO]: [ESTADOS_PEDIDO.ENTREGADO]
 };
 
 const puedeTransicionar = (estadoActual, estadoNuevo) => {
@@ -151,8 +152,11 @@ const calcularTotalCosto = (detalles = []) => {
   return Number(total.toFixed(2));
 };
 
-const obtenerActivas = async () => {
-  const pedidos = await pedidoRepository.getByEstados(ESTADOS_ACTIVOS);
+const obtenerActivas = async (opciones = {}) => {
+  const estados = opciones.incluirCompletados
+    ? ['pendiente', 'en_preparacion', 'en_empaque', 'completado']
+    : ESTADOS_ACTIVOS;
+  const pedidos = await pedidoRepository.getByEstados(estados);
   const pedidosConDetalles = await Promise.all(
     pedidos.map(async (pedido) => {
       const detalles = await detallePedidoRepository.getByPedidoId(pedido.id);
@@ -176,11 +180,36 @@ const cambiarEstado = async (id, nuevoEstado) => {
     throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
   }
 
+  if (nuevoEstado === ESTADOS_PEDIDO.ENTREGADO) {
+    return await entregar(id);
+  }
+
   if (!puedeTransicionar(pedido.estado, nuevoEstado)) {
     throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
   }
 
   await pedidoRepository.updateStatus(id, nuevoEstado);
+  return await pedidoRepository.getWithDetails(id);
+};
+
+const entregar = async (id) => {
+  const pedido = await pedidoRepository.getById(id);
+  if (!pedido) {
+    throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+  }
+
+  if (pedido.estado === ESTADOS_PEDIDO.CANCELADO) {
+    throw new AppError('No se puede entregar un pedido cancelado', 409, 'ESTADO_INVALIDO');
+  }
+
+  if (pedido.estado !== ESTADOS_PEDIDO.COMPLETADO) {
+    if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
+      await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.EN_EMPAQUE);
+    }
+    await completar(id);
+  }
+
+  await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.ENTREGADO);
   return await pedidoRepository.getWithDetails(id);
 };
 
@@ -296,6 +325,7 @@ module.exports = {
   obtenerActivas,
   cambiarEstado,
   completar,
+  entregar,
   calcularConsumoInsumos,
   detectarFaltantes,
   calcularTotalCosto

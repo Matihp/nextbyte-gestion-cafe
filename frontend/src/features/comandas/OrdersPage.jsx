@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { OrderSummaryModal } from './OrderSummaryModal';
 import { RecipeDetailModal } from './RecipeDetailModal';
 import { OrderPrintTicket } from './OrderPrintTicket';
+import ModalConfirmarCancelarPedido from './ModalConfirmarCancelarPedido';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
@@ -13,8 +14,6 @@ import { formatearPrecio } from '@/utils/formatters';
 import { useAuth } from '@/hooks/useAuth';
 import {
   formatDateDDMMAAAA,
-  isOrderFromToday,
-  isCompletedOrderExpired,
   assignDailyOrderNumbers
 } from './orderSequence';
 
@@ -69,6 +68,8 @@ export const toBackendStatus = (statusDisplay) => {
       return 'en_empaque';
     case 'Completado':
       return 'completado';
+    case 'Entregado':
+      return 'entregado';
     case 'Cancelado':
       return 'cancelado';
     case 'Pendiente':
@@ -125,14 +126,16 @@ export function OrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
+  const [accionCancelar, setAccionCancelar] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
 
   const statuses = [
     'Todos',
     'Pendiente',
     'En preparación',
     'En empaque',
-    'Completado',
-    'Cancelado'
+    'Completado'
   ];
 
   // Carga de comandas y pedidos desde el backend
@@ -140,7 +143,7 @@ export function OrdersPage() {
     setLoading(true);
     try {
       const [activasRes, todosRes] = await Promise.allSettled([
-        comandaService.obtenerActivas(),
+        comandaService.obtenerActivas({ incluir_completados: true }),
         pedidoService.obtenerTodos()
       ]);
 
@@ -170,7 +173,11 @@ export function OrdersPage() {
       }
 
       if (backendOrders !== null) {
-        const mapped = backendOrders.map((o) => {
+        const ordenesComanda = backendOrders.filter((o) => {
+          const st = String(o.estado || o.status || '').toLowerCase().trim();
+          return st !== 'entregado' && st !== 'cancelado';
+        });
+        const mapped = ordenesComanda.map((o) => {
           const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
           const itemsRaw = (o.detalles && o.detalles.length > 0)
             ? o.detalles
@@ -188,7 +195,16 @@ export function OrdersPage() {
           }));
 
           const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
-          const timeStr = o.hora || (o.created_at ? new Date(o.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '');
+          const timeStr =
+            o.hora ||
+            (o.created_at
+              ? new Date(o.created_at).toLocaleTimeString('es-AR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                  timeZone: 'America/Argentina/Buenos_Aires'
+                })
+              : '');
 
           return {
             id: String(o.id),
@@ -225,12 +241,14 @@ export function OrdersPage() {
       if (document.visibilityState === 'visible') {
         fetchOrders();
       }
-    }, 8000);
+    }, 5000);
     const onFocus = () => fetchOrders();
     window.addEventListener('focus', onFocus);
+    window.addEventListener('orders-updated', fetchOrders);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('orders-updated', fetchOrders);
     };
   }, []);
 
@@ -271,17 +289,15 @@ export function OrdersPage() {
     [orders, selectedOrderId]
   );
 
-  // Filtrado dinámico con reglas de negocio:
-  // 1. Desaparecen pedidos de días anteriores (reinicio a las 00:00 hs)
-  // 2. Pedidos en estado "Completado" desaparecen luego de 1 hora
+  // Filtrado dinámico:
+  // REGLA: Los pedidos NO se van de la pantalla Comandas hasta que se les dé el estado de Entregado (o Cancelado).
+  // No se van ni aunque pasen las horas ni aunque sea otro día. Solo desaparecen al pasar a "Entregado".
   const filteredOrders = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     return orders.filter((order) => {
-      // REGLA 1: Solo pedidos del día actual
-      if (!isOrderFromToday(order)) return false;
-
-      // REGLA 2: Completados desaparecen tras 1 hora
-      if (isCompletedOrderExpired(order, completedTimes)) return false;
+      // REGLA: Los pedidos entregados o cancelados no deben verse en la sección Comandas
+      const st = String(order.status || '').toLowerCase().trim();
+      if (st === 'entregado' || st === 'cancelado') return false;
 
       // Búsqueda por número (#0001), ID backend (PED-...) o nombre de cliente
       const idMatch = String(order.id).toLowerCase().includes(term);
@@ -292,13 +308,11 @@ export function OrdersPage() {
       let matchesStatus = true;
       if (statusFilter !== 'Todos') {
         matchesStatus = order.status === statusFilter;
-      } else {
-        matchesStatus = order.status !== 'Cancelado';
       }
 
       return matchesSearch && matchesStatus;
     });
-  }, [orders, searchTerm, statusFilter, completedTimes]);
+  }, [orders, searchTerm, statusFilter]);
 
   // Cambio de estado
   const handleStatusChange = async (orderId, newStatusDisplay) => {
@@ -306,10 +320,20 @@ export function OrdersPage() {
     if (!prevOrder) return;
     if (prevOrder.status === newStatusDisplay) return;
 
-    // Actualización optimista
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
-    );
+    // Actualización optimista: si se marca como Entregado, desaparece de inmediato de Comandas
+    if (newStatusDisplay === 'Entregado') {
+      setOrders((prev) => {
+        const next = prev.filter((o) => String(o.id) !== String(orderId));
+        try {
+          localStorage.setItem('nextbyte_orders', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } else {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
+      );
+    }
 
     // Si se pasa a Completado, registrar la hora para la expiración de 1 hora
     if (newStatusDisplay === 'Completado') {
@@ -329,7 +353,9 @@ export function OrdersPage() {
     const backendCurrent = toBackendStatus(prevOrder.status);
 
     try {
-      if (backendTarget === 'cancelado') {
+      if (backendTarget === 'entregado') {
+        await comandaService.entregar(orderId);
+      } else if (backendTarget === 'cancelado') {
         await pedidoService.cancelar(orderId);
       } else if (backendTarget === 'completado') {
         if (backendCurrent === 'pendiente') {
@@ -342,6 +368,7 @@ export function OrdersPage() {
       } else {
         await comandaService.cambiarEstado(orderId, backendTarget);
       }
+      window.dispatchEvent(new CustomEvent('orders-updated'));
       const orderNumLabel = prevOrder.displayId || prevOrder.orderNumber || `#${prevOrder.id}`;
       toast.success(`Pedido ${orderNumLabel.startsWith('#') ? orderNumLabel : `#${orderNumLabel}`} actualizado a "${newStatusDisplay}"`);
     } catch {
@@ -353,42 +380,75 @@ export function OrdersPage() {
     }
   };
 
-  // Cancelar pedido completo desde el modal
-  const handleCancelOrder = async (orderId) => {
-    try {
-      const esMerma = window.confirm(
-        '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
-      );
-      await pedidoService.cancelar(orderId, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelado' } : o))
-      );
-      setSelectedOrderId(null);
-      toast.success(esMerma ? 'Pedido cancelado y registrado como MERMA' : 'Pedido cancelado exitosamente');
-    } catch {
-      toast.error('Error al cancelar el pedido');
-    }
+  // Abrir modal de motivo de cancelación para pedido completo
+  const handleCancelOrder = (orderId) => {
+    setAccionCancelar({ tipo: 'pedido', orderId });
+    setModalCancelarOpen(true);
   };
 
-  // Cancelar ítem específico de un pedido
-  const handleCancelOrderItem = async (orderId, itemId, itemName) => {
+  // Abrir modal de motivo de cancelación para ítem específico de un pedido
+  const handleCancelOrderItem = (orderId, itemId, itemName) => {
+    setAccionCancelar({ tipo: 'item', orderId, itemId, itemName });
+    setModalCancelarOpen(true);
+  };
+
+  // Confirmación desde el modal unificado de cancelación (ES MERMA / OTROS MOTIVOS)
+  const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
+    if (!accionCancelar) return;
+    setCancelando(true);
     try {
-      const order = orders.find((o) => o.id === orderId);
-      if (!order) return;
+      if (accionCancelar.tipo === 'pedido') {
+        const { orderId } = accionCancelar;
+        await pedidoService.cancelar(orderId, { esMerma, motivo });
+        setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
+        setSelectedOrderId(null);
+        window.dispatchEvent(new CustomEvent('orders-updated'));
+        toast.success(
+          esMerma
+            ? 'Pedido cancelado y registrado en Mermas'
+            : 'Pedido cancelado y restaurado en stock de productos'
+        );
+      } else if (accionCancelar.tipo === 'item') {
+        const { orderId, itemId, itemName } = accionCancelar;
+        await pedidoService.eliminarItem(orderId, itemId, { esMerma, motivo });
 
-      const updatedItems = order.items.filter((item) => item.id !== itemId);
-      const newTotal = updatedItems.reduce(
-        (acc, item) => acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-        0
-      );
-
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, items: updatedItems, total: newTotal } : o))
-      );
-
-      toast.success(`Artículo "${itemName}" cancelado del pedido`);
-    } catch {
-      toast.error('No se pudo cancelar el artículo del pedido');
+        const order = orders.find((o) => String(o.id) === String(orderId));
+        if (order) {
+          const updatedItems = (order.items || []).filter(
+            (item) => String(item.id) !== String(itemId)
+          );
+          if (updatedItems.length === 0) {
+            setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
+            setSelectedOrderId(null);
+          } else {
+            const newTotal = updatedItems.reduce(
+              (acc, item) =>
+                acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+              0
+            );
+            setOrders((prev) =>
+              prev.map((o) =>
+                String(o.id) === String(orderId)
+                  ? { ...o, items: updatedItems, total: newTotal }
+                  : o
+              )
+            );
+          }
+        }
+        window.dispatchEvent(new CustomEvent('orders-updated'));
+        toast.success(
+          esMerma
+            ? `Artículo "${itemName}" cancelado y registrado en Mermas`
+            : `Artículo "${itemName}" cancelado del pedido`
+        );
+      }
+    } catch (err) {
+      console.error('Error al procesar cancelación:', err);
+      toast.error('No se pudo procesar la cancelación');
+    } finally {
+      setCancelando(false);
+      setAccionCancelar(null);
+      setModalCancelarOpen(false);
     }
   };
 
@@ -422,8 +482,16 @@ export function OrdersPage() {
   };
 
   // Imprimir comanda (modal de resumen de pedido)
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (order) => {
+    const ordenAImprimir = order || selectedOrder;
+    if (!ordenAImprimir) return;
+    setPrintingOrder(ordenAImprimir);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        setPrintingOrder(null);
+      }, 500);
+    }, 100);
   };
 
   return (
@@ -559,7 +627,7 @@ export function OrdersPage() {
                         <option value="En preparación">En preparación</option>
                         <option value="En empaque">En empaque</option>
                         <option value="Completado">Completado</option>
-                        <option value="Cancelado">Cancelado</option>
+                        <option value="Entregado">Entregado</option>
                       </select>
                     </td>
 
@@ -638,6 +706,14 @@ export function OrdersPage() {
           onClose={() => setViewingRecipe(null)}
         />
       )}
+
+      {/* Modal Unificado de Motivo de Cancelación */}
+      <ModalConfirmarCancelarPedido
+        open={modalCancelarOpen}
+        onOpenChange={setModalCancelarOpen}
+        onConfirmar={handleConfirmarCancelacion}
+        cargando={cancelando}
+      />
 
       {/* Ticket de Impresión para PrintPortal */}
       {printingOrder && <OrderPrintTicket order={printingOrder} />}

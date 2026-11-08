@@ -14,19 +14,20 @@ export function OrderPrintTicket({ order }) {
 
   return (
     <PrintPortal id="print-area">
-      <div className="p-4 max-w-sm text-left font-sans bg-white text-black">
-        <div className="text-center mb-6 border-b-2 border-black pb-4">
-          <h1 className="text-3xl font-bold uppercase tracking-widest mb-1 text-black">
+      <div className="p-2 w-[76mm] max-w-[76mm] mx-auto text-left font-sans bg-white text-black text-xs sm:text-sm">
+        <div className="text-center mb-4 border-b-2 border-black pb-3">
+          <h1 className="text-2xl font-black uppercase tracking-widest mb-0.5 text-black">
             Andén
           </h1>
-          <p className="text-sm font-semibold">Ticket de Pedido</p>
-          <p className="text-xs text-gray-700 mt-1">{fechaStr}</p>
+          <p className="text-xs font-bold uppercase tracking-wider">Orden de Pedido</p>
+          <p className="text-[11px] text-gray-700 mt-1">{fechaStr}</p>
         </div>
 
-        <div className="mb-6 space-y-1 text-sm">
-          <p>
-            <span className="font-bold">ID Pedido:</span> {formatearIdPedido(order)}
-          </p>
+        <div className="mb-4 space-y-1 text-xs">
+          <div className="flex justify-between items-center text-sm font-black border-b border-dashed border-gray-400 pb-1 mb-1">
+            <span>ID:</span>
+            <span className="font-mono text-base">{formatearIdPedido(order)}</span>
+          </div>
           <p>
             <span className="font-bold">Cliente:</span> {order.customer || 'Consumidor Final'}
           </p>
@@ -48,36 +49,36 @@ export function OrderPrintTicket({ order }) {
           )}
         </div>
 
-        <table className="w-full text-left mb-6 text-sm">
+        <table className="w-full text-left mb-4 text-xs">
           <thead>
             <tr className="border-b-2 border-black">
-              <th className="py-2 w-12">Cant</th>
-              <th className="py-2">Descripción</th>
-              <th className="py-2 text-right">Monto</th>
+              <th className="py-1 w-8">Cant</th>
+              <th className="py-1">Descripción</th>
+              <th className="py-1 text-right">Monto</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, idx) => {
               const precioTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
               return (
-                <tr key={item.id || idx} className="border-b border-gray-300">
-                  <td className="py-2 font-bold">{item.quantity}</td>
-                  <td className="py-2">{item.name}</td>
-                  <td className="py-2 text-right font-medium">{formatearPrecio(precioTotal)}</td>
+                <tr key={item.id || idx} className="border-b border-gray-200">
+                  <td className="py-1 font-bold">{item.quantity}</td>
+                  <td className="py-1">{item.name}</td>
+                  <td className="py-1 text-right font-medium">{formatearPrecio(precioTotal)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
 
-        <div className="border-t-2 border-black pt-4 mb-6">
-          <div className="flex justify-between items-center font-bold text-xl">
+        <div className="border-t-2 border-black pt-2 mb-4">
+          <div className="flex justify-between items-center font-black text-lg">
             <span>TOTAL</span>
             <span>{formatearPrecio(order.total)}</span>
           </div>
         </div>
 
-        <div className="text-center pt-4 border-t border-dashed border-gray-400 text-xs text-gray-700">
+        <div className="text-center pt-3 border-t border-dashed border-gray-400 text-[11px] text-gray-700">
           <p className="font-medium">¡Gracias por hacernos parte de tu viaje!</p>
         </div>
       </div>

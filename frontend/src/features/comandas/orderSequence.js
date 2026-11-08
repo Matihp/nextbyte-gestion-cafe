@@ -6,24 +6,29 @@
  * 3. Filtrado de comandas por fecha actual (reinicio a las 00:00 hs) y expiración de completados (1 hora).
  */
 
-// Formatear cualquier fecha a DD/MM/AAAA
+// Formatear cualquier fecha a DD/MM/AA
 export const formatDateDDMMAAAA = (dateVal) => {
   if (!dateVal) return '';
   const str = String(dateVal).trim();
-  // Si ya tiene formato DD/MM/AAAA
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+  // Si ya tiene formato DD/MM/AAAA o DD/MM/AA
+  const dma = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (dma) {
+    return `${dma[1]}/${dma[2]}/${dma[3].slice(-2)}`;
+  }
   // Si tiene formato YYYY-MM-DD
-  const ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const ymd = str.match(/^(\d{2,4})-(\d{2})-(\d{2})/);
   if (ymd) {
-    return `${ymd[3]}/${ymd[2]}/${ymd[1]}`;
+    return `${ymd[3]}/${ymd[2]}/${ymd[1].slice(-2)}`;
   }
   // Si es un objeto Date o timestamp ISO
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires'
+    }).format(d);
   }
   return str;
 };
@@ -44,6 +49,10 @@ export const toISODate = (dateStr) => {
   const dmMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (dmMatch) {
     return `${dmMatch[3]}-${dmMatch[2]}-${dmMatch[1]}`;
+  }
+  const dmShortMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{2})/);
+  if (dmShortMatch) {
+    return `20${dmShortMatch[3]}-${dmShortMatch[2]}-${dmShortMatch[1]}`;
   }
   const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (ymdMatch) {

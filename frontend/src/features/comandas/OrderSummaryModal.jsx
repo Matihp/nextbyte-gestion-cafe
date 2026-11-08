@@ -47,14 +47,14 @@ export function OrderSummaryModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden p-0 gap-0 border-0 print:shadow-none print:border print:border-gray-300">
+      <DialogContent className="sm:max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden p-0 gap-0 border-0 print:hidden">
         <DialogHeader className="px-6 py-5 border-b border-gray-100 flex flex-row justify-between items-center bg-gray-50 space-y-0">
           <DialogTitle className="text-2xl font-bold text-[#4B2B1D]">
             Resumen del Pedido {formatearIdPedido(order)}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-h-[65vh] print:max-h-none print:overflow-visible">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 max-h-[65vh]">
           {/* Tarjeta de información del cliente */}
           <div className="bg-[#F3E5DC]/50 rounded-xl p-4 border border-[#EAD5C8]">
             <p className="text-sm text-gray-700">
@@ -88,7 +88,7 @@ export function OrderSummaryModal({
           <div className="space-y-4">
             <div className="flex justify-between text-sm font-semibold text-gray-500 border-b pb-2">
               <span>Cant x Producto</span>
-              <span>Receta / Acciones</span>
+              <span className="print:hidden">Receta / Acciones</span>
             </div>
 
             {items.length === 0 ? (
@@ -113,7 +113,7 @@ export function OrderSummaryModal({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 print:hidden">
                     {/* Botón Ver Receta */}
                     <button
                       type="button"

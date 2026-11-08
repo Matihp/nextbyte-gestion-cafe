@@ -13,6 +13,7 @@ import inventarioService from '@/services/inventarioService';
 import { toast } from 'sonner';
 import { X, ExternalLink, Trash2, Loader2 } from 'lucide-react';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function ProductoModal({
   open,
@@ -58,18 +59,18 @@ export default function ProductoModal({
 
       // Buscar si el producto tiene receta
       const associatedRecipe = recipes.find(
-        (r) => Number(r.producto_id) === Number(producto.id) || Number(r.id) === Number(producto.id)
+        (r) => Number(r.id) === Number(producto.receta_id) || Number(r.producto_id) === Number(producto.id)
       );
 
       if (associatedRecipe) {
-        setSelectedRecipeId(String(associatedRecipe.producto_id || associatedRecipe.id));
+        setSelectedRecipeId(String(associatedRecipe.id));
         setRecipeDetails(associatedRecipe);
       } else {
         // Intentar obtener receta desde backend
         productoService.obtenerReceta(producto.id)
           .then((res) => {
-            if (res && res.ingredientes && res.ingredientes.length > 0) {
-              setSelectedRecipeId(String(producto.id));
+            if (res && res.id) {
+              setSelectedRecipeId(String(res.id));
               setRecipeDetails(res);
             } else {
               setSelectedRecipeId('');
@@ -102,7 +103,7 @@ export default function ProductoModal({
     }
 
     const rec = recipes.find(
-      (r) => String(r.producto_id || r.id) === String(selectedRecipeId)
+      (r) => String(r.id) === String(selectedRecipeId) || String(r.producto_id) === String(selectedRecipeId)
     );
 
     if (rec && rec.ingredientes) {
@@ -138,6 +139,11 @@ export default function ProductoModal({
 
     if (!formData.categoryId) {
       toast.error('Debe seleccionar una categoría');
+      return;
+    }
+
+    if (!selectedRecipeId) {
+      toast.error('La receta asociada es obligatoria');
       return;
     }
 
@@ -263,17 +269,18 @@ export default function ProductoModal({
 
             <div>
               <Label className="block text-sm mb-2 text-gray-700 font-normal">
-                Receta asociada
+                Receta asociada <span className="text-red-500 font-bold">*</span>
               </Label>
               <div className="flex gap-2">
                 <select
                   value={selectedRecipeId}
                   onChange={(e) => setSelectedRecipeId(e.target.value)}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#A67C52] bg-white text-gray-900 text-sm h-10"
+                  required
                 >
-                  <option value="">Sin receta</option>
+                  <option value="" disabled>Seleccione una receta (Obligatorio)</option>
                   {recipes.map((rec) => (
-                    <option key={rec.producto_id || rec.id} value={rec.producto_id || rec.id}>
+                    <option key={rec.id} value={rec.id}>
                       {rec.nombre}
                     </option>
                   ))}
@@ -299,7 +306,7 @@ export default function ProductoModal({
                 Precio (Costo)
               </Label>
               <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 text-sm">
-                ${calculatedCost.toFixed(2)}
+                {formatearPrecio(calculatedCost)}
                 <span className="text-xs ml-2 text-gray-400">
                   {selectedRecipeId ? '(Calculado desde la receta)' : '(Requiere cargar receta)'}
                 </span>

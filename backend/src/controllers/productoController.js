@@ -23,7 +23,8 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   const motivo = req.body?.motivo || req.query?.motivo || null;
-  const data = await productoService.delete(req.params.id, motivo);
+  const cantidad = req.body?.cantidad !== undefined ? req.body.cantidad : (req.query?.cantidad !== undefined ? req.query.cantidad : null);
+  const data = await productoService.delete(req.params.id, motivo, cantidad);
   return ok(res, data);
 };
 

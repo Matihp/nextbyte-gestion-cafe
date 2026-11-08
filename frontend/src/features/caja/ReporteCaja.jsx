@@ -74,12 +74,45 @@ const getBadgeMotivo = (motivo) => {
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
-  const soloFecha = String(fechaStr).split('T')[0];
+  const str = String(fechaStr).trim();
+  const soloFecha = str.split('T')[0];
   const partes = soloFecha.split('-');
   if (partes.length === 3) {
-    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`;
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0].slice(-2)}`;
+  }
+  const dma = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (dma) {
+    return `${dma[1]}/${dma[2]}/${dma[3].slice(-2)}`;
   }
   return fechaStr;
+};
+
+const formatearHora = (fechaVal) => {
+  if (!fechaVal) return '';
+  const str = String(fechaVal).trim();
+  if (str.includes('T') && str.includes(':')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat('es-AR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'America/Argentina/Buenos_Aires'
+        }).format(d);
+      }
+    } catch {}
+    const timePart = str.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (str.includes(' ') && str.includes(':')) {
+    const timePart = str.split(' ')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+    return str.slice(0, 5);
+  }
+  return '';
 };
 
 export default function ReporteCaja() {
@@ -530,21 +563,22 @@ export default function ReporteCaja() {
             }];
 
         const pedidoIdFormateado = String(p.id).startsWith('#') ? p.id : `#${p.id}`;
-        const fechaPedido = p.fecha || '-';
+        const fechaPedido = p.fecha ? formatearFechaDDMMAAAA(p.fecha) : '-';
+        const horaPedido = p.hora ? p.hora.slice(0, 5) : '';
 
         for (const item of items) {
           filas.push([
             fechaPedido,
-            p.hora || '',
+            horaPedido,
             pedidoIdFormateado,
             p.tipo_pedido || 'Mostrador',
             p.metodo_pago || 'Efectivo',
             `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
             item.cantidad,
-            item.precio_costo,
-            item.precio_venta,
-            item.costo_total,
-            item.venta_total,
+            Math.round(Number(item.precio_costo) || 0),
+            Math.round(Number(item.precio_venta) || 0),
+            Math.round(Number(item.costo_total) || 0),
+            Math.round(Number(item.venta_total) || 0),
             formatEstadoNombre(p.estado)
           ]);
         }
@@ -553,9 +587,9 @@ export default function ReporteCaja() {
       filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
     }
 
-    filas.push(['SUBTOTAL (Costos)', '', '', '', '', '', '', '', '', totalesAExportar.subtotalCosto, '', '']);
-    filas.push(['TOTAL VENTAS', '', '', '', '', '', '', '', '', '', totalesAExportar.totalVenta, '']);
-    filas.push(['DIFERENCIA (Ventas - Costos)', '', '', '', '', '', '', '', '', '', (totalesAExportar.totalVenta || 0) - (totalesAExportar.subtotalCosto || 0), '']);
+    filas.push(['SUBTOTAL (Costos)', '', '', '', '', '', '', '', '', Math.round(Number(totalesAExportar.subtotalCosto) || 0), '', '']);
+    filas.push(['TOTAL VENTAS', '', '', '', '', '', '', '', '', '', Math.round(Number(totalesAExportar.totalVenta) || 0), '']);
+    filas.push(['DIFERENCIA (Ventas - Costos)', '', '', '', '', '', '', '', '', '', Math.round((Number(totalesAExportar.totalVenta) || 0) - (Number(totalesAExportar.subtotalCosto) || 0)), '']);
 
     // Recuadro de Movimientos de Caja Chica en CSV
     if (movimientosAExportar && movimientosAExportar.length > 0) {
@@ -569,19 +603,19 @@ export default function ReporteCaja() {
         if (m.tipo === 'INGRESO') tIng += monto;
         if (m.tipo === 'RETIRO') tRet += monto;
         filas.push([
-          m.fecha || '',
-          m.hora || '',
+          m.fecha ? formatearFechaDDMMAAAA(m.fecha) : '',
+          m.hora ? m.hora.slice(0, 5) : '',
           m.tipo,
           `"${(m.detalle || '').replace(/"/g, '""')}"`,
           '', '', '', '', '',
-          m.tipo === 'INGRESO' ? m.monto : '',
-          m.tipo === 'RETIRO' ? m.monto : '',
+          m.tipo === 'INGRESO' ? Math.round(monto) : '',
+          m.tipo === 'RETIRO' ? Math.round(monto) : '',
           ''
         ]);
       }
-      filas.push(['TOTAL INGRESOS (+)', '', '', '', '', '', '', '', '', tIng, '', '']);
-      filas.push(['TOTAL RETIROS (-)', '', '', '', '', '', '', '', '', '', tRet, '']);
-      filas.push(['SALDO FINAL DE CAJA (Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', (totalesAExportar.totalVenta || 0) + tIng - tRet, '']);
+      filas.push(['TOTAL INGRESOS (+)', '', '', '', '', '', '', '', '', Math.round(tIng), '', '']);
+      filas.push(['TOTAL RETIROS (-)', '', '', '', '', '', '', '', '', '', Math.round(tRet), '']);
+      filas.push(['SALDO FINAL DE CAJA (Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', Math.round((Number(totalesAExportar.totalVenta) || 0) + tIng - tRet), '']);
     }
 
     const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');
@@ -657,10 +691,10 @@ export default function ReporteCaja() {
         filas.push(['Fecha', 'Hora', 'Producto', 'Categoría', 'Cantidad', 'Precio Costo', 'Costo Total', 'Motivo de Eliminación']);
         for (const m of mermasValidas) {
           const fecha = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-          const hora = m.created_at ? (String(m.created_at).split(' ')[1]?.slice(0, 5) || '-') : '-';
+          const hora = m.created_at ? (formatearHora(m.created_at) || '-') : '-';
           const cant = Number(m.cantidad) || 1;
-          const pCosto = Number(m.precio_costo) || 0;
-          const cTot = Number(m.costo_total) || (cant * pCosto);
+          const pCosto = Math.round(Number(m.precio_costo) || 0);
+          const cTot = Math.round(Number(m.costo_total) || (cant * pCosto));
           filas.push([
             fecha,
             hora,
@@ -673,7 +707,7 @@ export default function ReporteCaja() {
           ]);
         }
         filas.push(['', '', '', '', '', '', '', '']);
-        filas.push(['TOTAL VALOR DE COSTOS ELIMINADOS', '', '', '', '', '', totalCostoMermas, '']);
+        filas.push(['TOTAL VALOR DE COSTOS ELIMINADOS', '', '', '', '', '', Math.round(Number(totalCostoMermas) || 0), '']);
         const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');
         const blob = new Blob([contenidoCsv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -693,11 +727,10 @@ export default function ReporteCaja() {
     }
   };
 
-  const handleFacturar = (pedidoId) => {
-    const pedidoNum = String(pedidoId).startsWith('#') ? pedidoId : `#${pedidoId}`;
+  const handleFacturar = () => {
     toast.info(
-      `Se deja implementado este botón para que, en próximas actualizaciones y mejoras, pueda asociarse a ARCA y obtener e imprimir el ticket fiscal correspondiente al pedido ${pedidoNum}.`,
-      { duration: 6500 }
+      'Se deja implementado este botón para que, en próximas actualizaciones y mejoras, pueda asociarse a ARCA.',
+      { duration: 5000 }
     );
   };
   const handleGenerarFactura = handleFacturar;
@@ -706,13 +739,13 @@ export default function ReporteCaja() {
   const getTituloTabla = () => {
     if (modoFiltro === 'hoy') {
       const hoy = new Date();
-      return `Transacciones del ${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+      return `Transacciones del ${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${String(hoy.getFullYear()).slice(-2)}`;
     }
     if (modoFiltro === 'fecha') {
       const [y, m, d] = (fechaEspecifica || '').split('-');
-      return `Transacciones del ${d}/${m}/${y}`;
+      return `Transacciones del ${d}/${m}/${y ? y.slice(-2) : ''}`;
     }
-    return `Transacciones del período (${reporte.fecha || 'Mes'})`;
+    return `Transacciones del período (${reporte.fecha ? formatearSoloFecha(reporte.fecha) : 'Mes'})`;
   };
 
   // Nombres de mes para las pestañas de Ingresos/Retiros y Motivos de Eliminación
@@ -1730,7 +1763,7 @@ export default function ReporteCaja() {
                       ) : (
                         mermasValidas.map((m) => {
                           const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-                          const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                          const horaStr = formatearHora(m.created_at);
                           const cant = Number(m.cantidad) || 1;
                           const pCosto = Number(m.precio_costo) || 0;
                           const cTotal = Number(m.costo_total) || (cant * pCosto);
@@ -1742,7 +1775,11 @@ export default function ReporteCaja() {
                             >
                               <td className="py-3 px-4 text-primary font-medium whitespace-nowrap align-middle">
                                 <div className="text-xs font-semibold">{fechaStr}</div>
-                                {horaStr && <div className="text-[10px] text-muted-foreground">{horaStr} hs</div>}
+                                {horaStr ? (
+                                  <div className="text-[10px] text-muted-foreground">{horaStr} hs</div>
+                                ) : (
+                                  <div className="text-[10px] text-muted-foreground">-</div>
+                                )}
                               </td>
 
                               <td className="py-3 px-4 text-primary font-medium align-middle">

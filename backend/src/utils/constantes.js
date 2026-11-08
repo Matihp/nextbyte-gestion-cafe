@@ -3,6 +3,7 @@ const ESTADOS_PEDIDO = Object.freeze({
   EN_PREPARACION: 'en_preparacion',
   EN_EMPAQUE: 'en_empaque',
   COMPLETADO: 'completado',
+  ENTREGADO: 'entregado',
   CANCELADO: 'cancelado'
 });
 

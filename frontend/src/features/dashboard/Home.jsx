@@ -8,7 +8,8 @@ import {
   Bike,
   RotateCw,
   AlertCircle,
-  Eye
+  Eye,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventarioService } from '@/services/inventarioService';
@@ -16,7 +17,9 @@ import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
+import ModalConfirmarCancelarPedido from '@/features/comandas/ModalConfirmarCancelarPedido';
 import { OrderPrintTicket } from '@/features/comandas/OrderPrintTicket';
+import { formatCustomerName } from '@/features/clientes/CustomerViewerPage';
 
 // Cálculo de días restantes hasta el vencimiento (idéntico a InventoryPage)
 const getExpirationDiff = (expirationDateStr) => {
@@ -58,52 +61,76 @@ const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
   if (s === 'en_empaque') return 'En empaque';
   if (s === 'en_preparacion' || s === 'en preparacion') return 'En preparación';
-  if (s === 'completado') return 'Completado';
+  if (s === 'completado') return 'Listo';
   if (s === 'entregado') return 'Entregado';
   if (s === 'cancelado') return 'Cancelado';
   if (s === 'pendiente') return 'Pendiente';
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-function TarjetaPedido({ pedido, onVerResumen }) {
-  const items = pedido.detalles || pedido.items || [];
-  const itemsTexto = items.length > 0
-    ? items.map((it) => `${it.cantidad || it.quantity || 1}x ${it.nombre_producto || it.name || 'Producto'}`).join(', ')
-    : 'Sin artículos';
+function TarjetaPedido({ pedido, onVerResumen, onMarcarEntregado, entregandoId }) {
+  const isEntregando = entregandoId === pedido.id;
+  const clienteFormateado = formatCustomerName(pedido.cliente || pedido.customer);
 
   return (
-    <div className="bg-white border border-[#EAD5C8] rounded-xl p-4 space-y-2 hover:shadow-sm transition-shadow">
-      <div className="flex justify-between items-center gap-2">
-        <span className="font-bold text-gray-900 text-sm tracking-tight">{formatearIdPedido(pedido)}</span>
-        <span
-          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getBadgeEstado(
-            pedido.estado || pedido.status
-          )}`}
+    <div className="bg-white border border-[#EAD5C8] rounded-xl p-3 space-y-2.5 hover:shadow-sm transition-shadow">
+      {/* Fila única: ID, Cliente, Estado del pedido y Precio Total */}
+      <div className="flex items-center justify-between gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="font-extrabold text-[#4B2B1D] text-xs sm:text-sm tracking-tight font-mono shrink-0">
+            {formatearIdPedido(pedido)}
+          </span>
+          {clienteFormateado ? (
+            <span
+              className="text-xs font-bold text-gray-800 truncate"
+              title={pedido.cliente || pedido.customer || 'Consumidor Final'}
+            >
+              {clienteFormateado}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span
+            className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
+              pedido.estado || pedido.status
+            )}`}
+          >
+            {formatEstadoNombre(pedido.estado || pedido.status)}
+          </span>
+
+          <span className="font-bold text-gray-900 text-xs sm:text-sm whitespace-nowrap shrink-0">
+            {formatearPrecio(pedido.total)}
+          </span>
+        </div>
+      </div>
+
+      {/* Fila de Botones: Ver Resumen y Entregado (mismo tamaño) */}
+      <div className="flex items-center gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={() => onVerResumen && onVerResumen(pedido)}
+          className="flex-1 py-1.5 px-2 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
-          {formatEstadoNombre(pedido.estado || pedido.status)}
-        </span>
-        <span className="font-bold text-gray-900 text-sm">
-          {formatearPrecio(pedido.total)}
-        </span>
-      </div>
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Ver Resumen</span>
+        </button>
 
-      <div>
-        <p className="text-xs font-semibold text-gray-800">
-          {pedido.cliente || pedido.customer || 'Consumidor Final'}
-        </p>
-        <p className="text-xs text-gray-600 font-normal mt-0.5 line-clamp-2">
-          {itemsTexto}
-        </p>
+        <button
+          type="button"
+          disabled={isEntregando}
+          onClick={() => onMarcarEntregado && onMarcarEntregado(pedido)}
+          className="flex-1 py-1.5 px-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 text-emerald-800 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+          title="Marcar como entregado"
+        >
+          {isEntregando ? (
+            <span className="w-3.5 h-3.5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          ) : (
+            <Check className="w-3.5 h-3.5 stroke-[2.5] text-emerald-600 shrink-0" />
+          )}
+          <span className="truncate">Entregado</span>
+        </button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => onVerResumen && onVerResumen(pedido)}
-        className="w-full mt-2 py-1.5 px-3 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-      >
-        <Eye className="w-3.5 h-3.5" />
-        <span>Ver Resumen</span>
-      </button>
     </div>
   );
 }
@@ -114,9 +141,39 @@ export default function Home() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
+  const [entregandoId, setEntregandoId] = useState(null);
+
+  const handleMarcarEntregado = async (pedido) => {
+    if (!pedido || !pedido.id) return;
+    setEntregandoId(pedido.id);
+    try {
+      await comandaService.entregar(pedido.id);
+      setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+      try {
+        const saved = localStorage.getItem('nextbyte_orders');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const filtered = parsed.filter((p) => String(p.id) !== String(pedido.id));
+          localStorage.setItem('nextbyte_orders', JSON.stringify(filtered));
+        }
+      } catch {}
+      window.dispatchEvent(new CustomEvent('orders-updated'));
+      toast.success(`Pedido ${formatearIdPedido(pedido)} marcado como entregado`);
+    } catch (err) {
+      console.error('Error al entregar pedido:', err);
+      toast.error('No se pudo marcar el pedido como entregado');
+      await cargarDatos();
+    } finally {
+      setEntregandoId(null);
+    }
+  };
+
   // Estados para el Modal de Resumen e Impresión de Comanda
   const [pedidoResumen, setPedidoResumen] = useState(null);
   const [modalResumenAbierto, setModalResumenAbierto] = useState(false);
+  const [modalCancelarOpen, setModalCancelarOpen] = useState(false);
+  const [accionCancelar, setAccionCancelar] = useState(null);
+  const [cancelando, setCancelando] = useState(false);
   const [ticketAImprimir, setTicketAImprimir] = useState(null);
 
   const handleVerResumen = (pedido) => {
@@ -140,71 +197,86 @@ export default function Home() {
     }, 80);
   };
 
-  // Cancelar pedido completo desde el modal
-  const handleCancelarPedido = async (pedido) => {
+  // Abrir modal de motivo de cancelación para pedido completo
+  const handleCancelarPedido = (pedido) => {
     if (!pedido) return;
-
-    // 1. Confirmar si desea eliminar el pedido
-    const confirma = window.confirm('¿Confirma que desea eliminar el pedido?');
-    if (!confirma) return;
-
-    // 2. Preguntar si se registra como MERMA o vuelve a stock
-    const esMerma = window.confirm(
-      '¿Desea registrar los productos de este pedido como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
-    );
-
-    try {
-      // Cancelar pedido en backend pasando si los productos son MERMA
-      await pedidoService.cancelar(pedido.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-
-      toast.success(esMerma ? 'Pedido cancelado y registrado en Mermas' : 'Pedido cancelado exitosamente');
-      handleCerrarResumen();
-      await cargarDatos();
-    } catch (err) {
-      console.error('Error al cancelar el pedido:', err);
-      toast.error('No se pudo cancelar el pedido');
-    }
+    setAccionCancelar({ tipo: 'pedido', pedido });
+    setModalCancelarOpen(true);
   };
 
-  // Cancelar/eliminar un ítem individual del pedido
-  const handleEliminarItem = async (pedido, item) => {
+  // Abrir modal de motivo de cancelación para un ítem individual
+  const handleEliminarItem = (pedido, item) => {
     if (!pedido || !item) return;
+    setAccionCancelar({ tipo: 'item', pedido, item });
+    setModalCancelarOpen(true);
+  };
 
-    // Preguntar si va a merma o regresa al stock
-    const esMerma = window.confirm(
-      '¿Desea registrar este producto como MERMA (Aceptar) o RESTAURAR el stock (Cancelar)?\n\nAceptar = Es Merma (no vuelve al stock)\nCancelar = Vuelve al stock'
-    );
-
+  // Confirmación desde el modal unificado de cancelación (ES MERMA / OTROS MOTIVOS)
+  const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
+    if (!accionCancelar) return;
+    setCancelando(true);
     try {
-      if (item.id) {
-        await pedidoService.eliminarItem(pedido.id, item.id, { esMerma: Boolean(esMerma), motivo: 'MERMA' });
-        toast.success(esMerma ? `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado y registrado en Mermas` : `Artículo "${item.nombre_producto || item.name || 'Producto'}" eliminado`);
-      }
-
-      // Actualizar vista local
-      const itemsActuales = pedido.detalles || pedido.items || [];
-      if (itemsActuales.length <= 1) {
+      if (accionCancelar.tipo === 'pedido') {
+        const { pedido } = accionCancelar;
+        await pedidoService.cancelar(pedido.id, { esMerma, motivo });
+        setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+        toast.success(
+          esMerma
+            ? 'Pedido cancelado y registrado en Mermas'
+            : 'Pedido cancelado y restaurado en stock de productos'
+        );
         handleCerrarResumen();
-      } else {
-        const restantes = itemsActuales.filter((it) => it.id !== item.id);
-        const nuevoTotal = restantes.reduce((acc, it) => {
-          const c = Number(it.cantidad || it.quantity || 1);
-          const p = Number(it.precio_venta || it.price || 0);
-          return acc + (c * p);
-        }, 0);
+      } else if (accionCancelar.tipo === 'item') {
+        const { pedido, item } = accionCancelar;
+        if (item.id) {
+          await pedidoService.eliminarItem(pedido.id, item.id, { esMerma, motivo });
+          toast.success(
+            esMerma
+              ? `Artículo "${item.nombre_producto || item.name || 'Producto'}" cancelado y registrado en Mermas`
+              : `Artículo "${item.nombre_producto || item.name || 'Producto'}" cancelado del pedido`
+          );
+        }
 
-        setPedidoResumen((prev) => (prev ? {
-          ...prev,
-          detalles: restantes,
-          items: restantes,
-          total: nuevoTotal
-        } : null));
+        const itemsActuales = pedido.detalles || pedido.items || [];
+        if (itemsActuales.length <= 1) {
+          setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
+          handleCerrarResumen();
+        } else {
+          const restantes = itemsActuales.filter((it) => it.id !== item.id);
+          const nuevoTotal = restantes.reduce((acc, it) => {
+            const c = Number(it.cantidad || it.quantity || 1);
+            const p = Number(it.precio_venta || it.price || 0);
+            return acc + c * p;
+          }, 0);
+
+          setPedidoResumen((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  detalles: restantes,
+                  items: restantes,
+                  total: nuevoTotal
+                }
+              : null
+          );
+
+          setComandas((prev) =>
+            prev.map((p) =>
+              p.id === pedido.id
+                ? { ...p, detalles: restantes, items: restantes, total: nuevoTotal }
+                : p
+            )
+          );
+        }
       }
-
-      await cargarDatos();
+      window.dispatchEvent(new CustomEvent('orders-updated'));
     } catch (err) {
-      console.error('Error al eliminar ítem del pedido:', err);
-      toast.error('No se pudo eliminar el artículo');
+      console.error('Error al procesar cancelación:', err);
+      toast.error('No se pudo procesar la cancelación');
+    } finally {
+      setCancelando(false);
+      setAccionCancelar(null);
+      setModalCancelarOpen(false);
     }
   };
 
@@ -236,7 +308,7 @@ export default function Home() {
     try {
       const [resInsumos, resComandas] = await Promise.allSettled([
         inventarioService.obtenerInsumos(),
-        comandaService.obtenerActivas()
+        comandaService.obtenerActivas({ incluir_completados: true })
       ]);
 
       if (resInsumos.status === 'fulfilled') {
@@ -268,6 +340,12 @@ export default function Home() {
 
   useEffect(() => {
     cargarDatos();
+    window.addEventListener('orders-updated', cargarDatos);
+    window.addEventListener('storage', cargarDatos);
+    return () => {
+      window.removeEventListener('orders-updated', cargarDatos);
+      window.removeEventListener('storage', cargarDatos);
+    };
   }, [cargarDatos]);
 
   // Cálculos de Stock / Insumos para las 4 Tarjetas (sincronizado con InventoryPage)
@@ -431,10 +509,10 @@ export default function Home() {
       </div>
 
       {/* SECCIÓN INFERIOR: 3 Columnas de Pedidos Activos por Canal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-start">
 
         {/* COLUMNA 1: Mostrador */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Campana Mostrador">
               🛎️
@@ -454,14 +532,14 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.mostrador.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
         </div>
 
         {/* COLUMNA 2: Take away */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Take away">
               🏃
@@ -481,14 +559,14 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.takeAway.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
         </div>
 
         {/* COLUMNA 3: Delivery */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Delivery">
               🛵
@@ -508,7 +586,7 @@ export default function Home() {
           ) : (
             <div className="space-y-3 overflow-y-auto max-h-[580px] pr-1">
               {pedidosPorCanal.delivery.map((p) => (
-                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} />
+                <TarjetaPedido key={p.id} pedido={p} onVerResumen={handleVerResumen} onMarcarEntregado={handleMarcarEntregado} entregandoId={entregandoId} />
               ))}
             </div>
           )}
@@ -524,6 +602,14 @@ export default function Home() {
         alImprimir={handleImprimirComanda}
         alCancelar={handleCancelarPedido}
         alEliminarItem={handleEliminarItem}
+      />
+
+      {/* Modal Unificado de Motivo de Cancelación */}
+      <ModalConfirmarCancelarPedido
+        open={modalCancelarOpen}
+        onOpenChange={setModalCancelarOpen}
+        onConfirmar={handleConfirmarCancelacion}
+        cargando={cancelando}
       />
 
       {/* Ticket de Impresión para PrintPortal */}

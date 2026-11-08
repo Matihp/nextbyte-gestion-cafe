@@ -1,6 +1,11 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const Client_Libsql = require('@libsql/knex-libsql');
+let Client_Libsql;
+try {
+  Client_Libsql = require('@libsql/knex-libsql');
+} catch (e) {
+  // Opcional en entornos sin driver libsql instalado
+}
 
 module.exports = {
   development: {

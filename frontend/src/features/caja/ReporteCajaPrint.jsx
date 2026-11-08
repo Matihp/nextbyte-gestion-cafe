@@ -4,12 +4,45 @@ import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/form
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
-  const soloFecha = String(fechaStr).split('T')[0];
+  const str = String(fechaStr).trim();
+  const soloFecha = str.split('T')[0];
   const partes = soloFecha.split('-');
   if (partes.length === 3) {
-    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0]}`;
+    return `${partes[2].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[0].slice(-2)}`;
+  }
+  const dma = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+  if (dma) {
+    return `${dma[1]}/${dma[2]}/${dma[3].slice(-2)}`;
   }
   return fechaStr;
+};
+
+const formatearHora = (fechaVal) => {
+  if (!fechaVal) return '';
+  const str = String(fechaVal).trim();
+  if (str.includes('T') && str.includes(':')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat('es-AR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'America/Argentina/Buenos_Aires'
+        }).format(d);
+      }
+    } catch {}
+    const timePart = str.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (str.includes(' ') && str.includes(':')) {
+    const timePart = str.split(' ')[1];
+    return timePart ? timePart.slice(0, 5) : '';
+  }
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) {
+    return str.slice(0, 5);
+  }
+  return '';
 };
 
 const formatEstadoNombre = (estado) => {
@@ -193,7 +226,7 @@ export function ReporteCajaPrint({
                 ) : (
                   mermas.map((m, idx) => {
                     const fechaStr = m.fecha ? formatearFechaDDMMAAAA(m.fecha) : (m.created_at ? formatearFechaDDMMAAAA(m.created_at) : '-');
-                    const horaStr = m.created_at ? String(m.created_at).split(' ')[1]?.slice(0, 5) || '' : '';
+                    const horaStr = formatearHora(m.created_at);
                     const cant = Number(m.cantidad) || 1;
                     const pCosto = Number(m.precio_costo) || 0;
                     const cTotal = Number(m.costo_total) || (cant * pCosto);

@@ -2,7 +2,8 @@ const comandaService = require('../services/comandaService');
 const { ok } = require('../utils/respuesta');
 
 const obtenerActivas = async (req, res) => {
-  const data = await comandaService.obtenerActivas();
+  const incluirCompletados = req.query?.incluir_completados === 'true' || req.query?.incluirCompletados === 'true';
+  const data = await comandaService.obtenerActivas({ incluirCompletados });
   return ok(res, data);
 };
 
@@ -16,8 +17,14 @@ const completar = async (req, res) => {
   return ok(res, data);
 };
 
+const entregar = async (req, res) => {
+  const data = await comandaService.entregar(req.params.id);
+  return ok(res, data);
+};
+
 module.exports = {
   obtenerActivas,
   cambiarEstado,
-  completar
+  completar,
+  entregar
 };

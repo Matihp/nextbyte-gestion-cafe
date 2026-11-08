@@ -4,12 +4,20 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ROLES_SISTEMA } from '@/constants/roles';
+import {
+  getRoleDisplayName,
+  isCajaContingenciaRole,
+  isAdminRole,
+  isAdministracionRole,
+  isCajaDiariaRole,
+  ROLES_SISTEMA
+} from '@/constants/roles';
 import { ImageUpload } from '@/components/ui/image-upload';
 
 export function EmployeeForm({ roles = [], initialData = null, existingEmployees = [], onSave, onCancel }) {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -24,31 +32,110 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     workDayShifts: {},
     photo: '',
     roleId: '',
-    password: '123456'
+    password: ''
   });
 
-  const isCajaContingenciaRole = (role) => {
-    if (!role) return false;
-    return role.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || role.id === 'role-caja-contingencia';
+  // Helper para verificar si un registro pertenece al mismo empleado o a su usuario vinculado
+  const isSameEmployee = (emp, init) => {
+    if (!init) return false;
+    const initId = String(init.id || init.empleado_id || '');
+    const empId = String(emp.id || '');
+    const empEmpleadoId = String(emp.empleado_id || '');
+
+    if (initId && empId && initId === empId) return true;
+    if (initId && empEmpleadoId && initId === empEmpleadoId) return true;
+    if (
+      init.email &&
+      emp.email &&
+      String(emp.email).trim().toLowerCase() === String(init.email).trim().toLowerCase()
+    ) {
+      return true;
+    }
+    return false;
   };
 
+  // Validar si el email ya pertenece a otro empleado o usuario
+  const isDuplicateEmail = (email) => {
+    if (!email) return false;
+    const emailLimpio = String(email).trim().toLowerCase();
+    return existingEmployees.some((emp) => {
+      if (isSameEmployee(emp, initialData)) return false;
+      return String(emp.email || '').trim().toLowerCase() === emailLimpio;
+    });
+  };
+
+  // Validar si el rol de contingencia (Cajero Principal) ya está asignado a otro usuario
   const isContingenciaYaAsignado = (role) => {
     if (!isCajaContingenciaRole(role)) return false;
     return existingEmployees.some((emp) => {
-      if (initialData && (emp.id === initialData.id || emp.id === initialData.empleado_id)) {
-        return false;
-      }
+      if (isSameEmployee(emp, initialData)) return false;
       if (emp.tiene_usuario === false || emp.tiene_usuario === 0) {
         return false;
       }
       const empRoleId = emp.roleId || emp.rol_id;
       const empRole = roles.find((r) => r.id === empRoleId);
-      return empRoleId === role.id || isCajaContingenciaRole(empRole) || empRoleId === '877890f1-ffc8-488b-a5c4-b1caff520383';
+      return empRoleId === role.id || isCajaContingenciaRole(empRole) || empRoleId === ROLES_SISTEMA.CAJERO_PRINCIPAL;
     });
   };
 
+  // Resolver ID de rol reconociendo UUIDs, nombres y aliases heredados
+  const resolveRoleId = (rawRoleId) => {
+    if (!rawRoleId) return '';
+    const found = roles.find(
+      (r) =>
+        r.id === rawRoleId ||
+        String(r.nombre || '').toLowerCase() === String(rawRoleId).toLowerCase() ||
+        String(r.name || '').toLowerCase() === String(rawRoleId).toLowerCase()
+    );
+    if (found) return found.id;
+
+    if (rawRoleId === 'role-administracion' || String(rawRoleId).toLowerCase().includes('administra')) {
+      return roles.find((r) => isAdministracionRole(r))?.id || rawRoleId;
+    }
+    if (
+      rawRoleId === 'role-caja-contingencia' ||
+      String(rawRoleId).toLowerCase().includes('principal') ||
+      String(rawRoleId).toLowerCase().includes('contingencia')
+    ) {
+      return roles.find((r) => isCajaContingenciaRole(r))?.id || rawRoleId;
+    }
+    if (rawRoleId === 'role-caja-diaria' || String(rawRoleId).toLowerCase().includes('secundario')) {
+      return roles.find((r) => isCajaDiariaRole(r))?.id || rawRoleId;
+    }
+    if (rawRoleId === 'role-admin' || String(rawRoleId).toLowerCase() === 'admin') {
+      return roles.find((r) => isAdminRole(r))?.id || rawRoleId;
+    }
+    return rawRoleId;
+  };
+
   useEffect(() => {
+    const defaultRoleId =
+      roles.find((r) => !isAdminRole(r) && !isContingenciaYaAsignado(r))?.id || roles[0]?.id || '';
+
     if (initialData) {
+      const initialWorkDays = Array.isArray(initialData.workDays)
+        ? initialData.workDays
+        : Array.isArray(initialData.work_days)
+        ? initialData.work_days
+        : Array.isArray(initialData.dias_franco)
+        ? initialData.dias_franco
+        : [];
+
+      let shiftsMap =
+        initialData.workDayShifts ||
+        initialData.work_day_shifts ||
+        initialData.dias_franco_turnos ||
+        {};
+
+      // Si shiftsMap está vacío pero hay días asignados, inicializar con el turno habitual
+      if (Object.keys(shiftsMap).length === 0 && initialWorkDays.length > 0) {
+        const defaultShift = initialData.usualShift || initialData.turno_habitual || 'Turno Mañana';
+        shiftsMap = {};
+        initialWorkDays.forEach((day) => {
+          shiftsMap[day] = defaultShift;
+        });
+      }
+
       setFormData({
         firstName: initialData.firstName || initialData.nombre || '',
         lastName: initialData.lastName || initialData.apellido || '',
@@ -59,16 +146,20 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
         birthDate: initialData.birthDate || initialData.fecha_nacimiento || '',
         joinDate: initialData.joinDate || initialData.fecha_ingreso || '',
         usualShift: initialData.usualShift || initialData.turno_habitual || 'Turno Mañana',
-        workDays: initialData.workDays || initialData.work_days || [],
-        workDayShifts: initialData.workDayShifts || initialData.work_day_shifts || initialData.dias_franco_turnos || {},
+        workDays: initialWorkDays,
+        workDayShifts: shiftsMap,
         photo: initialData.photo || initialData.foto || '',
-        roleId: initialData.roleId || initialData.rol_id || (roles[0]?.id || ''),
-        password: initialData.password || '123456'
+        roleId: resolveRoleId(initialData.roleId || initialData.rol_id || initialData.rol?.id) || defaultRoleId,
+        password: '' // En edición inicia vacía para no sobreescribir la contraseña si no se modifica
       });
     } else {
       setFormData((prev) => ({
         ...prev,
-        roleId: roles.find((r) => !r.isAdmin && !r.es_admin && !isContingenciaYaAsignado(r))?.id || roles[0]?.id || ''
+        password: '',
+        roleId:
+          prev.roleId && roles.some((r) => r.id === prev.roleId)
+            ? prev.roleId
+            : defaultRoleId
       }));
     }
   }, [initialData, roles]);
@@ -78,16 +169,18 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     setFormData((prev) => ({ ...prev, [name]: value }));
 
     if (name === 'email') {
-      const emailVal = value.trim().toLowerCase();
-      const isDup = existingEmployees.some(
-        (emp) =>
-          (emp.email || '').toLowerCase().trim() === emailVal &&
-          (!initialData || (emp.id !== initialData.id && emp.id !== initialData.empleado_id))
-      );
-      if (isDup && emailVal) {
+      if (isDuplicateEmail(value)) {
         setEmailError('Ya existe un empleado registrado con este email');
       } else {
         setEmailError('');
+      }
+    }
+
+    if (name === 'password') {
+      if (value && value.trim().length > 0 && value.trim().length < 6) {
+        setPasswordError('El mínimo es de 6 caracteres');
+      } else {
+        setPasswordError('');
       }
     }
   };
@@ -117,27 +210,35 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     e.preventDefault();
     if (!formData.firstName || !formData.email) return;
 
-    const emailLimpio = formData.email.trim().toLowerCase();
-    const isDup = existingEmployees.some(
-      (emp) =>
-        (emp.email || '').toLowerCase().trim() === emailLimpio &&
-        (!initialData || (emp.id !== initialData.id && emp.id !== initialData.empleado_id))
-    );
-
-    if (isDup) {
+    if (isDuplicateEmail(formData.email)) {
       setEmailError('Ya existe un empleado registrado con este email');
       toast.error('Ya existe un empleado registrado con ese email.');
+      return;
+    }
+
+    if (!initialData && (!formData.password || formData.password.trim().length < 6)) {
+      setPasswordError('El mínimo es de 6 caracteres');
+      toast.error('La contraseña debe tener como mínimo 6 caracteres.');
+      return;
+    }
+
+    if (initialData && formData.password && formData.password.trim().length > 0 && formData.password.trim().length < 6) {
+      setPasswordError('El mínimo es de 6 caracteres');
+      toast.error('La contraseña debe tener como mínimo 6 caracteres.');
       return;
     }
 
     const nombreLimpio = formData.firstName.trim();
     const apellidoLimpio = (formData.lastName || '').trim() || nombreLimpio;
     const legajoLimpio = (formData.legajo || '').trim() || String(Math.floor(1000 + Math.random() * 9000));
-    const passLimpio = formData.password && formData.password.length >= 6 ? formData.password : '123456';
+
+    // Si es edición y no escribió contraseña, no sobreescribir la existente
+    const hasPassword = formData.password && formData.password.trim().length >= 6;
+    const passLimpio = hasPassword ? formData.password.trim() : initialData ? null : '123456';
 
     const newEmployee = {
       ...formData,
-      id: initialData?.id,
+      id: initialData?.id || initialData?.empleado_id,
       firstName: nombreLimpio,
       lastName: apellidoLimpio,
       nombre: nombreLimpio,
@@ -145,15 +246,14 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
       displayName: (formData.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
       legajo: legajoLimpio,
       email: formData.email.trim(),
-      password: passLimpio,
-      contrasena: passLimpio,
       telefono: formData.phone?.trim() || null,
       foto: formData.photo?.trim() || null,
       fecha_nacimiento: formData.birthDate || null,
       fecha_ingreso: formData.joinDate || null,
       turno_habitual: formData.usualShift || 'Turno Mañana',
       dias_franco: Array.isArray(formData.workDays) ? formData.workDays : [],
-      rol_id: formData.roleId || null
+      rol_id: formData.roleId || null,
+      ...(passLimpio ? { password: passLimpio, contrasena: passLimpio } : {})
     };
 
     if (onSave) {
@@ -250,16 +350,15 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                   >
                     {roles.map((role) => {
                       const yaAsignado = isContingenciaYaAsignado(role);
+                      const displayName = role.nombre || role.name || getRoleDisplayName(role);
                       return (
                         <option key={role.id} value={role.id} disabled={yaAsignado}>
-                          {role.nombre || role.name} {yaAsignado ? '(Ya asignado a otro usuario)' : ''}
+                          {displayName} {yaAsignado ? '(Ya asignado a otro usuario)' : ''}
                         </option>
                       );
                     })}
                     {roles.length === 0 && (
-                      <>
-                        <option value="">Sin rol asignado</option>
-                      </>
+                      <option value="">Sin rol asignado</option>
                     )}
                   </select>
                 </div>
@@ -331,28 +430,32 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                    Contraseña * (mínimo 6 caracteres)
+                  <Label htmlFor="password" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                    {initialData ? 'Contraseña' : 'Contraseña *'}
                   </Label>
                   <div className="relative mt-1">
                     <Input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       name="password"
-                      required
-                      minLength={6}
+                      required={!initialData}
+                      minLength={!initialData || formData.password ? 6 : undefined}
                       value={formData.password}
                       onChange={handleChange}
-                      className="pr-10"
+                      placeholder={initialData ? 'Dejar en blanco' : '******'}
+                      className={`pr-10 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden ${passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {passwordError && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{passwordError}</p>
+                  )}
                 </div>
               </div>
 
@@ -378,8 +481,8 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                 </Label>
                 <div className="space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
                   {daysList.map((day) => {
-                    const isSelected = Boolean(formData.workDayShifts[day]);
-                    const currentShift = formData.workDayShifts[day] || 'Turno Mañana';
+                    const isSelected = Boolean(formData.workDayShifts[day] || formData.workDays?.includes(day));
+                    const currentShift = formData.workDayShifts[day] || formData.usualShift || 'Turno Mañana';
 
                     return (
                       <div key={day} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">

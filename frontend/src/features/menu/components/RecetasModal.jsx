@@ -12,12 +12,12 @@ import productoService from '@/services/productoService';
 import inventarioService from '@/services/inventarioService';
 import { toast } from 'sonner';
 import { X, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { formatearPrecio } from '@/utils/formatters';
 
 export default function RecetasModal({
   open,
   onOpenChange,
   recetas = [],
-  productos = [],
   initialEditRecipeId = null,
   onRecetaGuardada
 }) {
@@ -38,22 +38,11 @@ export default function RecetasModal({
   // Si se abre con un ID inicial a editar
   useEffect(() => {
     if (open && initialEditRecipeId) {
-      const rec = recetas.find(
-        (r) => String(r.producto_id || r.id) === String(initialEditRecipeId)
-      );
+      const rec = recetas.find((r) => String(r.id) === String(initialEditRecipeId));
       if (rec) {
         handleEdit(rec);
       } else {
-        // Cargar desde backend
-        productoService.obtenerReceta(initialEditRecipeId)
-          .then((res) => {
-            if (res && res.id) {
-              handleEdit(res);
-            } else {
-              handleAdd();
-            }
-          })
-          .catch(() => handleAdd());
+        handleAdd();
       }
     } else if (open && !initialEditRecipeId) {
       setEditingRecipe(null);
@@ -61,38 +50,22 @@ export default function RecetasModal({
   }, [open, initialEditRecipeId, recetas]);
 
   const handleAdd = () => {
-    const primerProd = productos[0];
     setEditingRecipe({
-      producto_id: primerProd ? String(primerProd.id) : '',
-      nombre: primerProd ? primerProd.nombre : '',
+      id: null,
+      nombre: '',
       ingredientes: []
     });
   };
 
-  const handleEdit = async (receta) => {
-    try {
-      setCargando(true);
-      const res = await productoService.obtenerReceta(receta.producto_id || receta.id);
-      setEditingRecipe({
-        producto_id: String(receta.producto_id || receta.id),
-        nombre: res?.nombre || receta.nombre || '',
-        ingredientes: (res?.ingredientes || []).map((i) => ({
-          insumo_id: String(i.insumo_id),
-          cantidad: String(i.cantidad)
-        }))
-      });
-    } catch {
-      setEditingRecipe({
-        producto_id: String(receta.producto_id || receta.id),
-        nombre: receta.nombre || '',
-        ingredientes: (receta.ingredientes || []).map((i) => ({
-          insumo_id: String(i.insumo_id),
-          cantidad: String(i.cantidad)
-        }))
-      });
-    } finally {
-      setCargando(false);
-    }
+  const handleEdit = (receta) => {
+    setEditingRecipe({
+      id: receta.id,
+      nombre: receta.nombre || '',
+      ingredientes: (receta.ingredientes || []).map((i) => ({
+        insumo_id: String(i.insumo_id),
+        cantidad: String(i.cantidad)
+      }))
+    });
   };
 
   const handleAddIngredient = () => {
@@ -123,11 +96,6 @@ export default function RecetasModal({
 
   const handleSaveRecipe = async () => {
     if (!editingRecipe) return;
-
-    if (!editingRecipe.producto_id) {
-      toast.error('Debe seleccionar un producto para asociar la receta');
-      return;
-    }
 
     if (!editingRecipe.nombre.trim()) {
       toast.error('El nombre de la receta es obligatorio');
@@ -161,8 +129,13 @@ export default function RecetasModal({
 
     try {
       setGuardando(true);
-      await productoService.guardarReceta(editingRecipe.producto_id, payload);
-      toast.success(`Receta "${payload.nombre}" guardada`);
+      if (editingRecipe.id) {
+        await productoService.actualizarRecetaIndependiente(editingRecipe.id, payload);
+        toast.success(`Receta "${payload.nombre}" actualizada`);
+      } else {
+        await productoService.crearReceta(payload);
+        toast.success(`Receta "${payload.nombre}" creada con éxito`);
+      }
       setEditingRecipe(null);
       if (onRecetaGuardada) onRecetaGuardada();
     } catch (error) {
@@ -175,7 +148,7 @@ export default function RecetasModal({
   const handleDeleteRecipe = async (receta) => {
     try {
       setGuardando(true);
-      await productoService.eliminarReceta(receta.producto_id || receta.id);
+      await productoService.eliminarRecetaIndependiente(receta.id);
       toast.success(`Receta "${receta.nombre}" eliminada`);
       if (onRecetaGuardada) onRecetaGuardada();
     } catch (error) {
@@ -218,34 +191,8 @@ export default function RecetasModal({
                   value={editingRecipe.nombre}
                   onChange={(e) => setEditingRecipe({ ...editingRecipe, nombre: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus-visible:ring-2 focus-visible:ring-[#A67C52] text-sm bg-white"
-                  placeholder="Ej. Receta de Capuchino..."
+                  placeholder="Ej. Receta de Gin Tonic..."
                 />
-              </div>
-
-              <div>
-                <Label className="block text-sm font-medium text-gray-700 mb-1">
-                  Producto Asociado
-                </Label>
-                <select
-                  value={editingRecipe.producto_id}
-                  onChange={(e) => {
-                    const prodId = e.target.value;
-                    const prod = productos.find((p) => String(p.id) === prodId);
-                    setEditingRecipe({
-                      ...editingRecipe,
-                      producto_id: prodId,
-                      nombre: editingRecipe.nombre || (prod ? prod.nombre : '')
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#A67C52] bg-white text-sm h-10"
-                >
-                  <option value="" disabled>Seleccione un producto</option>
-                  {productos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>
@@ -301,22 +248,22 @@ export default function RecetasModal({
                       <button
                         type="button"
                         onClick={() => handleRemoveIngredient(index)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                       >
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
+              <div className="flex gap-2 justify-end pt-4 border-t border-gray-100">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setEditingRecipe(null)}
                   disabled={guardando}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm h-10"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   Cancelar
                 </Button>
@@ -324,67 +271,66 @@ export default function RecetasModal({
                   type="button"
                   onClick={handleSaveRecipe}
                   disabled={guardando}
-                  className="px-4 py-2 bg-[#4B2B1D] text-white rounded-lg hover:bg-[#9F4F2F] transition-colors font-medium text-sm h-10 cursor-pointer"
+                  className="px-4 py-2 bg-[#4B2B1D] text-white rounded-lg hover:bg-[#9F4F2F] transition-colors"
                 >
-                  {guardando && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {guardando && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                   Guardar Receta
                 </Button>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              <button
-                type="button"
-                onClick={handleAdd}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#F3E5DC] border border-[#F3E5DC] text-[#4B2B1D] rounded-xl hover:bg-[#F3E5DC]/80 transition-colors font-medium cursor-pointer"
-              >
-                <Plus className="w-5 h-5" /> Agregar Nueva Receta
-              </button>
+              <div className="flex justify-between items-center">
+                <h2 className="text-base font-semibold text-gray-900">
+                  Lista de Recetas
+                </h2>
+                <Button
+                  type="button"
+                  onClick={handleAdd}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4B2B1D] text-white rounded-lg hover:bg-[#9F4F2F] transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" /> Agregar Nueva Receta
+                </Button>
+              </div>
 
-              <div className="mt-6 space-y-3">
+              <div className="space-y-2">
                 {recetas.length === 0 ? (
                   <p className="text-center text-gray-500 py-6">
                     No hay recetas registradas.
                   </p>
                 ) : (
-                  recetas.map((recipe) => {
-                    const prod = productos.find(
-                      (p) => String(p.id) === String(recipe.producto_id || recipe.id)
-                    );
-                    return (
-                      <div
-                        key={recipe.producto_id || recipe.id}
-                        className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors flex items-center justify-between"
-                      >
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{recipe.nombre}</h3>
-                          {prod && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Producto: {prod.nombre}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(recipe)}
-                            className="p-1.5 text-gray-500 hover:text-[#4B2B1D] transition-colors cursor-pointer"
-                            title="Editar receta"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRecipe(recipe)}
-                            className="p-1.5 text-gray-500 hover:text-red-600 transition-colors cursor-pointer"
-                            title="Eliminar receta"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                  recetas.map((recipe) => (
+                    <div
+                      key={recipe.id}
+                      className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors flex items-center justify-between"
+                    >
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{recipe.nombre}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {recipe.ingredientes?.length || 0} {recipe.ingredientes?.length === 1 ? 'ingrediente' : 'ingredientes'}
+                          {recipe.costo_total !== undefined && ` • Costo: ${formatearPrecio(recipe.costo_total)}`}
+                        </p>
                       </div>
-                    );
-                  })
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(recipe)}
+                          className="p-1.5 text-gray-500 hover:text-[#4B2B1D] transition-colors cursor-pointer"
+                          title="Editar receta"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecipe(recipe)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Eliminar receta"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

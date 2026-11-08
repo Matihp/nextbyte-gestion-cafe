@@ -11,8 +11,9 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
+import { getRoleDisplayName } from '@/constants/roles';
 
-export function EmployeeList({ employees = [], onEdit, onDelete }) {
+export function EmployeeList({ employees = [], roles = [], onEdit, onDelete }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
@@ -72,9 +73,6 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
               <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#4B2B1D] uppercase tracking-wider">
                 Contacto
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#4B2B1D] uppercase tracking-wider">
-                Turno / Francos
-              </th>
               <th scope="col" className="relative px-6 py-3 text-right text-xs font-semibold text-[#4B2B1D] uppercase">
                 Acciones
               </th>
@@ -84,8 +82,6 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
             {filteredEmployees.map((emp) => {
               const firstName = emp.firstName || emp.nombre || '';
               const lastName = emp.lastName || emp.apellido || '';
-              const workDays = emp.workDays || emp.work_days || [];
-              const usualShift = emp.usualShift || emp.turno_habitual || '-';
 
               return (
                 <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
@@ -111,17 +107,16 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F3E5DC] text-[#70422B]">
-                      {emp.roleId === 'role-admin' || emp.es_admin ? 'Administrador' : 'Empleado'}
+                      {(() => {
+                        const r = roles.find((item) => item.id === (emp.roleId || emp.rol_id));
+                        if (r) return getRoleDisplayName(r);
+                        if (emp.roleId === 'role-admin' || emp.es_admin) return 'Administrador';
+                        return 'Empleado';
+                      })()}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[150px] truncate" title={emp.phone || emp.telefono || '-'}>
                     {emp.phone || emp.telefono || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap max-w-[200px]">
-                    <div className="text-sm font-medium text-gray-900 truncate">{usualShift}</div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {Array.isArray(workDays) && workDays.length > 0 ? workDays.join(', ') : 'Días habituales'}
-                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
@@ -146,7 +141,7 @@ export function EmployeeList({ employees = [], onEdit, onDelete }) {
             })}
             {filteredEmployees.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
                   No se encontraron empleados.
                 </td>
               </tr>
