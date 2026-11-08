@@ -411,7 +411,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                 <div>
                   <Label htmlFor="password" className="text-sm font-medium text-gray-700">
                     {initialData
-                      ? 'Contraseña (vacío para mantener actual)'
+                      ? 'Contraseña'
                       : 'Contraseña * (mínimo 6 caracteres)'}
                   </Label>
                   <div className="relative mt-1">
@@ -423,7 +423,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                       minLength={!initialData || formData.password ? 6 : undefined}
                       value={formData.password}
                       onChange={handleChange}
-                      placeholder={initialData ? '••••••••' : ''}
+                      placeholder={initialData ? 'Dejar en blanco para mantener' : ''}
                       className="pr-10"
                     />
                     <button
