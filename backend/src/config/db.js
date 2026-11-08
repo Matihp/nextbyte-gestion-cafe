@@ -146,25 +146,16 @@ const dbLocal = new Proxy(function () {}, {
             return function (resolve, reject) {
               return qbTarget.then(resolve, async (err) => {
                 if (isNetworkError(err)) {
-                  
+                  console.warn('⚠️ Fallo de conexión con Turso Cloud en query. Redirigiendo a SQLite local:', err.message);
+                  isOnlineState = false;
+                  pendingLocalSync = true;
                   try {
                     const { sql, bindings } = qbTarget.toSQL();
-                    const retryRes = await dbCloudDirect.raw(sql, bindings);
-                    const finalRes = qbTarget._single?.first && Array.isArray(retryRes) ? (retryRes[0] || null) : retryRes;
+                    const fallbackRes = await dbLocalDirect.raw(sql, bindings);
+                    const finalRes = qbTarget._single?.first && Array.isArray(fallbackRes) ? (fallbackRes[0] || null) : fallbackRes;
                     return resolve(finalRes);
-                  } catch (retryErr) {
-                   
-                    console.warn('⚠️ Fallo de red con Turso Cloud en query. Redirigiendo a SQLite local:', retryErr.message);
-                    isOnlineState = false;
-                    pendingLocalSync = true;
-                    try {
-                      const { sql, bindings } = qbTarget.toSQL();
-                      const fallbackRes = await dbLocalDirect.raw(sql, bindings);
-                      const finalRes = qbTarget._single?.first && Array.isArray(fallbackRes) ? (fallbackRes[0] || null) : fallbackRes;
-                      return resolve(finalRes);
-                    } catch (fallbackErr) {
-                      return reject(fallbackErr);
-                    }
+                  } catch (fallbackErr) {
+                    return reject(fallbackErr);
                   }
                 }
                 return reject(err);

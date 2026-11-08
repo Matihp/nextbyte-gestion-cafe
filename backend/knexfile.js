@@ -32,6 +32,12 @@ module.exports = {
         : path.join(__dirname, 'dev_local.db')
     },
     useNullAsDefault: true,
+    pool: {
+      min: 2,
+      max: 10,
+      acquireTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000
+    },
     migrations: {
       directory: path.join(__dirname, 'src', 'db', 'migrations')
     },
