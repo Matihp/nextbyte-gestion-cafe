@@ -1,0 +1,39 @@
+{
+  "name": "nextbyte-cafe-app",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión y Comandas - NextByte Café",
+  "main": "electron/main.js",
+  "scripts": {
+    "build:front": "npm run build --prefix frontend",
+    "start": "npm run build:front && electron .",
+    "dist": "npm run build:front && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.nextbyte.cafe",
+    "productName": "NextByte Cafe",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "npmRebuild": false,
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "frontend/dist/**/*",
+      "!backend/tests/**/*",
+      "!**/node_modules/*/{test,__tests__,tests}/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
+
