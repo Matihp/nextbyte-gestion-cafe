@@ -25,7 +25,6 @@
   "description": "",
   "dependencies": {
     "@libsql/client": "^0.18.0",
-    "@libsql/knex-libsql": "^0.1.0",
     "bcryptjs": "3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

@@ -1,90 +1,54 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-let Client_Libsql;
-try {
-  Client_Libsql = require('@libsql/knex-libsql');
-} catch (e) {
-  // Opcional en entornos sin driver libsql instalado
-}
+const LibsqlKnexClient = require('./src/config/libsqlKnexClient');
+
+const migrations = { directory: path.join(__dirname, 'src', 'db', 'migrations') };
+const seeds = { directory: path.join(__dirname, 'src', 'db', 'seeds') };
+const localConfig = (filename) => ({
+  client: 'sqlite3',
+  connection: {
+    filename: process.env.LOCAL_DB_PATH ? path.resolve(__dirname, process.env.LOCAL_DB_PATH) : path.join(__dirname, filename)
+  },
+  useNullAsDefault: true,
+  pool: {
+    min: 1,
+    max: 1,
+    afterCreate(conn, cb) {
+      conn.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;', (error) => cb(error, conn));
+    }
+  },
+  migrations,
+  seeds
+});
 
 module.exports = {
-  development: {
-    client: 'sqlite3',
-    connection: {
-      filename: process.env.LOCAL_DB_PATH 
-        ? path.resolve(__dirname, process.env.LOCAL_DB_PATH) 
-        : path.join(__dirname, 'dev_local.db')
-    },
-    useNullAsDefault: true,
-    pool: {
-      afterCreate: (conn, cb) => {
-        conn.run('PRAGMA foreign_keys = ON', cb);
-      }
-    },
-    migrations: {
-      directory: path.join(__dirname, 'src', 'db', 'migrations')
-    },
-    seeds: {
-      directory: path.join(__dirname, 'src', 'db', 'seeds')
-    }
-  },
-
+  development: localConfig('dev_local.db'),
+  production: localConfig('contingencia.db'),
   turso: {
-    client: Client_Libsql,
+    client: LibsqlKnexClient,
     connection: {
-      filename: process.env.TURSO_DB_URL
-        ? `${process.env.TURSO_DB_URL}?authToken=${process.env.TURSO_AUTH_TOKEN || ''}`
-        : path.join(__dirname, 'dev_local.db')
+      filename: ':memory:',
+      url: process.env.TURSO_DB_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+      requestTimeoutMs: Number(process.env.TURSO_REQUEST_TIMEOUT_MS || 5000)
     },
     useNullAsDefault: true,
-    pool: {
-      min: 2,
-      max: 10,
-      acquireTimeoutMillis: 10000,
-      idleTimeoutMillis: 30000
-    },
-    migrations: {
-      directory: path.join(__dirname, 'src', 'db', 'migrations')
-    },
-    seeds: {
-      directory: path.join(__dirname, 'src', 'db', 'seeds')
-    }
+    acquireConnectionTimeout: 10000,
+    pool: { min: 0, max: 4, idleTimeoutMillis: 30000 },
+    migrations,
+    seeds
   },
-
   test: {
     client: 'sqlite3',
-    connection: {
-      filename: path.join(__dirname, 'test.db')
-    },
+    connection: { filename: ':memory:' },
     useNullAsDefault: true,
     pool: {
-      afterCreate: (conn, cb) => {
-        conn.run('PRAGMA foreign_keys = ON', () => {
-          conn.run('PRAGMA synchronous = OFF', () => {
-            conn.run('PRAGMA journal_mode = MEMORY', cb);
-          });
-        });
+      min: 1,
+      max: 1,
+      afterCreate(conn, cb) {
+        conn.run('PRAGMA foreign_keys = ON', (error) => cb(error, conn));
       }
     },
-    migrations: {
-      directory: path.join(__dirname, 'src', 'db', 'migrations')
-    }
-  },
-  production: {
-    client: 'sqlite3',
-    connection: {
-      filename: process.env.LOCAL_DB_PATH 
-        ? path.resolve(__dirname, process.env.LOCAL_DB_PATH) 
-        : path.join(__dirname, 'contingencia.db')
-    },
-    useNullAsDefault: true,
-    pool: {
-      afterCreate: (conn, cb) => {
-        conn.run('PRAGMA foreign_keys = ON', cb);
-      }
-    },
-    migrations: {
-      directory: path.join(__dirname, 'src', 'db', 'migrations')
-    }
+    migrations
   }
 };

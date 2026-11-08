@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const checkConnection = require('./middlewares/checkConnection');
 const checkRoleOffline = require('./middlewares/checkRole');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
+const { databaseMode } = require('./config/db');
 
 const app = express();
 
@@ -27,7 +28,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     message: 'Backend NextByte funcionando correctamente!',
     isOnline: Boolean(req.isOnline),
-    status: req.isOnline ? 'Online (Turso)' : 'Offline (SQLite Contingencia)'
+    databaseMode,
+    status: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : req.isOnline ? 'Online (Turso)' : 'Turso no disponible (sin fallback)'
   });
 });
 
