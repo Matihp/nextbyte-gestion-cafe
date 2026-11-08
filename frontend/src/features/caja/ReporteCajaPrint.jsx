@@ -64,7 +64,9 @@ export function ReporteCajaPrint({
   totales = { subtotalCosto: 0, totalVenta: 0 },
   ticketPedido = null,
   movimientos = [],
-  mermas = []
+  mermas = [],
+  saldoMesAnterior = undefined,
+  esMensual = false
 }) {
   // CASO 1: Reimpresión de ticket individual de control interno (igual al PDF de muestra)
   if (ticketPedido) {
@@ -74,8 +76,8 @@ export function ReporteCajaPrint({
     const fechaHoraStr = `${fechaTexto} ${ticketPedido.hora || ''}`.trim() || '-';
 
     return (
-      <PrintPortal id="print-area">
-        <div className="p-8 max-w-sm mx-auto bg-white text-black font-sans leading-normal">
+      <PrintPortal id="print-area" pageType="ticket" className="ticket-termico">
+        <div className="ticket-termico p-4 w-[76mm] max-w-[76mm] mx-auto bg-white text-black font-sans leading-normal">
           {/* Encabezado */}
           <div className="text-center mb-4">
             <h1 className="text-2xl font-bold uppercase tracking-wider text-black">
@@ -163,7 +165,11 @@ export function ReporteCajaPrint({
     }
   }
   const printSaldoNeto = printTotalIngresos - printTotalRetiros;
-  const printSaldoFinal = (totales.totalVenta || 0) + printSaldoNeto;
+  const printSaldoAnteriorNum = Number(saldoMesAnterior) || 0;
+  const esReporteMensual = esMensual || saldoMesAnterior !== undefined;
+  const printSaldoFinal = esReporteMensual
+    ? printSaldoAnteriorNum + (totales.totalVenta || 0) + printSaldoNeto
+    : (totales.totalVenta || 0) + printSaldoNeto;
   const printDiferenciaVentasCostos = (totales.totalVenta || 0) - (totales.subtotalCosto || 0);
 
   const esIngresosRetiros = tipoReporte === 'ingresos-retiros';
@@ -178,10 +184,10 @@ export function ReporteCajaPrint({
     }
   }
 
-  // CASO 2: Reporte General de Caja o Reporte de Ingresos/Retiros
+  // CASO 2: Reporte General de Caja, Mensual, Ingresos/Retiros o Auditoría (Formato Hoja A4)
   return (
-    <PrintPortal id="print-area">
-      <div className="p-8 max-w-4xl mx-auto bg-white text-black font-sans leading-normal">
+    <PrintPortal id="print-area" pageType="a4" className="reporte-a4 w-full">
+      <div className="reporte-a4 w-full max-w-full p-6 bg-white text-black font-sans leading-normal">
         {/* Encabezado del Reporte */}
         <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
           <div>
@@ -323,6 +329,27 @@ export function ReporteCajaPrint({
                 <th className="py-2 px-2 text-center">Estado</th>
               </tr>
             </thead>
+
+            {/* Primera línea en Reporte Mensual: Saldo del mes anterior */}
+            {esReporteMensual && (
+              <tbody className="border-b-2 border-black bg-gray-50 font-bold">
+                <tr>
+                  <td className="py-2.5 px-2 text-gray-500 whitespace-nowrap">-</td>
+                  <td className="py-2.5 px-2 text-gray-500 whitespace-nowrap">-</td>
+                  <td className="py-2.5 px-2 font-black text-black">SALDO INICIAL</td>
+                  <td className="py-2.5 px-2 font-black text-black" colSpan={4}>
+                    Saldo del mes anterior
+                  </td>
+                  <td className="py-2.5 px-2 text-right text-gray-400 font-normal">$ 0</td>
+                  <td className="py-2.5 px-2 text-right font-black text-black text-sm">
+                    {formatearPrecio(printSaldoAnteriorNum)}
+                  </td>
+                  <td className="py-2.5 px-2 text-center text-[10px] font-bold uppercase text-gray-700">
+                    Saldo Inicial
+                  </td>
+                </tr>
+              </tbody>
+            )}
 
             {pedidos.length === 0 ? (
               <tbody>
@@ -489,7 +516,13 @@ export function ReporteCajaPrint({
               <p>Andén Café - Sistema de Gestión NextByte.</p>
             </div>
 
-            <div className="w-72 space-y-1.5 text-xs text-right">
+            <div className="w-80 space-y-1.5 text-xs text-right">
+              {esReporteMensual && (
+                <div className="flex justify-between text-xs text-black font-bold border-b border-gray-300 pb-1">
+                  <span>(+) Saldo del Mes Anterior:</span>
+                  <span className="font-black text-sm">{formatearPrecio(printSaldoAnteriorNum)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-semibold text-gray-700">
                 <span>Subtotal Costos:</span>
                 <span>{formatearPrecio(totales.subtotalCosto)}</span>

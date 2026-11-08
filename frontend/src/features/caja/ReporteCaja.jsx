@@ -450,6 +450,7 @@ export default function ReporteCaja() {
         let desdeTarget = '';
         let hastaTarget = '';
         let mesTexto = '';
+        let mesTag = '';
 
         if (modoFiltro === 'mes-seleccionado' && mesSeleccionado) {
           const [anioStr, mesStr] = mesSeleccionado.split('-');
@@ -461,6 +462,7 @@ export default function ReporteCaja() {
           const dRef = new Date(anio, mes - 1, 1);
           const mNom = dRef.toLocaleString('es-ES', { month: 'long' });
           mesTexto = `${mNom.charAt(0).toUpperCase() + mNom.slice(1)} ${anio}`;
+          mesTag = mesSeleccionado;
         } else {
           const ahora = new Date();
           const anio = ahora.getFullYear();
@@ -470,14 +472,18 @@ export default function ReporteCaja() {
           hastaTarget = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
           const mNom = ahora.toLocaleString('es-ES', { month: 'long' });
           mesTexto = `${mNom.charAt(0).toUpperCase() + mNom.slice(1)} ${anio}`;
+          mesTag = `${anio}-${String(mes).padStart(2, '0')}`;
         }
 
-        const [data, resMovs] = await Promise.all([
+        const [data, resMovs, resSaldo] = await Promise.all([
           reporteService.obtenerReporteCaja({ desde: desdeTarget, hasta: hastaTarget }),
-          cajaService.obtenerMovimientos({ desde: desdeTarget, hasta: hastaTarget }).catch(() => ({ data: [] }))
+          cajaService.obtenerMovimientos({ desde: desdeTarget, hasta: hastaTarget }).catch(() => ({ data: [] })),
+          cajaService.obtenerSaldoAnterior(mesTag).catch(() => ({ data: { saldo: 0 } }))
         ]);
         const pedidosCierre = data?.pedidos || [];
         const listaMovs = resMovs?.data || resMovs || [];
+        const saldoAnterior = Number(resSaldo?.data?.saldo) || Number(resSaldo?.saldo) || 0;
+
         setDatosImpresion({
           titulo: 'Reporte de CAJA MES',
           periodo: `Cierre Mensual - ${mesTexto} (${desdeTarget} a ${hastaTarget})`,
@@ -486,13 +492,20 @@ export default function ReporteCaja() {
             subtotalCosto: data?.total_costo || 0,
             totalVenta: data?.total_venta || 0
           },
-          movimientos: listaMovs
+          movimientos: listaMovs,
+          saldoMesAnterior: saldoAnterior,
+          esMensual: true
         });
       } else if (tipo === 'pestana-2') {
-        const { desde, hasta, nombreMes, anio } = getRangoPestana2();
-        const dataVentas = await reporteService.obtenerReporteCaja({ desde, hasta }).catch(() => ({ total_costo: 0, total_venta: 0 }));
+        const { desde, hasta, nombreMes, anio, mesIso } = getRangoPestana2();
+        const [dataVentas, resSaldo] = await Promise.all([
+          reporteService.obtenerReporteCaja({ desde, hasta }).catch(() => ({ total_costo: 0, total_venta: 0 })),
+          cajaService.obtenerSaldoAnterior(mesIso).catch(() => ({ data: { saldo: 0 } }))
+        ]);
         const subtotalCosto = Number(dataVentas?.total_costo) || 0;
         const totalVenta = Number(dataVentas?.total_venta) || ventasMesP2 || 0;
+        const saldoAnterior = Number(resSaldo?.data?.saldo) || Number(resSaldo?.saldo) || 0;
+
         setDatosImpresion({
           tipoReporte: 'ingresos-retiros',
           titulo: `Reporte de Ingresos y Retiros de Caja - ${nombreMes.toUpperCase()} ${anio}`,
@@ -502,7 +515,9 @@ export default function ReporteCaja() {
             subtotalCosto,
             totalVenta
           },
-          movimientos: movimientosP2
+          movimientos: movimientosP2,
+          saldoMesAnterior: saldoAnterior,
+          esMensual: true
         });
       } else if (tipo === 'pestana-3') {
         const { desde, hasta, nombreMes, anio } = getRangoPestana2();
@@ -516,12 +531,21 @@ export default function ReporteCaja() {
           totales: { totalCostoMermas }
         });
       } else {
+        const esFiltroMes = modoFiltro === 'mes-seleccionado' && mesSeleccionado;
+        let saldoAnterior = undefined;
+        if (esFiltroMes) {
+          const resSaldo = await cajaService.obtenerSaldoAnterior(mesSeleccionado).catch(() => ({ data: { saldo: 0 } }));
+          saldoAnterior = Number(resSaldo?.data?.saldo) || Number(resSaldo?.saldo) || 0;
+        }
+
         setDatosImpresion({
           titulo: getTituloTabla(),
           periodo: getTituloTabla(),
           pedidos: pedidosFiltrados,
           totales: totales,
-          movimientos: movimientos
+          movimientos: movimientos,
+          saldoMesAnterior: saldoAnterior,
+          esMensual: esFiltroMes
         });
       }
 
@@ -534,7 +558,7 @@ export default function ReporteCaja() {
     }
   };
 
-  const descargarCsv = (pedidosAExportar, totalesAExportar, nombreArchivo, movimientosAExportar = [], soloTotalesVentas = false) => {
+  const descargarCsv = (pedidosAExportar, totalesAExportar, nombreArchivo, movimientosAExportar = [], soloTotalesVentas = false, saldoMesAnterior = undefined) => {
     const filas = [];
     if (!soloTotalesVentas) {
       filas.push([
@@ -551,6 +575,23 @@ export default function ReporteCaja() {
         'Total Venta',
         'Estado'
       ]);
+
+      if (saldoMesAnterior !== undefined) {
+        filas.push([
+          '-',
+          '-',
+          'SALDO INICIAL',
+          '-',
+          '-',
+          'Saldo del mes anterior',
+          '-',
+          '-',
+          '-',
+          0,
+          Math.round(Number(saldoMesAnterior) || 0),
+          'Saldo Inicial'
+        ]);
+      }
 
       for (const p of pedidosAExportar) {
         const items = p.items && p.items.length > 0
@@ -589,14 +630,17 @@ export default function ReporteCaja() {
       filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
     }
 
+    if (saldoMesAnterior !== undefined) {
+      filas.push(['SALDO DEL MES ANTERIOR (+)', '', '', '', '', '', '', '', '', '', Math.round(Number(saldoMesAnterior) || 0), '']);
+    }
     filas.push(['SUBTOTAL (Costos)', '', '', '', '', '', '', '', '', Math.round(Number(totalesAExportar.subtotalCosto) || 0), '', '']);
     filas.push(['TOTAL VENTAS', '', '', '', '', '', '', '', '', '', Math.round(Number(totalesAExportar.totalVenta) || 0), '']);
     filas.push(['DIFERENCIA (Ventas - Costos)', '', '', '', '', '', '', '', '', '', Math.round((Number(totalesAExportar.totalVenta) || 0) - (Number(totalesAExportar.subtotalCosto) || 0)), '']);
 
     // Recuadro de Movimientos de Caja Chica en CSV
+    let tIng = 0;
+    let tRet = 0;
     if (movimientosAExportar && movimientosAExportar.length > 0) {
-      let tIng = 0;
-      let tRet = 0;
       filas.push(['', '', '', '', '', '', '', '', '', '', '', '']);
       filas.push(['--- MOVIMIENTOS DE CAJA CHICA (INGRESOS / RETIROS) ---', '', '', '', '', '', '', '', '', '', '', '']);
       filas.push(['Fecha', 'Hora', 'Tipo', 'Detalle', '', '', '', '', '', 'Ingreso', 'Retiro', '']);
@@ -617,7 +661,11 @@ export default function ReporteCaja() {
       }
       filas.push(['TOTAL INGRESOS (+)', '', '', '', '', '', '', '', '', Math.round(tIng), '', '']);
       filas.push(['TOTAL RETIROS (-)', '', '', '', '', '', '', '', '', '', Math.round(tRet), '']);
-      filas.push(['SALDO FINAL DE CAJA (Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', Math.round((Number(totalesAExportar.totalVenta) || 0) + tIng - tRet), '']);
+      const saldoFinal = (saldoMesAnterior !== undefined ? (Number(saldoMesAnterior) || 0) : 0) + (Number(totalesAExportar.totalVenta) || 0) + tIng - tRet;
+      filas.push(['SALDO FINAL DE CAJA (Saldo Anterior + Ventas + Ingresos - Retiros)', '', '', '', '', '', '', '', '', '', Math.round(saldoFinal), '']);
+    } else if (saldoMesAnterior !== undefined) {
+      const saldoFinal = (Number(saldoMesAnterior) || 0) + (Number(totalesAExportar.totalVenta) || 0);
+      filas.push(['SALDO FINAL DE CAJA (Saldo Anterior + Ventas)', '', '', '', '', '', '', '', '', '', Math.round(saldoFinal), '']);
     }
 
     const contenidoCsv = '\uFEFF' + filas.map((e) => e.join(',')).join('\n');
@@ -668,9 +716,10 @@ export default function ReporteCaja() {
           hastaTarget = `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
           mesTag = `${anio}-${String(mes).padStart(2, '0')}`;
         }
-        const [data, resMovs] = await Promise.all([
+        const [data, resMovs, resSaldo] = await Promise.all([
           reporteService.obtenerReporteCaja({ desde: desdeTarget, hasta: hastaTarget }),
-          cajaService.obtenerMovimientos({ desde: desdeTarget, hasta: hastaTarget }).catch(() => ({ data: [] }))
+          cajaService.obtenerMovimientos({ desde: desdeTarget, hasta: hastaTarget }).catch(() => ({ data: [] })),
+          cajaService.obtenerSaldoAnterior(mesTag).catch(() => ({ data: { saldo: 0 } }))
         ]);
         const pedidosExp = data?.pedidos || [];
         const totExp = {
@@ -678,7 +727,8 @@ export default function ReporteCaja() {
           totalVenta: data?.total_venta || 0
         };
         const listaMovs = resMovs?.data || resMovs || [];
-        descargarCsv(pedidosExp, totExp, `Cierre_Mes_${mesTag}.csv`, listaMovs);
+        const saldoAnterior = Number(resSaldo?.data?.saldo) || Number(resSaldo?.saldo) || 0;
+        descargarCsv(pedidosExp, totExp, `Cierre_Mes_${mesTag}.csv`, listaMovs, false, saldoAnterior);
         toast.success(`Exportado Cierre Mensual (${pedidosExp.length} ventas, ${listaMovs.length} movimientos)`);
       } else if (tipo === 'pestana-2') {
         const { desde, hasta, mesIso } = getRangoPestana2();
@@ -1187,33 +1237,46 @@ export default function ReporteCaja() {
                           </tbody>
                         );
                       })}
+                      {/* Totales alineados exactamente con sus columnas correspondientes */}
+                      <tfoot className="border-t-2 border-border/30 bg-[#FAF7F5]/80 font-sans">
+                        <tr>
+                          {/* Columnas 1 a 7 (Fecha a Venta U.): Dato secundario discreto de Diferencia */}
+                          <td colSpan={7} className="py-3.5 pr-3 text-right align-middle">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-border/30 shadow-2xs">
+                              <span className="text-[11px] text-muted-foreground font-medium">
+                                Diferencia (Ventas - Costos):
+                              </span>
+                              <span className="text-xs font-bold text-emerald-700">
+                                {formatearPrecio(diferenciaVentasCostos)}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Columna 8 (Costo Tot.): Subtotal (Costos) grande y llamativo */}
+                          <td className="py-3.5 pr-2 text-right align-middle whitespace-nowrap">
+                            <span className="block text-xs font-black uppercase tracking-wider text-muted-foreground mb-0.5">
+                              Subtotal (Costos)
+                            </span>
+                            <span className="block text-xl font-black text-red-600">
+                              {formatearPrecio(totales.subtotalCosto)}
+                            </span>
+                          </td>
+
+                          {/* Columna 9 (Venta Tot.): Total Ventas grande y llamativo */}
+                          <td className="py-3.5 pr-2 text-right align-middle whitespace-nowrap">
+                            <span className="block text-xs font-black uppercase tracking-wider text-primary mb-0.5">
+                              Total Ventas
+                            </span>
+                            <span className="block text-2xl font-black text-primary">
+                              {formatearPrecio(totales.totalVenta)}
+                            </span>
+                          </td>
+
+                          {/* Columnas 10 y 11: Espaciadores */}
+                          <td colSpan={2} className="py-3.5"></td>
+                        </tr>
+                      </tfoot>
                     </table>
-                  </div>
-
-                  {/* Totales al pie de la tabla de ventas */}
-                  <div className="pt-6 border-t border-border/20 flex flex-wrap justify-end items-center gap-6 sm:gap-8 text-right">
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">Subtotal (Costos)</p>
-                      <p className="text-base font-bold text-red-600">
-                        {formatearPrecio(totales.subtotalCosto)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">Total Ventas</p>
-                      <p className="text-xl font-extrabold text-primary">
-                        {formatearPrecio(totales.totalVenta)}
-                      </p>
-                    </div>
-
-                    <div className="border-l border-border/40 pl-6">
-                      <p className="text-xs text-muted-foreground font-medium">
-                        Diferencia (Ventas - Costos)
-                      </p>
-                      <p className="text-xl font-black text-emerald-700">
-                        {formatearPrecio(diferenciaVentasCostos)}
-                      </p>
-                    </div>
                   </div>
 
                   {/* Recuadro de Movimientos de Caja Chica (Punto 3.3, 3.4 y 3.5) */}
@@ -1866,6 +1929,8 @@ export default function ReporteCaja() {
         ticketPedido={ticketPedidoImprimir}
         movimientos={datosImpresion?.movimientos !== undefined ? datosImpresion.movimientos : movimientos}
         mermas={datosImpresion?.mermas !== undefined ? datosImpresion.mermas : mermasValidas}
+        saldoMesAnterior={datosImpresion?.saldoMesAnterior}
+        esMensual={datosImpresion?.esMensual}
       />
 
       {/* Modal de Detalle Interno del Pedido */}

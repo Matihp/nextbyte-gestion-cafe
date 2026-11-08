@@ -13,8 +13,8 @@ export function OrderPrintTicket({ order }) {
     : formatearFecha(order.created_at || new Date());
 
   return (
-    <PrintPortal id="print-area">
-      <div className="p-2 w-[76mm] max-w-[76mm] mx-auto text-left font-sans bg-white text-black text-xs sm:text-sm">
+    <PrintPortal id="print-area" pageType="ticket" className="ticket-termico">
+      <div className="ticket-termico p-2 w-[76mm] max-w-[76mm] mx-auto text-left font-sans bg-white text-black text-xs sm:text-sm">
         <div className="text-center mb-4 border-b-2 border-black pb-3">
           <h1 className="text-2xl font-black uppercase tracking-widest mb-0.5 text-black">
             Andén

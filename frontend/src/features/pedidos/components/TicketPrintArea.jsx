@@ -5,7 +5,7 @@ export function TicketPrintArea({ order }) {
   if (!order) return null;
 
   return (
-    <div className="text-black bg-white w-[76mm] max-w-[76mm] mx-auto font-sans text-xs sm:text-sm p-2">
+    <div className="ticket-termico text-black bg-white w-[76mm] max-w-[76mm] mx-auto font-sans text-xs sm:text-sm p-2">
       <div className="text-center mb-4 border-b-2 border-black pb-3">
         <h1 className="text-2xl font-black uppercase tracking-widest mb-0.5">Andén</h1>
         <p className="text-xs font-bold uppercase tracking-wider">Orden de Pedido</p>

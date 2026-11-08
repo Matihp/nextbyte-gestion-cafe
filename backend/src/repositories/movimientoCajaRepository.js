@@ -70,13 +70,29 @@ module.exports = {
     };
   },
 
-  getSaldoAntesDeMes: (mes, trx = null) =>
-    consulta(trx)
+  getSaldoAntesDeMes: async (mes, trx = null) => {
+    const pedidosQ = trx ? trx('pedidos') : dbLocal('pedidos');
+    const ventaRes = await pedidosQ
+      .whereNot('estado', 'cancelado')
+      .where('fecha', '<', `${mes}-01`)
+      .select(dbLocal.raw('COALESCE(SUM(total), 0) as total_ventas'))
+      .first();
+
+    const movRes = await consulta(trx)
       .where('fecha', '<', `${mes}-01`)
       .select(dbLocal.raw(`
-        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as saldo
+        COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0) as total_movimientos
       `))
-      .first(),
+      .first();
+
+    const totalVentas = Number(ventaRes?.total_ventas) || 0;
+    const totalMovs = Number(movRes?.total_movimientos) || 0;
+    return {
+      saldo: totalVentas + totalMovs,
+      total_ventas: totalVentas,
+      total_movimientos: totalMovs,
+    };
+  },
 
   getMermasMes: (mes) =>
     dbLocal(MERMAS_TABLE)
