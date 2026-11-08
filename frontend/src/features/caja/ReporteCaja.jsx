@@ -1237,54 +1237,41 @@ export default function ReporteCaja() {
                           </tbody>
                         );
                       })}
-                      {/* Totales alineados exactamente con sus columnas correspondientes */}
-                      <tfoot className="border-t-2 border-border/30 bg-[#FAF7F5]/80 font-sans">
-                        {/* Fila 1: Subtotal Costos y Total Ventas alineados bajo sus respectivas columnas */}
-                        <tr>
-                          {/* Columnas 1 a 7: Vacías */}
-                          <td colSpan={7} className="py-3.5 pr-3"></td>
-
-                          {/* Columna 8 (Costo Tot.): Subtotal (Costos) grande y llamativo */}
-                          <td className="py-3.5 pr-2 text-right align-middle whitespace-nowrap">
-                            <span className="block text-xs font-black uppercase tracking-wider text-muted-foreground mb-0.5">
-                              Subtotal (Costos)
-                            </span>
-                            <span className="block text-xl font-black text-red-600">
-                              {formatearPrecio(totales.subtotalCosto)}
-                            </span>
-                          </td>
-
-                          {/* Columna 9 (Venta Tot.): Total Ventas grande y llamativo */}
-                          <td className="py-3.5 pr-2 text-right align-middle whitespace-nowrap">
-                            <span className="block text-xs font-black uppercase tracking-wider text-primary mb-0.5">
-                              Total Ventas
-                            </span>
-                            <span className="block text-2xl font-black text-primary">
-                              {formatearPrecio(totales.totalVenta)}
-                            </span>
-                          </td>
-
-                          {/* Columnas 10 y 11: Espaciadores */}
-                          <td colSpan={2} className="py-3.5"></td>
-                        </tr>
-
-                        {/* Fila 2: Diferencia ubicada directamente debajo de esos dos importes */}
-                        <tr className="border-t border-border/15">
-                          <td colSpan={7}></td>
-                          <td colSpan={2} className="py-2.5 pr-2 text-right align-middle">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-border/20 shadow-2xs">
-                              <span className="text-[11px] text-muted-foreground font-medium">
-                                Diferencia (Ventas - Costos):
-                              </span>
-                              <span className="text-xs font-bold text-emerald-700">
-                                {formatearPrecio(diferenciaVentasCostos)}
-                              </span>
-                            </div>
-                          </td>
-                          <td colSpan={2}></td>
-                        </tr>
-                      </tfoot>
                     </table>
+                  </div>
+
+                  {/* Totales al pie de la tabla de ventas (sin scroll lateral) */}
+                  <div className="pt-6 border-t border-border/20 flex flex-col items-end gap-3 text-right">
+                    {/* Fila superior: Subtotal Costos y Total Ventas destacados */}
+                    <div className="flex flex-wrap items-center justify-end gap-6 sm:gap-8">
+                      <div>
+                        <p className="text-xs text-muted-foreground font-black uppercase tracking-wider mb-0.5">
+                          Subtotal (Costos)
+                        </p>
+                        <p className="text-xl sm:text-2xl font-black text-red-600">
+                          {formatearPrecio(totales.subtotalCosto)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-primary font-black uppercase tracking-wider mb-0.5">
+                          Total Ventas
+                        </p>
+                        <p className="text-2xl sm:text-3xl font-black text-primary">
+                          {formatearPrecio(totales.totalVenta)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Fila inferior: Diferencia ubicada directamente debajo de esos importes */}
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-border/20 shadow-2xs">
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        Diferencia (Ventas - Costos):
+                      </span>
+                      <span className="text-xs font-bold text-emerald-700">
+                        {formatearPrecio(diferenciaVentasCostos)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Recuadro de Movimientos de Caja Chica (Punto 3.3, 3.4 y 3.5) */}
