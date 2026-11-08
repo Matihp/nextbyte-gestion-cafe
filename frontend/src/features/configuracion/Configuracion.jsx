@@ -106,6 +106,17 @@ export const isAdminRole = (role) => {
   return Boolean(role.es_admin || role.isAdmin || role.id === ROLES_SISTEMA.ADMIN || role.id === 'role-admin');
 };
 
+export const isUserAdmin = (u, rolesList = []) => {
+  if (!u) return false;
+  if (u.id === '11111111-1111-1111-1111-111111111111' || u.id === 'EMP-ADMIN-ROOT') return true;
+  if (u.email === 'admin@nextbyte.com') return true;
+  if (u.es_admin === true || u.es_admin === 1) return true;
+  if (u.rol_id === ROLES_SISTEMA.ADMIN || u.rol_id === '48575788-681d-47dc-b0ed-11cd402ca182') return true;
+  if (Array.isArray(u.permisos) && u.permisos.includes('all')) return true;
+  const role = rolesList.find((r) => r.id === (u.rol_id || u.roleId));
+  return isAdminRole(role);
+};
+
 export const isCustomerRole = (role) => {
   if (!role) return false;
   return role.id === ROLES_SISTEMA.PANTALLA_CLIENTE || role.id === 'role-customer';
@@ -500,7 +511,7 @@ export function Configuracion() {
   const openEditList = () => {
     setShowAddForm(false);
     const edits = {};
-    editableUsers.forEach((u) => {
+    users.forEach((u) => {
       const uRole = roles.find((r) => r.id === (u.rol_id || u.roleId));
       const fixedPerms = getFixedPermissionsForRole(uRole);
 
@@ -563,6 +574,12 @@ export function Configuracion() {
   };
 
   const saveEmpEdit = async (userId) => {
+    const targetUser = users.find((u) => u.id === userId);
+    if (isUserAdmin(targetUser, roles)) {
+      toast.error('El usuario Administrador está protegido y solo puede modificarse desde la sección Perfil');
+      return;
+    }
+
     const edit = empEdits[userId];
     if (!edit) return;
 
@@ -605,6 +622,11 @@ export function Configuracion() {
   // Eliminación de usuario (⚠️ SI ES EMPLEADO DEL COMERCIO, NO SE ELIMINA EL EMPLEADO, SOLO SU ACCESO DE USUARIO)
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
+    if (isUserAdmin(userToDelete, roles)) {
+      toast.error('No se puede eliminar el usuario Administrador del sistema');
+      setUserToDelete(null);
+      return;
+    }
     try {
       const res = await usuarioService.delete(userToDelete.id);
       if (res?.es_empleado) {
@@ -944,14 +966,15 @@ export function Configuracion() {
                   {/* Lista de usuarios para editar */}
                   {showEditList && (
                     <div className="space-y-2">
-                      {editableUsers.length === 0 ? (
+                      {users.length === 0 ? (
                         <p className="text-sm text-gray-400 text-center py-6">No hay usuarios para editar.</p>
                       ) : (
-                        editableUsers.map((u) => {
+                        users.map((u) => {
                           const edit = empEdits[u.id];
                           const isExpanded = expandedEmpId === u.id;
                           const isSaved = savedEmpIds.has(u.id);
                           const uRole = roles.find((r) => r.id === (u.rol_id || u.roleId));
+                          const isAdminUser = isUserAdmin(u, roles);
                           if (!edit) return null;
 
                           const initials = `${(edit.firstName || 'U').charAt(0)}${(edit.lastName || '').charAt(0)}`.toUpperCase();
@@ -961,7 +984,10 @@ export function Configuracion() {
                               <button
                                 type="button"
                                 onClick={() => toggleExpand(u.id)}
-                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left cursor-pointer"
+                                className={cn(
+                                  "w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left cursor-pointer",
+                                  isAdminUser && "bg-amber-50/40"
+                                )}
                               >
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F] text-sm font-semibold shrink-0 overflow-hidden">
@@ -979,9 +1005,17 @@ export function Configuracion() {
                                     )}
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-gray-900">
-                                      {edit.firstName} {edit.lastName}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium text-gray-900">
+                                        {edit.firstName} {edit.lastName}
+                                      </p>
+                                      {isAdminUser && (
+                                        <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1">
+                                          <Shield className="w-2.5 h-2.5 text-amber-600" />
+                                          Admin Protegido
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-xs text-gray-500">{edit.email}</p>
                                   </div>
                                 </div>
@@ -1009,19 +1043,50 @@ export function Configuracion() {
                               {/* Panel desplegable de edición */}
                               {isExpanded && (
                                 <div className="border-t border-gray-100 px-4 py-4 bg-[#F3E5DC]/40">
+                                  {isAdminUser && (
+                                    <div className="mb-4 p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-950 font-medium shadow-2xs">
+                                      <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="font-bold text-amber-900 text-sm mb-0.5 flex items-center gap-1.5">
+                                          <Shield className="w-3.5 h-3.5 text-amber-700" />
+                                          Edición del Administrador Bloqueada
+                                        </p>
+                                        <p className="text-amber-800 leading-relaxed">
+                                          El usuario Administrador está protegido y no puede modificarse ni eliminarse desde este panel. Si sos el administrador y querés actualizar tu nombre, contraseña o foto de perfil, podés hacerlo directamente arriba en la sección <strong>"Perfil"</strong>.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+
                                   <div className="mb-4">
-                                    <ImageUpload
-                                      label="Foto del Usuario"
-                                      value={edit.photo || ''}
-                                      folder="perfiles"
-                                      shape="circle"
-                                      size="sm"
-                                      placeholderInitials={initials}
-                                      buttonText="Subir Foto"
-                                      changeButtonText="Cambiar Foto"
-                                      successMessage="Foto lista para guardar"
-                                      onChange={(url) => setEditField(u.id, 'photo', url)}
-                                    />
+                                    {isAdminUser ? (
+                                      <div className="flex items-center gap-3 p-3 bg-white/80 border border-gray-200 rounded-lg">
+                                        <div className="w-10 h-10 rounded-full bg-[#F3E5DC] flex items-center justify-center text-[#9F4F2F] font-semibold overflow-hidden shrink-0">
+                                          {(edit.photo || u.foto) ? (
+                                            <img src={edit.photo || u.foto} alt="Avatar" className="w-full h-full object-cover" />
+                                          ) : (
+                                            initials
+                                          )}
+                                        </div>
+                                        <div>
+                                          <Label className="block text-xs font-semibold text-gray-700">Foto del Administrador</Label>
+                                          <p className="text-[11px] text-gray-500">Solo modificable arriba en la sección "Perfil"</p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <ImageUpload
+                                        label="Foto del Usuario"
+                                        value={edit.photo || ''}
+                                        folder="perfiles"
+                                        shape="circle"
+                                        size="sm"
+                                        placeholderInitials={initials}
+                                        buttonText="Subir Foto"
+                                        changeButtonText="Cambiar Foto"
+                                        successMessage="Foto lista para guardar"
+                                        onChange={(url) => setEditField(u.id, 'photo', url)}
+                                      />
+                                    )}
                                   </div>
 
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1029,37 +1094,41 @@ export function Configuracion() {
                                       <Label className="block text-xs font-medium text-gray-700 mb-1.5">Nombre</Label>
                                       <Input
                                         type="text"
+                                        disabled={isAdminUser}
                                         value={edit.firstName}
                                         onChange={(e) => setEditField(u.id, 'firstName', e.target.value)}
-                                        className="w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+                                        className={cn("w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white", isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100")}
                                       />
                                     </div>
                                     <div>
                                       <Label className="block text-xs font-medium text-gray-700 mb-1.5">Apellido</Label>
                                       <Input
                                         type="text"
+                                        disabled={isAdminUser}
                                         value={edit.lastName}
                                         onChange={(e) => setEditField(u.id, 'lastName', e.target.value)}
-                                        className="w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+                                        className={cn("w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white", isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100")}
                                       />
                                     </div>
                                     <div>
                                       <Label className="block text-xs font-medium text-gray-700 mb-1.5">Nombre distintivo</Label>
                                       <Input
                                         type="text"
+                                        disabled={isAdminUser}
                                         value={edit.displayName || ''}
                                         onChange={(e) => setEditField(u.id, 'displayName', e.target.value)}
                                         placeholder="Este nombre figurará en la grilla..."
-                                        className="w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+                                        className={cn("w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white", isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100")}
                                       />
                                     </div>
                                     <div>
                                       <Label className="block text-xs font-medium text-gray-700 mb-1.5">Email / Usuario</Label>
                                       <Input
                                         type="email"
+                                        disabled={isAdminUser}
                                         value={edit.email}
                                         onChange={(e) => setEditField(u.id, 'email', e.target.value)}
-                                        className="w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
+                                        className={cn("w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white", isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100")}
                                       />
                                     </div>
                                     <div className="md:col-span-2">
@@ -1067,41 +1136,48 @@ export function Configuracion() {
                                       <div className="relative">
                                         <Input
                                           type={showEmpPasswords[u.id] ? "text" : "password"}
-                                          placeholder="Dejar en blanco para mantener"
+                                          disabled={isAdminUser}
+                                          placeholder={isAdminUser ? "Modificable solo desde la sección 'Perfil'" : "Dejar en blanco para mantener"}
                                           value={edit.password || ''}
                                           onChange={(e) => setEditField(u.id, 'password', e.target.value)}
-                                          className="w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white pr-10"
+                                          className={cn("w-full !h-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white pr-10", isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100")}
                                         />
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() =>
-                                            setShowEmpPasswords((prev) => ({ ...prev, [u.id]: !prev[u.id] }))
-                                          }
-                                          className="absolute right-1 top-1/2 -translate-y-1/2 !h-8 !w-8 hover:bg-transparent text-gray-500 hover:text-gray-700"
-                                          tabIndex={-1}
-                                        >
-                                          {showEmpPasswords[u.id] ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </Button>
+                                        {!isAdminUser && (
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                              setShowEmpPasswords((prev) => ({ ...prev, [u.id]: !prev[u.id] }))
+                                            }
+                                            className="absolute right-1 top-1/2 -translate-y-1/2 !h-8 !w-8 hover:bg-transparent text-gray-500 hover:text-gray-700"
+                                            tabIndex={-1}
+                                          >
+                                            {showEmpPasswords[u.id] ? <EyeOff size={16} /> : <Eye size={16} />}
+                                          </Button>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
 
-                                  {/* Selector de Rol y Permisos (bloqueados solo para roles con permisos fijos) */}
+                                  {/* Selector de Rol y Permisos (bloqueados para Admin o roles con permisos fijos) */}
                                   {(() => {
                                     const currentEmpRole = roles.find((r) => r.id === edit.roleId);
-                                    const isLocked = hasFixedPermissionsRole(currentEmpRole);
-                                    const isCajaDia = isCajaDiariaRole(currentEmpRole);
+                                    const isLocked = isAdminUser || hasFixedPermissionsRole(currentEmpRole);
+                                    const isCajaDia = !isAdminUser && isCajaDiariaRole(currentEmpRole);
 
                                     return (
                                       <>
                                         <div className="mb-4">
                                           <Label className="block text-xs font-medium text-gray-700 mb-1.5">Rol</Label>
                                           <select
+                                            disabled={isAdminUser}
                                             value={edit.roleId}
                                             onChange={(e) => setEditField(u.id, 'roleId', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800"
+                                            className={cn(
+                                              "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#A67C52] bg-white text-gray-800",
+                                              isAdminUser && "opacity-60 cursor-not-allowed bg-gray-100"
+                                            )}
                                           >
                                             <option value="">Seleccionar un rol...</option>
                                             {assignableRoles.map((r) => {
@@ -1119,9 +1195,11 @@ export function Configuracion() {
                                               );
                                             })}
                                           </select>
-                                          {!isAdmin && (
+                                          {isAdminUser ? (
+                                            <p className="text-xs text-amber-800 mt-1">El rol Administrador es fijo e inalterable.</p>
+                                          ) : !isAdmin ? (
                                             <p className="text-xs text-gray-400 mt-1">Solo el Admin puede asignar el rol Admin.</p>
-                                          )}
+                                          ) : null}
                                         </div>
 
                                         {/* Permisos */}
@@ -1130,16 +1208,19 @@ export function Configuracion() {
                                             <p className="text-xs font-bold text-[#4B2B1D] uppercase tracking-wide">
                                               Permisos para el Rol:
                                             </p>
-                                            {isLocked && (
+                                            {isAdminUser ? (
+                                              <span className="text-xs text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 font-semibold">
+                                                Permisos totales de Administrador (fijos)
+                                              </span>
+                                            ) : isLocked ? (
                                               <span className="text-xs text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 font-semibold">
                                                 Permisos fijos de {getRoleDisplayName(currentEmpRole)} (bloqueados)
                                               </span>
-                                            )}
-                                            {isCajaDia && (
+                                            ) : isCajaDia ? (
                                               <span className="text-xs text-red-800 bg-red-100 px-2 py-0.5 rounded border border-red-300 font-semibold">
                                                 Rol Fijo (Permisos 100% modificables)
                                               </span>
-                                            )}
+                                            ) : null}
                                           </div>
                                           <div className="space-y-2.5">
                                             {EMP_PERM_ITEMS.map(({ key, label, sublabel }) => (
@@ -1151,18 +1232,22 @@ export function Configuracion() {
                                                   {sublabel && <span className="block text-xs text-gray-500">{sublabel}</span>}
                                                 </div>
                                                 <Switch
-                                                  checked={Boolean(edit.permissions[key])}
+                                                  checked={isAdminUser ? true : Boolean(edit.permissions[key])}
                                                   disabled={isLocked}
                                                   onCheckedChange={() => toggleEditPerm(u.id, key)}
                                                 />
                                               </div>
                                             ))}
                                           </div>
-                                          {isLocked && (
+                                          {isAdminUser ? (
+                                            <p className="mt-3 text-xs text-amber-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 font-medium">
+                                              El usuario Administrador cuenta con acceso total irrestricto a todos los módulos del sistema.
+                                            </p>
+                                          ) : isLocked ? (
                                             <p className="mt-3 text-xs text-amber-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 font-medium">
                                               Los permisos del rol {getRoleDisplayName(currentEmpRole)} son fijos e inalterables. No pueden modificarse.
                                             </p>
-                                          )}
+                                          ) : null}
                                         </div>
                                       </>
                                     );
@@ -1170,19 +1255,30 @@ export function Configuracion() {
 
                                   <div className="flex gap-2 mt-4 justify-between">
                                     <div className="flex gap-2">
-                                      <Button
-                                        onClick={() => saveEmpEdit(u.id)}
-                                        disabled={savingEmpId === u.id}
-                                        className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer disabled:opacity-60"
-                                        style={{ backgroundColor: '#9F4F2F' }}
-                                      >
-                                        {savingEmpId === u.id ? (
-                                          <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                                        ) : (
-                                          <Check className="w-3.5 h-3.5" />
-                                        )}
-                                        {isSaved ? 'Guardado' : savingEmpId === u.id ? 'Guardando...' : 'Guardar Cambios'}
-                                      </Button>
+                                      {isAdminUser ? (
+                                        <Button
+                                          disabled
+                                          className="flex items-center gap-1.5 px-4 py-2 bg-gray-200 text-gray-500 rounded-lg text-sm font-medium border-0 cursor-not-allowed"
+                                          title="El usuario Administrador está protegido y solo puede modificarse desde la sección Perfil"
+                                        >
+                                          <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                          Edición Bloqueada
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          onClick={() => saveEmpEdit(u.id)}
+                                          disabled={savingEmpId === u.id}
+                                          className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-medium border-0 cursor-pointer disabled:opacity-60"
+                                          style={{ backgroundColor: '#9F4F2F' }}
+                                        >
+                                          {savingEmpId === u.id ? (
+                                            <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                          ) : (
+                                            <Check className="w-3.5 h-3.5" />
+                                          )}
+                                          {isSaved ? 'Guardado' : savingEmpId === u.id ? 'Guardando...' : 'Guardar Cambios'}
+                                        </Button>
+                                      )}
                                       <Button
                                         variant="outline"
                                         onClick={() => toggleExpand(u.id)}
@@ -1191,13 +1287,15 @@ export function Configuracion() {
                                         <X className="w-3.5 h-3.5" /> Cerrar
                                       </Button>
                                     </div>
-                                    <Button
-                                      variant="destructive"
-                                      onClick={() => setUserToDelete(u)}
-                                      className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 text-sm font-medium transition-colors cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                                    </Button>
+                                    {!isAdminUser && (
+                                      <Button
+                                        variant="destructive"
+                                        onClick={() => setUserToDelete(u)}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 text-sm font-medium transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                               )}

@@ -113,6 +113,22 @@ const actualizar = async (id, datos, currentUser) => {
     throw new AppError('Usuario no encontrado', 404, 'NO_ENCONTRADO');
   }
 
+  const esAdmin = Boolean(
+    usuario.id === '11111111-1111-1111-1111-111111111111' ||
+    usuario.email === 'admin@nextbyte.com' ||
+    usuario.es_admin ||
+    usuario.rol_id === '48575788-681d-47dc-b0ed-11cd402ca182'
+  );
+
+  if (esAdmin) {
+    if (datos.rol_id && datos.rol_id !== usuario.rol_id) {
+      throw new AppError('No se puede cambiar el rol del usuario Administrador', 403, 'PROHIBIDO');
+    }
+    if (datos.permisos && !datos.permisos.includes('all')) {
+      throw new AppError('No se pueden modificar los permisos del usuario Administrador', 403, 'PROHIBIDO');
+    }
+  }
+
   const payload = {};
   if (datos.nombre !== undefined) payload.nombre = datos.nombre.trim();
   if (datos.apellido !== undefined) payload.apellido = datos.apellido.trim();
@@ -156,6 +172,11 @@ const eliminar = async (id, currentUser) => {
 
   if (currentUser && currentUser.id === id) {
     throw new AppError('No puedes eliminar tu propio usuario', 409, 'CONFLICTO');
+  }
+
+  // Protección del Administrador principal del sistema
+  if (usuario.id === '11111111-1111-1111-1111-111111111111' || usuario.email === 'admin@nextbyte.com') {
+    throw new AppError('No se puede eliminar al usuario Administrador principal del sistema', 403, 'PROHIBIDO');
   }
 
   // Protección del rol de administrador

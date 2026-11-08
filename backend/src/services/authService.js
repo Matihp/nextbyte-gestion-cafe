@@ -82,7 +82,7 @@ const me = async (user) => {
       id: user.id,
       rol_id: user.rol_id || null,
       es_admin: Boolean(user.es_admin),
-      es_contingencia: Boolean(user.es_contingencia || user.rol_id === ROL_CONTINGENCIA_ID),
+      es_contingencia: Boolean(user.es_contingencia || user.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL),
       permisos: Array.isArray(user.permisos) ? user.permisos : []
     };
   }
