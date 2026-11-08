@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { dbLocal } = require('../config/db');
 const AppError = require('../utils/AppError');
 const { ESTADOS_PEDIDO } = require('../utils/constantes');
 const { hoy, ahora } = require('../utils/fechas');
@@ -42,60 +43,84 @@ const crear = async (datos) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
-  const detalles = [];
+  return dbLocal.transaction(async (trx) => {
+    const detalles = [];
 
-  for (const item of datos.items) {
-    const producto = await productoRepository.getById(item.producto_id);
-    if (!producto) {
-      throw new AppError(`El producto con id ${item.producto_id} no existe`, 404, 'NO_ENCONTRADO');
+    for (const item of datos.items) {
+      const producto = await productoRepository.getById(item.producto_id, trx);
+      if (!producto) {
+        throw new AppError(`El producto con id ${item.producto_id} no existe`, 404, 'NO_ENCONTRADO');
+      }
+
+      const stockActual = Number(producto.stock_actual) || 0;
+      const cantPedida = Number(item.cantidad || 0);
+
+      if (cantPedida > stockActual) {
+        throw new AppError(
+          `No hay productos suficientes de "${producto.nombre}". Disponibles: ${stockActual}, solicitados: ${cantPedida}`,
+          409,
+          'STOCK_INSUFICIENTE'
+        );
+      }
+
+      let receta = null;
+      if (producto.receta_id) {
+        receta = await recetaRepository.getById(producto.receta_id, trx);
+      }
+      if (!receta) {
+        receta = await recetaRepository.getByProductoId(producto.id, trx);
+      }
+
+      let precioCosto = 0;
+      if (receta) {
+        const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id, trx);
+        const ingredientesConCosto = await Promise.all(
+          ingredientes.map(async (ing) => {
+            const insumo = await insumoRepository.getById(ing.insumo_id, trx);
+            return {
+              cantidad: ing.cantidad,
+              precio_costo: insumo ? insumo.precio_costo : 0
+            };
+          })
+        );
+        precioCosto = calcularCostoUnitario(ingredientesConCosto);
+      }
+
+      detalles.push({
+        producto_id: producto.id,
+        nombre_producto: producto.nombre,
+        cantidad: cantPedida,
+        precio_venta: Number(producto.precio_venta),
+        precio_costo: precioCosto
+      });
+
+      // Descontar inmediatamente las unidades vendidas del stock del producto
+      await trx('productos')
+        .where({ id: producto.id })
+        .decrement('stock_actual', cantPedida);
     }
 
-    const receta = await recetaRepository.getByProductoId(producto.id);
-    let precioCosto = 0;
+    const total = calcularTotal(detalles);
 
-    if (receta) {
-      const ingredientes = await ingredienteRecetaRepository.getByRecetaId(receta.id);
-      const ingredientesConCosto = await Promise.all(
-        ingredientes.map(async (ing) => {
-          const insumo = await insumoRepository.getById(ing.insumo_id);
-          return {
-            cantidad: ing.cantidad,
-            precio_costo: insumo ? insumo.precio_costo : 0
-          };
-        })
-      );
-      precioCosto = calcularCostoUnitario(ingredientesConCosto);
-    }
+    const cliente = (datos.cliente && typeof datos.cliente === 'string' && datos.cliente.trim() !== '')
+      ? datos.cliente.trim()
+      : 'Consumidor Final';
 
-    detalles.push({
-      producto_id: producto.id,
-      nombre_producto: producto.nombre,
-      cantidad: item.cantidad,
-      precio_venta: Number(producto.precio_venta),
-      precio_costo: precioCosto
-    });
-  }
+    const cabecera = {
+      id: generarIdPedido(),
+      cliente,
+      total,
+      estado: datos.estado || ESTADOS_PEDIDO.PENDIENTE,
+      tipo_pedido: datos.tipo_pedido,
+      metodo_pago: datos.metodo_pago,
+      direccion: datos.direccion ? datos.direccion.trim() : null,
+      telefono: datos.telefono ? datos.telefono.trim() : null,
+      fecha: hoy(),
+      hora: ahora()
+    };
 
-  const total = calcularTotal(detalles);
-
-  const cliente = (datos.cliente && typeof datos.cliente === 'string' && datos.cliente.trim() !== '')
-    ? datos.cliente.trim()
-    : 'Consumidor Final';
-
-  const cabecera = {
-    id: generarIdPedido(),
-    cliente,
-    total,
-    estado: ESTADOS_PEDIDO.PENDIENTE,
-    tipo_pedido: datos.tipo_pedido,
-    metodo_pago: datos.metodo_pago,
-    direccion: datos.direccion ? datos.direccion.trim() : null,
-    telefono: datos.telefono ? datos.telefono.trim() : null,
-    fecha: hoy(),
-    hora: ahora()
-  };
-
-  return pedidoRepository.createWithDetails(cabecera, detalles);
+    return pedidoRepository.createWithDetails(cabecera, detalles, trx);
+  });
 };
 
 const obtenerTodos = async (filtros = {}) => {

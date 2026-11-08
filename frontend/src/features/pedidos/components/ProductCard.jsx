@@ -1,4 +1,5 @@
 import { Plus, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { formatearPrecio } from '@/utils/formatters';
 import { obtenerImagenProducto } from '@/features/menu/utils/imagenesCafe';
 
@@ -12,7 +13,7 @@ export function ProductCard({ product, onAddToCart }) {
   const imageUrl = obtenerImagenProducto(product) || product.imagen || product.image || FALLBACK_PRODUCT_IMAGE;
 
   const getProductStockStatus = () => {
-    if (stock <= 0) return { status: 'agotado', msg: 'Sin stock' };
+    if (stock <= 0) return { status: 'agotado', msg: 'AGOTADO' };
     if (stock <= 5) return { status: 'critico', msg: 'Stock bajo' };
     return { status: 'ok', msg: '' };
   };
@@ -21,9 +22,11 @@ export function ProductCard({ product, onAddToCart }) {
   const isAgotado = stockStatus.status === 'agotado';
 
   const handleClick = () => {
-    if (!isAgotado) {
-      onAddToCart(product);
+    if (isAgotado) {
+      toast.error(`El producto "${name}" se encuentra agotado`);
+      return;
     }
+    onAddToCart(product);
   };
 
   return (
