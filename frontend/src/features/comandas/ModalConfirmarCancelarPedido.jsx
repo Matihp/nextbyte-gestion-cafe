@@ -36,13 +36,15 @@ export default function ModalConfirmarCancelarPedido({
       id: 'MERMA',
       label: 'ES MERMA',
       tooltip: 'Cuando se considera una perdida. Por ej. se cayo el cafe y no se pudo vender.',
-      colorClasses: 'border border-[#FEB2B2] bg-[#FFF5F5] text-[#C53030]'
+      colorDefault: 'border-2 border-red-200 bg-red-50/70 text-red-700 hover:bg-red-100 hover:border-red-300',
+      colorSelected: 'bg-red-600 text-white border-2 border-red-700 shadow-md ring-2 ring-red-300/80 scale-[1.02] font-black'
     },
     {
       id: 'OTROS',
       label: 'OTROS MOTIVOS',
       tooltip: 'Volverá al stock de productos',
-      colorClasses: 'border border-[#E2E8F0] bg-[#F7FAFC] text-[#2D3748]'
+      colorDefault: 'border-2 border-gray-300 bg-gray-50/80 text-gray-700 hover:bg-gray-100 hover:border-gray-400',
+      colorSelected: 'bg-gray-900 text-white border-2 border-black shadow-md ring-2 ring-gray-400/80 scale-[1.02] font-black'
     }
   ];
 
@@ -74,19 +76,19 @@ export default function ModalConfirmarCancelarPedido({
               const isSelected = motivoSeleccionado === op.id;
               return (
                 <div key={op.id} className="relative group">
-                  <div
-                    title={op.tooltip}
+                  <button
+                    type="button"
                     onClick={() => setMotivoSeleccionado(op.id)}
-                    className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${op.colorClasses} ${
+                    className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${
                       isSelected
-                        ? 'opacity-40 blur-[0.6px] ring-2 ring-gray-400 scale-[0.98]'
-                        : 'opacity-100 blur-none hover:opacity-90 shadow-2xs'
+                        ? op.colorSelected
+                        : `${op.colorDefault} shadow-2xs`
                     }`}
                   >
                     {op.label}
-                  </div>
+                  </button>
 
-                  {/* Cartelito flotante al pasar el mouse */}
+                  {/* Cartelito flotante al pasar el mouse (único tooltip, sin title nativo duplicado) */}
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 px-2.5 py-1.5 text-xs text-white bg-gray-900/95 rounded-md shadow-lg text-center max-w-[210px] w-max pointer-events-none transition-opacity">
                     {op.tooltip}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900/95" />

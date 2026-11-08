@@ -94,17 +94,20 @@ export default function ModalConfirmarEliminarProducto({
     {
       id: 'Vencido',
       label: 'Vencido',
-      colorClasses: 'border border-[#FBD38D] bg-[#FFF9F2] text-[#C05621]'
+      colorDefault: 'border-2 border-[#FBD38D] bg-[#FFF9F2] text-[#C05621] hover:bg-amber-100/70 hover:border-amber-400',
+      colorSelected: 'bg-[#C05621] text-white border-2 border-[#9C4215] shadow-md ring-2 ring-amber-300/80 scale-[1.02] font-black'
     },
     {
       id: 'Merma',
       label: 'Merma',
-      colorClasses: 'border border-[#FEB2B2] bg-[#FFF5F5] text-[#C53030]'
+      colorDefault: 'border-2 border-[#FEB2B2] bg-[#FFF5F5] text-[#C53030] hover:bg-red-100/70 hover:border-red-400',
+      colorSelected: 'bg-red-600 text-white border-2 border-red-700 shadow-md ring-2 ring-red-300/80 scale-[1.02] font-black'
     },
     {
       id: 'En falta',
       label: 'En falta',
-      colorClasses: 'border border-[#E2E8F0] bg-[#F7FAFC] text-[#2D3748]'
+      colorDefault: 'border-2 border-[#E2E8F0] bg-[#F7FAFC] text-[#2D3748] hover:bg-gray-100/70 hover:border-gray-400',
+      colorSelected: 'bg-gray-900 text-white border-2 border-black shadow-md ring-2 ring-gray-400/80 scale-[1.02] font-black'
     }
   ];
 
@@ -146,18 +149,17 @@ export default function ModalConfirmarEliminarProducto({
                 <div
                   key={m.id}
                   onClick={() => handleSeleccionarMotivo(m.id)}
-                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${m.colorClasses} opacity-100 blur-none hover:opacity-90 shadow-2xs`}
+                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${m.colorDefault} shadow-2xs`}
                 >
                   {m.label}
                 </div>
               ))
             ) : (
-              /* Cuando se seleccionó un motivo: desaparecen los otros, el seleccionado se ubica arriba blureado/aclarado */
+              /* Cuando se seleccionó un motivo: desaparecen los otros, el seleccionado se ubica arriba bien resaltado */
               <div className="w-full flex flex-col items-center gap-4">
                 <div
                   onClick={() => setMotivoSeleccionado(null)}
-                  title="Click para cambiar motivo"
-                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${motivoActivo?.colorClasses} opacity-50 blur-[0.5px] ring-2 ring-gray-400 scale-[0.98]`}
+                  className={`w-52 h-11 flex items-center justify-center font-bold text-sm tracking-wide rounded-none transition-all cursor-pointer select-none ${motivoActivo?.colorSelected}`}
                 >
                   {motivoActivo?.label}
                 </div>
@@ -180,10 +182,10 @@ export default function ModalConfirmarEliminarProducto({
                       <button
                         type="button"
                         onClick={handleSelectTodos}
-                        className={`h-9 px-2.5 text-xs font-bold uppercase rounded-none border border-gray-300 transition-all cursor-pointer select-none ${
+                        className={`h-9 px-2.5 text-xs font-bold uppercase rounded-none transition-all cursor-pointer select-none ${
                           esTodos
-                            ? 'bg-gray-100 opacity-50 blur-[0.5px] ring-2 ring-gray-400 text-gray-800'
-                            : 'bg-white hover:bg-gray-50 text-gray-700 shadow-2xs'
+                            ? 'bg-[#4B2B1D] text-white border-2 border-[#361F14] shadow-sm font-black ring-2 ring-amber-300/70 scale-[1.02]'
+                            : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-2xs'
                         }`}
                       >
                         TODOS
