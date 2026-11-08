@@ -20,7 +20,7 @@ export function CompletedOrders({ orders = [] }) {
       className={`flex items-center justify-between gap-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100 transition-all ${
         isMultiColumn
           ? 'px-3 py-1.5'
-          : 'px-3.5 py-1.5 md:px-4 md:py-2'
+          : 'px-3 py-1.5 md:px-3.5 md:py-1.5'
       }`}
     >
       {/* 1. Nombre y primera inicial del apellido */}
@@ -68,22 +68,22 @@ export function CompletedOrders({ orders = [] }) {
   );
 
   return (
-    <Card className="bg-white rounded-2xl shadow-sm p-3.5 md:p-4 lg:p-5 border border-emerald-100 h-full flex flex-col min-h-0 overflow-hidden">
+    <Card className="bg-white rounded-2xl shadow-sm p-3 md:p-3.5 lg:p-4 border border-emerald-100 h-full flex flex-col min-h-0 overflow-hidden">
       {/* Cabecera de la card con menor separación hacia la lista */}
-      <div className="flex items-center justify-between mb-2 md:mb-2.5 border-b border-gray-100 pb-2 shrink-0">
+      <div className="flex items-center justify-between mb-1.5 md:mb-2 border-b border-gray-100 pb-1.5 md:pb-2 shrink-0">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-extrabold text-emerald-800 flex items-center gap-2 tracking-tight">
           <CheckCircle2 className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
           <span>Pedidos Listos</span>
         </h2>
         <Badge
           variant="outline"
-          className="text-xs md:text-sm font-bold text-emerald-800 bg-emerald-50 border-emerald-300 px-3 py-0.5 rounded-full"
+          className="text-xs md:text-sm font-bold text-emerald-800 bg-emerald-50 border-emerald-300 px-2.5 py-0.5 rounded-full"
         >
           {filteredOrders.length} listos para retirar
         </Badge>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
         {filteredOrders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-center py-8">
             <UtensilsCrossed className="w-12 h-12 text-gray-300 stroke-[1.5]" />

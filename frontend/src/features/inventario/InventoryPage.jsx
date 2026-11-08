@@ -453,9 +453,9 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="p-8">
+    <div>
       {/* Cards de Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {/* Card Rojo */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500"></div>

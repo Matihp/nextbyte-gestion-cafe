@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { PackageOpen } from 'lucide-react';
 import productoService from '@/services/productoService';
-import pedidoService from '@/services/pedidoService';
+import pedidoService, { preparePedidoSubmission, clearPedidoSubmission } from '@/services/pedidoService';
+import { notifyOrdersUpdated } from '@/services/comandaService';
+import { useAuth } from '@/hooks/useAuth';
 import { normalizeText } from './utils/categoryDetails';
 import CategoryFilterBar from './components/CategoryFilterBar';
 import ProductCard from './components/ProductCard';
@@ -14,6 +16,7 @@ import PrintPortal from './components/PrintPortal';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Pedidos() {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [cargandoDatos, setCargandoDatos] = useState(true);
@@ -26,6 +29,9 @@ export default function Pedidos() {
   const [step, setStep] = useState('building');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cargandoEnvio, setCargandoEnvio] = useState(false);
+  const submittingRef = useRef(false);
+  // El payload queda en memoria; solo digest, UUID y timestamp sobreviven al reload en esta pestaña.
+  const submitAttemptRef = useRef(null);
 
   const [orderType, setOrderType] = useState('Mostrador');
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
@@ -83,6 +89,7 @@ export default function Pedidos() {
   };
 
   const addToCart = (product) => {
+    if (submittingRef.current) return;
     const max = getMaxStock(product);
     if (max <= 0) {
       toast.error(`El producto "${product.nombre || product.name}" está agotado`);
@@ -125,6 +132,7 @@ export default function Pedidos() {
   };
 
   const updateQuantity = (productId, delta) => {
+    if (submittingRef.current) return;
     const product = products.find((p) => p.id === productId);
     if (!product) return;
     const max = getMaxStock(product);
@@ -152,12 +160,13 @@ export default function Pedidos() {
   };
 
   const removeProduct = (productId) => {
+    if (submittingRef.current) return;
     setCart((prev) => prev.filter((item) => item.productId !== productId));
     setStep('building');
   };
 
   const handleContinue = () => {
-    if (cart.length === 0) return;
+    if (submittingRef.current || cart.length === 0) return;
     setIsModalOpen(true);
   };
 
@@ -184,6 +193,7 @@ export default function Pedidos() {
   };
 
   const handleSendOrder = async () => {
+    if (submittingRef.current) return;
     if (cart.length === 0) {
       toast.error('El carrito de compras está vacío');
       return;
@@ -208,35 +218,55 @@ export default function Pedidos() {
       }
     }
 
-    // Validación de stock antes de enviar
-    for (const item of cart) {
-      const prod = products.find((p) => p.id === item.productId);
-      const max = prod ? getMaxStock(prod) : 0;
-      if (item.quantity > max) {
-        toast.error(`No hay productos suficientes de "${item.name}". Solo hay ${max} disponibles.`);
-        setIsModalOpen(false);
-        return;
-      }
-    }
+    const payload = {
+      cliente: customerName.trim() || 'Consumidor Final',
+      tipo_pedido: mapearTipoPedidoBackend(orderType),
+      metodo_pago: mapearMetodoPagoBackend(paymentMethod),
+      direccion: orderType !== 'Mostrador' && address.trim() ? address.trim() : null,
+      telefono: orderType !== 'Mostrador' && phone.trim() ? phone.trim() : null,
+      items: cart.map((item) => ({
+        producto_id: Number(item.productId),
+        cantidad: Number(item.quantity),
+      })),
+      estado: 'en_preparacion'
+    };
 
+    submittingRef.current = true;
     try {
       setCargandoEnvio(true);
       setIsModalOpen(false);
-
-      const payload = {
-        cliente: customerName.trim() || 'Consumidor Final',
-        tipo_pedido: mapearTipoPedidoBackend(orderType),
-        metodo_pago: mapearMetodoPagoBackend(paymentMethod),
-        direccion: orderType !== 'Mostrador' && address.trim() ? address.trim() : null,
-        telefono: orderType !== 'Mostrador' && phone.trim() ? phone.trim() : null,
-        items: cart.map((item) => ({
-          producto_id: Number(item.productId),
-          cantidad: Number(item.quantity),
-        })),
-        estado: 'en_preparacion'
-      };
-
-      const respuesta = await pedidoService.crear(payload);
+      const previousAttempt = submitAttemptRef.current;
+      const attempt = await preparePedidoSubmission(payload, previousAttempt, {
+        namespace: user?.id != null ? `user:${user.id}` : undefined
+      });
+      submitAttemptRef.current = attempt;
+      const isRetry = attempt === previousAttempt || attempt.restored;
+      if (attempt.restored) {
+        const confirmed = window.confirm('Existe un envío anterior con estos mismos datos en esta pestaña. Puede haber sido creado aunque no recibieras respuesta. ¿Querés reintentar usando la misma clave para recuperar ese pedido sin duplicarlo?');
+        if (!confirmed) return;
+        attempt.restored = false;
+      }
+      // Un replay puede tener stock ya descontado: debe decidirlo el backend, no la caché.
+      if (!isRetry) {
+        for (const item of cart) {
+          const prod = products.find((p) => p.id === item.productId);
+          const max = prod ? getMaxStock(prod) : 0;
+          if (item.quantity > max) {
+            clearPedidoSubmission(attempt);
+            submitAttemptRef.current = null;
+            toast.error(`No hay productos suficientes de "${item.name}". Solo hay ${max} disponibles.`);
+            return;
+          }
+        }
+      }
+      const respuesta = attempt.confirmedResponse || await pedidoService.crear(attempt.payload, { idempotencyKey: attempt.idempotencyKey });
+      if (!respuesta?.id) {
+        throw new Error('El servidor no confirmó el pedido. Reintentá sin modificar el carrito para consultar el mismo envío.');
+      }
+      // Si storage falla al limpiar, un nuevo clic solo finaliza la confirmación, nunca repite el POST.
+      attempt.confirmedResponse = respuesta;
+      clearPedidoSubmission(attempt);
+      notifyOrdersUpdated();
       const pedidoDisplayId = respuesta?.display_id || respuesta?.displayId || (respuesta?.numero_pedido ? `#${String(respuesta.numero_pedido).padStart(4, '0')}` : '#0001');
 
       toast.success(`Comanda enviada con éxito (${pedidoDisplayId})`);
@@ -272,6 +302,7 @@ export default function Pedidos() {
         }),
       };
 
+      submitAttemptRef.current = null;
       setCart([]);
       setCustomerName('');
       setAddress('');
@@ -284,8 +315,12 @@ export default function Pedidos() {
 
       await cargarDatos();
     } catch (error) {
-      toast.error(error.message || 'Error al enviar la comanda');
+      const message = error.response?.data?.message || error.message || 'Error al enviar la comanda';
+      toast.error(submitAttemptRef.current?.confirmedResponse
+        ? `El pedido ya está confirmado. No lo envíes como un pedido nuevo. ${message}`
+        : message);
     } finally {
+      submittingRef.current = false;
       setCargandoEnvio(false);
     }
   };
@@ -320,7 +355,7 @@ export default function Pedidos() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-full min-h-0 w-full gap-6 overflow-hidden print:hidden">
+    <div aria-busy={cargandoEnvio} className="flex flex-col lg:flex-row h-full min-h-0 w-full gap-6 overflow-hidden print:hidden">
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         <div className="shrink-0">
           <CategoryFilterBar
@@ -337,7 +372,7 @@ export default function Pedidos() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-gray-100">
-                  <Skeleton className="w-full aspect-[4/3] rounded-xl" />
+                  <Skeleton className="w-full aspect-4/3 rounded-xl" />
                   <Skeleton className="h-4 w-3/4 mt-2" />
                   <Skeleton className="h-4 w-1/2" />
                 </div>
@@ -385,7 +420,9 @@ export default function Pedidos() {
 
       <OrderSummaryModal
         open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!submittingRef.current) setIsModalOpen(false);
+        }}
         cart={cart}
         totalCart={totalCart}
         orderType={orderType}

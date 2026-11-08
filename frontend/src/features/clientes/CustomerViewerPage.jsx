@@ -3,8 +3,7 @@ import { Maximize2, X, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { RecentOrders } from './RecentOrders';
 import { CompletedOrders } from './CompletedOrders';
-import { comandaService } from '@/services/comandaService';
-import { pedidoService } from '@/services/pedidoService';
+import { createComandaPolling, getComandaErrorMessage } from '@/services/comandaService';
 import { normalizeStatusDisplay, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
 import { assignDailyOrderNumbers } from '@/features/comandas/orderSequence';
 
@@ -38,189 +37,99 @@ export const getOrderTypeColor = (type) => {
 
 export function CustomerViewerPage() {
   const containerRef = useRef(null);
-  const ordersRef = useRef([]);
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('nextbyte_orders') || '[]');
+      return assignDailyOrderNumbers(Array.isArray(saved) ? saved.filter((order) =>
+        !['entregado', 'cancelado'].includes(String(order.status || order.estado || '').toLowerCase().trim())) : []);
+    } catch {
+      return [];
+    }
+  });
+  const ordersRef = useRef(orders);
+  const pollingRef = useRef(null);
+  const [readError, setReadError] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
+  const receiveOrders = useCallback((backendOrders) => {
+    // Filtrar pedidos entregados o cancelados (no deben aparecer en pantalla cliente)
+    const ordenesVisibles = backendOrders.filter((o) => {
+      const st = String(o.estado || o.status || '').toLowerCase().trim();
+      return st !== 'entregado' && st !== 'cancelado';
+    });
 
-  // Carga de pedidos activos y actualizados desde el backend en tiempo real
-  const fetchOrders = useCallback(async () => {
-    try {
-      const [activasRes, todosRes] = await Promise.allSettled([
-        comandaService.obtenerActivas({ incluir_completados: true }),
-        pedidoService.obtenerTodos()
-      ]);
+    const mapped = ordenesVisibles.map((o) => {
+      const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
+      const itemsRaw = Array.isArray(o.detalles)
+        ? o.detalles
+        : Array.isArray(o.items) ? o.items : (prevOrder?.items || []);
 
-      const extractData = (res) => {
-        if (!res || res.status !== 'fulfilled') return null;
-        const val = res.value;
-        if (Array.isArray(val)) return val;
-        if (Array.isArray(val?.data)) return val.data;
-        if (Array.isArray(val?.data?.data)) return val.data.data;
-        return null;
+      const items = itemsRaw.map((det) => ({
+        id: det.id,
+        productId: det.producto_id ?? det.productId,
+        name: det.nombre_producto || det.name || 'Producto',
+        quantity: Number(det.cantidad ?? det.quantity ?? 1),
+        price: Number(det.precio_venta ?? det.price ?? 0)
+      }));
+
+      const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
+      const timeStr =
+        o.hora ||
+        (o.created_at
+          ? new Date(o.created_at).toLocaleTimeString('es-AR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: 'America/Argentina/Buenos_Aires'
+            })
+          : '');
+
+      return {
+        id: String(o.id),
+        displayId: o.display_id || o.displayId || (o.numero_pedido ? `#${String(o.numero_pedido).padStart(4, '0')}` : null),
+        numero_pedido: o.numero_pedido,
+        customer: o.cliente || o.customer || 'Consumidor Final',
+        total: Number(o.total || 0),
+        status: normalizeStatusDisplay(o.estado || o.status),
+        orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
+        time: timeStr,
+        date: dateStr,
+        created_at: o.created_at,
+        items
       };
+    });
 
-      const activas = extractData(activasRes);
-      const todos = extractData(todosRes);
-
-      let backendOrders = null;
-      if (activas !== null) {
-        // La fuente de la verdad para las comandas activas y sus estados en este instante es comandaService.obtenerActivas
-        const todosMap = todos ? new Map(todos.map((t) => [String(t.id), t])) : new Map();
-        backendOrders = activas.map((act) => {
-          const t = todosMap.get(String(act.id)) || {};
-          return {
-            ...t,
-            ...act, // act contiene el estado exacto de comanda en este instante
-          };
-        });
-      } else if (todos !== null) {
-        backendOrders = todos.filter((o) => {
-          const st = String(o.estado || o.status || '').toLowerCase().trim();
-          return st !== 'entregado' && st !== 'cancelado';
-        });
-      }
-
-      if (backendOrders !== null) {
-        // Filtrar pedidos entregados o cancelados (no deben aparecer en pantalla cliente)
-        const ordenesVisibles = backendOrders.filter((o) => {
-          const st = String(o.estado || o.status || '').toLowerCase().trim();
-          return st !== 'entregado' && st !== 'cancelado';
-        });
-
-        const mapped = ordenesVisibles.map((o) => {
-          const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
-          const itemsRaw = (o.detalles && o.detalles.length > 0)
-            ? o.detalles
-            : (o.items && o.items.length > 0)
-            ? o.items
-            : (prevOrder?.items || []);
-
-          const items = itemsRaw.map((det) => ({
-            id: det.id,
-            productId: det.producto_id ?? det.productId,
-            name: det.nombre_producto || det.name || 'Producto',
-            quantity: Number(det.cantidad ?? det.quantity ?? 1),
-            price: Number(det.precio_venta ?? det.price ?? 0)
-          }));
-
-          const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
-          const timeStr =
-            o.hora ||
-            (o.created_at
-              ? new Date(o.created_at).toLocaleTimeString('es-AR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                  timeZone: 'America/Argentina/Buenos_Aires'
-                })
-              : '');
-
-          return {
-            id: String(o.id),
-            displayId: o.display_id || o.displayId || (o.numero_pedido ? `#${String(o.numero_pedido).padStart(4, '0')}` : null),
-            numero_pedido: o.numero_pedido,
-            customer: o.cliente || o.customer || 'Consumidor Final',
-            total: Number(o.total || 0),
-            status: normalizeStatusDisplay(o.estado || o.status),
-            orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
-            time: timeStr,
-            date: dateStr,
-            created_at: o.created_at,
-            items
-          };
-        });
-
-        const sequenced = assignDailyOrderNumbers(mapped);
-        setOrders(sequenced);
-        localStorage.setItem('nextbyte_orders', JSON.stringify(sequenced));
-      } else {
-        // Fallback a localStorage si el backend no respondió
-        const saved = localStorage.getItem('nextbyte_orders');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed)) {
-              const filtrados = parsed.filter((o) => {
-                const st = String(o.status || o.estado || '').toLowerCase().trim();
-                return st !== 'entregado' && st !== 'cancelado';
-              });
-              setOrders(assignDailyOrderNumbers(filtrados));
-            }
-          } catch {
-            setOrders([]);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error al actualizar comandas en pantalla cliente:', err);
-      const saved = localStorage.getItem('nextbyte_orders');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const filtrados = parsed.filter((o) => {
-              const st = String(o.status || o.estado || '').toLowerCase().trim();
-              return st !== 'entregado' && st !== 'cancelado';
-            });
-            setOrders(assignDailyOrderNumbers(filtrados));
-          }
-        } catch {
-          setOrders([]);
-        }
-      }
-    }
+    const sequenced = assignDailyOrderNumbers(mapped);
+    ordersRef.current = sequenced;
+    setOrders(sequenced);
+    setReadError('');
+    try {
+      localStorage.setItem('nextbyte_orders', JSON.stringify(sequenced));
+    } catch { /* La lectura sigue disponible aunque la caché no pueda persistirse. */ }
   }, []);
 
   // Actualización manual instantánea de comandas y estados
   const handleManualRefresh = async () => {
-    try {
-      setIsRefreshing(true);
-      await fetchOrders();
-      toast.success('Comandas y estados actualizados');
-    } catch {
-      toast.error('Error al actualizar comandas');
-    } finally {
-      setIsRefreshing(false);
-    }
+    const refreshed = await pollingRef.current?.refresh({ force: true });
+    if (!pollingRef.current) return;
+    if (refreshed) toast.success('Comandas y estados actualizados');
   };
 
-  // Carga inicial y sondeo periódico cada 8 segundos para actualización pasiva en salón
   useEffect(() => {
-    fetchOrders();
-
-    const interval = setInterval(() => {
-      // Se considera activa si la pestaña está visible o si está en pantalla completa
-      const isTabActive =
-        document.visibilityState === 'visible' ||
-        Boolean(document.fullscreenElement) ||
-        isFullscreen;
-
-      if (isTabActive) {
-        fetchOrders();
-      }
-    }, 8000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchOrders();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('orders-updated', fetchOrders);
-    window.addEventListener('storage', fetchOrders);
-
+    const polling = createComandaPolling({
+      onData: receiveOrders,
+      onError: (error) => setReadError(getComandaErrorMessage(error)),
+      onLoading: setIsRefreshing,
+      interval: 8000
+    });
+    pollingRef.current = polling;
+    polling.start();
     return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('orders-updated', fetchOrders);
-      window.removeEventListener('storage', fetchOrders);
+      polling.stop();
+      pollingRef.current = null;
     };
-  }, [fetchOrders, isFullscreen]);
+  }, [receiveOrders]);
 
   // Manejo de pantalla completa
   const toggleFullscreen = async () => {
@@ -266,7 +175,7 @@ export function CustomerViewerPage() {
       className={
         isFullscreen
           ? 'fixed inset-0 z-[100] flex flex-col bg-[#F3E5DC] p-3.5 md:p-5 lg:p-6 select-none overflow-hidden h-screen w-screen'
-          : 'relative flex-1 w-full h-full min-h-0 bg-[#F3E5DC] rounded-2xl p-3 md:p-4 lg:p-5 flex flex-col select-none overflow-hidden'
+          : 'relative flex-1 w-full h-full min-h-0 bg-[#F3E5DC] rounded-2xl p-2.5 md:p-3 lg:p-3.5 pt-1.5 md:pt-2 flex flex-col select-none overflow-hidden'
       }
     >
       {/* Botón superior central flotante (visible al pasar el mouse por arriba SOLO en pantalla completa) */}
@@ -283,52 +192,72 @@ export function CustomerViewerPage() {
         </div>
       )}
 
-      {/* Cabecera con Título centrado y cartel de atención + botón de Ampliar */}
-      <div className="relative flex items-center justify-between mb-2 lg:mb-3 shrink-0 w-full max-w-[98%] mx-auto min-h-[46px] gap-2">
-        <div className="flex-1 hidden md:block"></div> {/* Espaciador balanceador izquierdo */}
-
-        <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-center text-[#4B2B1D] tracking-tight shrink-0 px-2">
-          Estado de Pedidos
-        </h1>
-
-        {/* Lado derecho: Cartel de advertencia con leve intermitencia y botón de pantalla completa */}
-        <div className="flex-1 flex justify-end items-center gap-2.5 sm:gap-3">
-          {!isFullscreen && (
-            <>
-              <div className="animate-pulse bg-[#FFF8F3] border border-[#D7BBA6] text-[#4B2B1D] px-3 py-1.5 rounded-xl shadow-xs text-xs md:text-sm flex items-center gap-1.5">
-                <span className="font-black text-[#8B0000] tracking-wider uppercase shrink-0">ATENCIÓN:</span>
-                <span className="font-semibold text-[#4B2B1D] text-left">
-                  Para visualizar los datos actualizados seleccionar{' '}
-                  <span className="font-extrabold text-[#70422B]">"PANTALLA COMPLETA"</span>
-                </span>
-              </div>
-
-              {/* Botón Actualizar Pantalla (a la izquierda de pantalla completa, no visible en pantalla completa) */}
-              <button
-                type="button"
-                onClick={handleManualRefresh}
-                disabled={isRefreshing}
-                className="p-2.5 md:p-3 bg-white shadow-md text-gray-700 rounded-full hover:text-[#4B2B1D] hover:bg-gray-50 transition-all cursor-pointer shadow-sm hover:shadow shrink-0 disabled:opacity-60"
-                title="Actualizar pantalla"
-              >
-                <RefreshCw className={`w-5 h-5 md:w-6 md:h-6 ${isRefreshing ? 'animate-spin text-[#4B2B1D]' : ''}`} />
-              </button>
-
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className="p-2.5 md:p-3 bg-white shadow-md text-gray-700 rounded-full hover:text-[#4B2B1D] hover:bg-gray-50 transition-all cursor-pointer shadow-sm hover:shadow shrink-0"
-                title="Pantalla completa"
-              >
-                <Maximize2 className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-            </>
-          )}
+      {/* Cabecera: en modo normal usa 2 filas (título + controles), en fullscreen solo el título centrado */}
+      {isFullscreen ? (
+        <div className="flex items-center justify-center mb-2.5 lg:mb-3.5 shrink-0 w-full">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-center text-[#4B2B1D] tracking-tight px-2">
+            Estado de Pedidos
+          </h1>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col mb-2 md:mb-2.5 shrink-0 w-full gap-1.5">
+          {/* Fila 1: Título alineado a la izquierda (igual que las demás páginas) */}
+          <h1 className="text-2xl md:text-3xl font-black text-[#4B2B1D] tracking-tight leading-tight">
+            Estado de Pedidos
+          </h1>
 
-      {/* Contenedor de las dos Cards (Pedidos Recientes y Pedidos Listos) sin scroll */}
-      <div className="w-full max-w-[98%] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 flex-1 min-h-0 overflow-hidden">
+          {/* Fila 2: Cartel de atención + botones, alineados a la derecha */}
+          <div className="flex items-center justify-end gap-2">
+            {/* Cartel de atención, clicable para abrir pantalla completa */}
+            <div
+              onClick={toggleFullscreen}
+              className="group bg-[#FFF8F3] hover:bg-[#FDF1E8] border border-[#D7BBA6] text-[#4B2B1D] px-2.5 py-1 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-colors"
+              title="Clic para activar pantalla completa"
+            >
+              <span className="px-1.5 py-0.5 rounded bg-red-100 text-[#8B0000] font-black text-[10px] tracking-wider uppercase shrink-0">
+                ATENCIÓN
+              </span>
+              <span className="font-medium text-[#4B2B1D] whitespace-nowrap hidden sm:inline">
+                Para ver datos actualizados activar{' '}
+                <span className="font-bold text-[#70422B] group-hover:underline">"PANTALLA COMPLETA"</span>
+              </span>
+              <span className="font-medium text-[#4B2B1D] sm:hidden whitespace-nowrap">
+                Activar <span className="font-bold text-[#70422B]">"PANTALLA COMPLETA"</span>
+              </span>
+            </div>
+
+            {/* Botón Actualizar */}
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="p-1.5 bg-white text-gray-700 rounded-xl hover:text-[#4B2B1D] hover:bg-[#FFF8F3] border border-[#D7BBA6]/60 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-60"
+              title="Actualizar pantalla"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#4B2B1D]' : ''}`} />
+            </button>
+
+            {/* Botón Pantalla Completa */}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="p-1.5 bg-[#9F4F2F] text-white rounded-xl hover:bg-[#8A4326] shadow-sm transition-all cursor-pointer shrink-0"
+              title="Pantalla completa"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {readError && (
+        <p role="alert" className="mb-2 shrink-0 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+          {readError}. Mostrando los últimos datos disponibles; pueden estar desactualizados.
+        </p>
+      )}
+
+      {/* Contenedor de las dos Cards (Pedidos Recientes y Pedidos Listos) con máximo espacio vertical */}
+      <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 overflow-hidden">
           <RecentOrders orders={orders} />
         </div>

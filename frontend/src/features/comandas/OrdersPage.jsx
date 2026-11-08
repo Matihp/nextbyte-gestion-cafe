@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Eye, UtensilsCrossed, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { OrderSummaryModal } from './OrderSummaryModal';
 import { RecipeDetailModal } from './RecipeDetailModal';
 import { OrderPrintTicket } from './OrderPrintTicket';
 import ModalConfirmarCancelarPedido from './ModalConfirmarCancelarPedido';
-import { comandaService } from '@/services/comandaService';
+import { comandaService, createComandaPolling, getAllowedOrderStatuses, getComandaErrorMessage, notifyOrdersUpdated } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
 import { formatearPrecio } from '@/utils/formatters';
@@ -45,7 +45,7 @@ export const normalizeStatusDisplay = (status) => {
   const s = String(status || '').toLowerCase().trim();
   if (s === 'en_preparacion') return 'En preparación';
   if (s === 'en_empaque') return 'En empaque';
-  if (s === 'completado') return 'Completado';
+  if (s === 'completado' || s === 'listo') return 'Listo';
   if (s === 'cancelado') return 'Cancelado';
   if (s === 'pendiente') return 'Pendiente';
   if (s === 'entregado') return 'Entregado';
@@ -61,22 +61,10 @@ export const normalizeOrderTypeDisplay = (type) => {
 };
 
 export const toBackendStatus = (statusDisplay) => {
-  switch (statusDisplay) {
-    case 'En preparación':
-      return 'en_preparacion';
-    case 'En empaque':
-      return 'en_empaque';
-    case 'Completado':
-      return 'completado';
-    case 'Entregado':
-      return 'entregado';
-    case 'Cancelado':
-      return 'cancelado';
-    case 'Pendiente':
-    case 'Ingresado':
-    default:
-      return 'pendiente';
-  }
+  const status = String(statusDisplay || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_');
+  if (status === 'listo' || status === 'completado') return 'completado';
+  return status === 'ingresado' ? 'pendiente' : status;
 };
 
 export function OrdersPage() {
@@ -109,7 +97,7 @@ export function OrdersPage() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [completedTimes, setCompletedTimes] = useState(() => {
+  const [, setCompletedTimes] = useState(() => {
     try {
       const s = localStorage.getItem('nextbyte_completed_order_times');
       return s ? JSON.parse(s) : {};
@@ -119,9 +107,21 @@ export function OrdersPage() {
   });
 
   const ordersRef = useRef(orders);
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
+  const pollingRef = useRef(null);
+  const pendingOrdersRef = useRef(new Set());
+  const activeMutationsRef = useRef(new Set());
+  const mountedRef = useRef(false);
+  const [pendingOrders, setPendingOrders] = useState(new Set());
+  const [readError, setReadError] = useState('');
+
+  const updateOrders = useCallback((update) => {
+    const next = typeof update === 'function' ? update(ordersRef.current) : update;
+    ordersRef.current = next;
+    setOrders(next);
+    try {
+      localStorage.setItem('nextbyte_orders', JSON.stringify(next));
+    } catch { /* La caché es opcional; nunca reemplaza una escritura al backend. */ }
+  }, []);
 
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [viewingRecipe, setViewingRecipe] = useState(null);
@@ -138,151 +138,82 @@ export function OrdersPage() {
     'Completado'
   ];
 
-  // Carga de comandas y pedidos desde el backend
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const [activasRes, todosRes] = await Promise.allSettled([
-        comandaService.obtenerActivas({ incluir_completados: true }),
-        pedidoService.obtenerTodos()
-      ]);
+  const receiveOrders = useCallback((backendOrders) => {
+    const ordenesComanda = backendOrders.filter((o) => {
+      const st = String(o.estado || o.status || '').toLowerCase().trim();
+      return st !== 'entregado' && st !== 'cancelado';
+    });
+    const mapped = ordenesComanda.map((o) => {
+      const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
+      const itemsRaw = Array.isArray(o.detalles)
+        ? o.detalles
+        : Array.isArray(o.items) ? o.items : (prevOrder?.items || []);
 
-      const extractData = (res) => {
-        if (!res || res.status !== 'fulfilled') return null;
-        const val = res.value;
-        if (Array.isArray(val)) return val;
-        if (Array.isArray(val?.data)) return val.data;
-        if (Array.isArray(val?.data?.data)) return val.data.data;
-        return null;
+      const items = itemsRaw.map((det) => ({
+        id: det.id,
+        productId: det.producto_id ?? det.productId,
+        name: det.nombre_producto || det.name || 'Producto',
+        quantity: Number(det.cantidad ?? det.quantity ?? 1),
+        price: Number(det.precio_venta ?? det.price ?? 0),
+        costPrice: Number(det.precio_costo ?? det.costPrice ?? 0)
+      }));
+
+      const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
+      const timeStr =
+        o.hora ||
+        (o.created_at
+          ? new Date(o.created_at).toLocaleTimeString('es-AR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: 'America/Argentina/Buenos_Aires'
+            })
+          : '');
+
+      return {
+        id: String(o.id),
+        numero_pedido: o.numero_pedido,
+        customer: o.cliente || o.customer || 'Consumidor Final',
+        total: Number(o.total || 0),
+        status: normalizeStatusDisplay(o.estado || o.status),
+        orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
+        paymentMethod: o.metodo_pago || o.paymentMethod || 'Efectivo',
+        address: o.direccion || o.address || '',
+        phone: o.telefono || o.phone || '',
+        date: dateStr,
+        time: timeStr,
+        created_at: o.created_at,
+        updated_at: o.updated_at,
+        items
       };
+    });
 
-      const activas = extractData(activasRes);
-      const todos = extractData(todosRes);
+    // Asignación de números secuenciales diarios (#0001 a #1000)
+    const sequenced = assignDailyOrderNumbers(mapped);
+    updateOrders(sequenced);
+    setSelectedOrderId((id) => sequenced.some((order) => order.id === id) ? id : null);
+    setReadError('');
+  }, [updateOrders]);
 
-      let backendOrders = null;
-      if (todos !== null && activas !== null) {
-        const activasMap = new Map(activas.map((a) => [String(a.id), a]));
-        backendOrders = todos.map((t) => {
-          const act = activasMap.get(String(t.id));
-          return act ? { ...t, ...act } : t;
-        });
-      } else if (todos !== null) {
-        backendOrders = todos;
-      } else if (activas !== null) {
-        backendOrders = activas;
-      }
-
-      if (backendOrders !== null) {
-        const ordenesComanda = backendOrders.filter((o) => {
-          const st = String(o.estado || o.status || '').toLowerCase().trim();
-          return st !== 'entregado' && st !== 'cancelado';
-        });
-        const mapped = ordenesComanda.map((o) => {
-          const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
-          const itemsRaw = (o.detalles && o.detalles.length > 0)
-            ? o.detalles
-            : (o.items && o.items.length > 0)
-            ? o.items
-            : (prevOrder?.items || []);
-
-          const items = itemsRaw.map((det) => ({
-            id: det.id,
-            productId: det.producto_id ?? det.productId,
-            name: det.nombre_producto || det.name || 'Producto',
-            quantity: Number(det.cantidad ?? det.quantity ?? 1),
-            price: Number(det.precio_venta ?? det.price ?? 0),
-            costPrice: Number(det.precio_costo ?? det.costPrice ?? 0)
-          }));
-
-          const dateStr = o.fecha || (o.created_at ? o.created_at.split('T')[0] : '');
-          const timeStr =
-            o.hora ||
-            (o.created_at
-              ? new Date(o.created_at).toLocaleTimeString('es-AR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                  timeZone: 'America/Argentina/Buenos_Aires'
-                })
-              : '');
-
-          return {
-            id: String(o.id),
-            customer: o.cliente || o.customer || 'Consumidor Final',
-            total: Number(o.total || 0),
-            status: normalizeStatusDisplay(o.estado || o.status),
-            orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
-            paymentMethod: o.metodo_pago || o.paymentMethod || 'Efectivo',
-            address: o.direccion || o.address || '',
-            phone: o.telefono || o.phone || '',
-            date: dateStr,
-            time: timeStr,
-            created_at: o.created_at,
-            updated_at: o.updated_at,
-            items
-          };
-        });
-
-        // Asignación de números secuenciales diarios (#0001 a #1000)
-        const sequenced = assignDailyOrderNumbers(mapped);
-        setOrders(sequenced);
-        localStorage.setItem('nextbyte_orders', JSON.stringify(sequenced));
-      }
-    } catch {
-      // Si el backend no tiene pedidos o está offline, se conservan los datos de localStorage
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchOrders = () => pollingRef.current?.refresh({ force: true });
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchOrders();
-      }
-    }, 5000);
-    const onFocus = () => fetchOrders();
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('orders-updated', fetchOrders);
+    mountedRef.current = true;
+    const polling = createComandaPolling({
+      onData: receiveOrders,
+      onError: (error) => setReadError(getComandaErrorMessage(error)),
+      onLoading: setLoading,
+      canFetch: () => activeMutationsRef.current.size === 0
+    });
+    pollingRef.current = polling;
+    polling.start();
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('orders-updated', fetchOrders);
+      mountedRef.current = false;
+      polling.stop();
+      pollingRef.current = null;
     };
-  }, []);
+  }, [receiveOrders]);
 
-  // Si se abre un pedido sin ítems cargados, cargar sus detalles
-  useEffect(() => {
-    if (!selectedOrderId) return;
-    const curr = orders.find((o) => o.id === selectedOrderId);
-    if (curr && (!curr.items || curr.items.length === 0)) {
-      pedidoService
-        .obtenerPorId(selectedOrderId)
-        .then((res) => {
-          const full = res?.data?.data || res?.data || res;
-          if (full && (full.detalles || full.items)) {
-            const items = (full.detalles || full.items || []).map((det) => ({
-              id: det.id,
-              productId: det.producto_id ?? det.productId,
-              name: det.nombre_producto || det.name || 'Producto',
-              quantity: Number(det.cantidad ?? det.quantity ?? 1),
-              price: Number(det.precio_venta ?? det.price ?? 0),
-              costPrice: Number(det.precio_costo ?? det.costPrice ?? 0)
-            }));
-            setOrders((prev) =>
-              prev.map((o) => (o.id === selectedOrderId ? { ...o, items } : o))
-            );
-          }
-        })
-        .catch(() => {});
-    }
-  }, [selectedOrderId, orders]);
-
-  // Guardar en localStorage cuando cambian las comandas
-  useEffect(() => {
-    localStorage.setItem('nextbyte_orders', JSON.stringify(orders));
-  }, [orders]);
 
   const selectedOrder = useMemo(
     () => (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) : null),
@@ -314,141 +245,131 @@ export function OrdersPage() {
     });
   }, [orders, searchTerm, statusFilter]);
 
-  // Cambio de estado
-  const handleStatusChange = async (orderId, newStatusDisplay) => {
-    const prevOrder = orders.find((o) => o.id === orderId);
-    if (!prevOrder) return;
-    if (prevOrder.status === newStatusDisplay) return;
-
-    // Actualización optimista: si se marca como Entregado, desaparece de inmediato de Comandas
-    if (newStatusDisplay === 'Entregado') {
-      setOrders((prev) => {
-        const next = prev.filter((o) => String(o.id) !== String(orderId));
-        try {
-          localStorage.setItem('nextbyte_orders', JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-    } else {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: newStatusDisplay } : o))
-      );
-    }
-
-    // Si se pasa a Completado, registrar la hora para la expiración de 1 hora
-    if (newStatusDisplay === 'Completado') {
-      const now = Date.now();
-      setCompletedTimes((prev) => {
-        const next = { ...prev, [String(orderId)]: now };
-        try {
-          localStorage.setItem('nextbyte_completed_order_times', JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      });
-    }
-
-    const backendTarget = toBackendStatus(newStatusDisplay);
-    const backendCurrent = toBackendStatus(prevOrder.status);
-
+  const runOrderMutation = async (orderId, mutation, onConfirmed) => {
+    const key = String(orderId);
+    if (pendingOrdersRef.current.has(key)) return;
+    pendingOrdersRef.current.add(key);
+    activeMutationsRef.current.add(key);
+    setPendingOrders(new Set(pendingOrdersRef.current));
+    pollingRef.current?.invalidate();
     try {
+      await mutation();
+      if (mountedRef.current) onConfirmed();
+    } catch (error) {
+      if (mountedRef.current) toast.error(getComandaErrorMessage(error));
+    } finally {
+      if (mountedRef.current) {
+        // También reconciliar 409, timeout y 503, sin repetir jamás la escritura.
+        pollingRef.current?.invalidate();
+        notifyOrdersUpdated();
+      }
+      activeMutationsRef.current.delete(key);
+      if (mountedRef.current) await pollingRef.current?.refresh({ force: true });
+      pendingOrdersRef.current.delete(key);
+      if (mountedRef.current) setPendingOrders(new Set(pendingOrdersRef.current));
+    }
+  };
+
+  // Una acción del usuario equivale a una única transición confirmada por el backend.
+  const handleStatusChange = async (orderId, newStatusDisplay) => {
+    const prevOrder = ordersRef.current.find((order) => order.id === orderId);
+    if (!prevOrder) return;
+    const backendCurrent = toBackendStatus(prevOrder.status);
+    const backendTarget = toBackendStatus(newStatusDisplay);
+    if (backendCurrent === backendTarget) return;
+
+    await runOrderMutation(orderId, async () => {
       if (backendTarget === 'entregado') {
-        await comandaService.entregar(orderId);
-      } else if (backendTarget === 'cancelado') {
-        await pedidoService.cancelar(orderId);
-      } else if (backendTarget === 'completado') {
+        return comandaService.entregar(orderId);
+      }
+      if (backendTarget === 'completado') {
         if (backendCurrent === 'pendiente') {
           await comandaService.cambiarEstado(orderId, 'en_preparacion');
           await comandaService.cambiarEstado(orderId, 'en_empaque');
         } else if (backendCurrent === 'en_preparacion') {
           await comandaService.cambiarEstado(orderId, 'en_empaque');
         }
-        await comandaService.completar(orderId);
-      } else {
-        await comandaService.cambiarEstado(orderId, backendTarget);
+        return comandaService.completar(orderId);
       }
-      window.dispatchEvent(new CustomEvent('orders-updated'));
-      const orderNumLabel = prevOrder.displayId || prevOrder.orderNumber || `#${prevOrder.id}`;
-      toast.success(`Pedido ${orderNumLabel.startsWith('#') ? orderNumLabel : `#${orderNumLabel}`} actualizado a "${newStatusDisplay}"`);
-    } catch {
-      // Revertir en error
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: prevOrder.status } : o))
-      );
-      toast.error('No se pudo actualizar el estado del pedido en el servidor');
-    }
+      if (backendTarget === 'en_empaque') {
+        if (backendCurrent === 'pendiente') {
+          await comandaService.cambiarEstado(orderId, 'en_preparacion');
+        }
+        return comandaService.cambiarEstado(orderId, 'en_empaque');
+      }
+      return comandaService.cambiarEstado(orderId, backendTarget);
+    }, () => {
+      updateOrders((prev) => backendTarget === 'entregado'
+        ? prev.filter((order) => order.id !== orderId)
+        : prev.map((order) => order.id === orderId ? { ...order, status: newStatusDisplay } : order));
+      if (backendTarget === 'entregado') setSelectedOrderId((id) => id === orderId ? null : id);
+      if (backendTarget === 'completado') {
+        setCompletedTimes((prev) => {
+          const next = { ...prev, [String(orderId)]: Date.now() };
+          try {
+            localStorage.setItem('nextbyte_completed_order_times', JSON.stringify(next));
+          } catch { /* Caché opcional. */ }
+          return next;
+        });
+      }
+      const label = prevOrder.displayId || prevOrder.orderNumber || `#${prevOrder.id}`;
+      toast.success(`Pedido ${label} actualizado a "${newStatusDisplay}"`);
+    });
   };
 
   // Abrir modal de motivo de cancelación para pedido completo
   const handleCancelOrder = (orderId) => {
+    if (pendingOrdersRef.current.has(String(orderId))) return;
     setAccionCancelar({ tipo: 'pedido', orderId });
     setModalCancelarOpen(true);
   };
 
   // Abrir modal de motivo de cancelación para ítem específico de un pedido
   const handleCancelOrderItem = (orderId, itemId, itemName) => {
+    if (pendingOrdersRef.current.has(String(orderId))) return;
     setAccionCancelar({ tipo: 'item', orderId, itemId, itemName });
     setModalCancelarOpen(true);
   };
 
   // Confirmación desde el modal unificado de cancelación (ES MERMA / OTROS MOTIVOS)
   const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
-    if (!accionCancelar) return;
-    setCancelando(true);
-    try {
-      if (accionCancelar.tipo === 'pedido') {
-        const { orderId } = accionCancelar;
-        await pedidoService.cancelar(orderId, { esMerma, motivo });
-        setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
-        setSelectedOrderId(null);
-        window.dispatchEvent(new CustomEvent('orders-updated'));
-        toast.success(
-          esMerma
-            ? 'Pedido cancelado y registrado en Mermas'
-            : 'Pedido cancelado y restaurado en stock de productos'
-        );
-      } else if (accionCancelar.tipo === 'item') {
-        const { orderId, itemId, itemName } = accionCancelar;
-        await pedidoService.eliminarItem(orderId, itemId, { esMerma, motivo });
-
-        const order = orders.find((o) => String(o.id) === String(orderId));
-        if (order) {
-          const updatedItems = (order.items || []).filter(
-            (item) => String(item.id) !== String(itemId)
-          );
-          if (updatedItems.length === 0) {
-            setOrders((prev) => prev.filter((o) => String(o.id) !== String(orderId)));
-            setSelectedOrderId(null);
-          } else {
-            const newTotal = updatedItems.reduce(
-              (acc, item) =>
-                acc + (Number(item.price) || 0) * (Number(item.quantity) || 1),
-              0
-            );
-            setOrders((prev) =>
-              prev.map((o) =>
-                String(o.id) === String(orderId)
-                  ? { ...o, items: updatedItems, total: newTotal }
-                  : o
-              )
-            );
-          }
-        }
-        window.dispatchEvent(new CustomEvent('orders-updated'));
-        toast.success(
-          esMerma
-            ? `Artículo "${itemName}" cancelado y registrado en Mermas`
-            : `Artículo "${itemName}" cancelado del pedido`
-        );
-      }
-    } catch (err) {
-      console.error('Error al procesar cancelación:', err);
-      toast.error('No se pudo procesar la cancelación');
-    } finally {
-      setCancelando(false);
+    if (!accionCancelar || pendingOrdersRef.current.has(String(accionCancelar.orderId))) return;
+    const current = ordersRef.current.find((order) => String(order.id) === String(accionCancelar.orderId));
+    if (!current || ['completado', 'entregado', 'cancelado'].includes(toBackendStatus(current.status)) ||
+        (accionCancelar.tipo === 'item' && !current.items.some((item) => String(item.id) === String(accionCancelar.itemId)))) {
+      toast.error('El pedido cambió; revisá su estado antes de cancelar');
       setAccionCancelar(null);
       setModalCancelarOpen(false);
+      return;
+    }
+    setCancelando(true);
+    try {
+      await runOrderMutation(accionCancelar.orderId, async () => {
+        if (accionCancelar.tipo === 'pedido') {
+          await pedidoService.cancelar(accionCancelar.orderId, { esMerma, motivo });
+        } else {
+          await pedidoService.eliminarItem(accionCancelar.orderId, accionCancelar.itemId, { esMerma, motivo });
+        }
+      }, () => {
+        if (accionCancelar.tipo === 'pedido') {
+          updateOrders((prev) => prev.filter((order) => String(order.id) !== String(accionCancelar.orderId)));
+          setSelectedOrderId(null);
+          toast.success(esMerma
+            ? 'Pedido cancelado y registrado en Mermas'
+            : 'Pedido cancelado y restaurado en stock de productos');
+        } else {
+          // Ítems y total se reconcilian con la lectura posterior, no se recalculan localmente.
+          toast.success(esMerma
+            ? `Artículo "${accionCancelar.itemName}" cancelado y registrado en Mermas`
+            : `Artículo "${accionCancelar.itemName}" cancelado del pedido`);
+        }
+      });
+    } finally {
+      if (mountedRef.current) {
+        setCancelando(false);
+        setAccionCancelar(null);
+        setModalCancelarOpen(false);
+      }
     }
   };
 
@@ -541,6 +462,12 @@ export function OrdersPage() {
         </div>
       </div>
 
+      {readError && (
+        <p role="alert" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          {readError}. Se conservan los últimos datos disponibles; pueden estar desactualizados.
+        </p>
+      )}
+
       {/* Tabla Dinámica de Comandas: Sin espacios excesivos ni scroll lateral */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full max-w-full">
         <div className="overflow-x-auto w-full max-w-full">
@@ -617,16 +544,18 @@ export function OrdersPage() {
                     {/* 6. Estado */}
                     <td className="px-3.5 py-2.5 whitespace-nowrap">
                       <select
-                        value={order.status}
+                        value={normalizeStatusDisplay(order.status)}
+                        disabled={pendingOrders.has(String(order.id)) || (modalCancelarOpen && String(accionCancelar?.orderId) === String(order.id))}
+                        aria-label={`Estado del pedido ${order.displayId || order.id}`}
                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
                         className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer border-0 outline-none transition-colors ${getStatusColor(
-                          order.status
+                          normalizeStatusDisplay(order.status)
                         )}`}
                       >
                         <option value="Pendiente">Pendiente</option>
                         <option value="En preparación">En preparación</option>
                         <option value="En empaque">En empaque</option>
-                        <option value="Completado">Completado</option>
+                        <option value="Listo">Listo</option>
                         <option value="Entregado">Entregado</option>
                       </select>
                     </td>
@@ -690,8 +619,8 @@ export function OrdersPage() {
           onClose={() => setSelectedOrderId(null)}
           onViewRecipe={handleViewRecipe}
           onPrint={() => handlePrint(selectedOrder)}
-          onCancelOrder={canCancelOrder ? handleCancelOrder : undefined}
-          onCancelItem={canCancelOrder ? handleCancelOrderItem : undefined}
+          onCancelOrder={canCancelOrder && !pendingOrders.has(String(selectedOrder.id)) && !modalCancelarOpen ? handleCancelOrder : undefined}
+          onCancelItem={canCancelOrder && !pendingOrders.has(String(selectedOrder.id)) && !modalCancelarOpen ? handleCancelOrderItem : undefined}
         />
       )}
 
@@ -710,7 +639,11 @@ export function OrdersPage() {
       {/* Modal Unificado de Motivo de Cancelación */}
       <ModalConfirmarCancelarPedido
         open={modalCancelarOpen}
-        onOpenChange={setModalCancelarOpen}
+        onOpenChange={(open) => {
+          if (cancelando || (accionCancelar && pendingOrdersRef.current.has(String(accionCancelar.orderId)))) return;
+          setModalCancelarOpen(open);
+          if (!open) setAccionCancelar(null);
+        }}
         onConfirmar={handleConfirmarCancelacion}
         cargando={cancelando}
       />

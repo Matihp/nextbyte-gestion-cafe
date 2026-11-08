@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   XCircle,
   AlertTriangle,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inventarioService } from '@/services/inventarioService';
-import { comandaService } from '@/services/comandaService';
+import { comandaService, notifyOrdersUpdated, getComandaErrorMessage } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
@@ -142,10 +142,18 @@ export default function Home() {
   const [error, setError] = useState(null);
 
   const [entregandoId, setEntregandoId] = useState(null);
+  const entregandoIdsRef = useRef(new Set());
+  const generationRef = useRef(0);
+  const inFlightRef = useRef(null);
 
   const handleMarcarEntregado = async (pedido) => {
     if (!pedido || !pedido.id) return;
+    if (entregandoIdsRef.current.has(pedido.id)) return;
+
+    entregandoIdsRef.current.add(pedido.id);
     setEntregandoId(pedido.id);
+    generationRef.current += 1;
+
     try {
       await comandaService.entregar(pedido.id);
       setComandas((prev) => prev.filter((p) => p.id !== pedido.id));
@@ -157,13 +165,14 @@ export default function Home() {
           localStorage.setItem('nextbyte_orders', JSON.stringify(filtered));
         }
       } catch {}
-      window.dispatchEvent(new CustomEvent('orders-updated'));
+      notifyOrdersUpdated();
       toast.success(`Pedido ${formatearIdPedido(pedido)} marcado como entregado`);
     } catch (err) {
       console.error('Error al entregar pedido:', err);
-      toast.error('No se pudo marcar el pedido como entregado');
+      toast.error(getComandaErrorMessage(err) || 'No se pudo marcar el pedido como entregado');
       await cargarDatos();
     } finally {
+      entregandoIdsRef.current.delete(pedido.id);
       setEntregandoId(null);
     }
   };
@@ -215,6 +224,7 @@ export default function Home() {
   const handleConfirmarCancelacion = async ({ esMerma, motivo }) => {
     if (!accionCancelar) return;
     setCancelando(true);
+    generationRef.current += 1;
     try {
       if (accionCancelar.tipo === 'pedido') {
         const { pedido } = accionCancelar;
@@ -269,10 +279,10 @@ export default function Home() {
           );
         }
       }
-      window.dispatchEvent(new CustomEvent('orders-updated'));
+      notifyOrdersUpdated();
     } catch (err) {
       console.error('Error al procesar cancelación:', err);
-      toast.error('No se pudo procesar la cancelación');
+      toast.error(getComandaErrorMessage(err) || 'No se pudo procesar la cancelación');
     } finally {
       setCancelando(false);
       setAccionCancelar(null);
@@ -303,48 +313,84 @@ export default function Home() {
   }, [ticketAImprimir]);
 
   const cargarDatos = useCallback(async () => {
+    const currentGeneration = ++generationRef.current;
+
+    if (inFlightRef.current) {
+      try {
+        await inFlightRef.current;
+      } catch {}
+      if (currentGeneration !== generationRef.current) {
+        return;
+      }
+    }
+
     setCargando(true);
     setError(null);
-    try {
-      const [resInsumos, resComandas] = await Promise.allSettled([
-        inventarioService.obtenerInsumos(),
-        comandaService.obtenerActivas({ incluir_completados: true })
-      ]);
 
-      if (resInsumos.status === 'fulfilled') {
-        const rawInsumos = resInsumos.value;
-        const listaInsumos = Array.isArray(rawInsumos)
-          ? rawInsumos
-          : rawInsumos?.data || [];
-        setInsumos(listaInsumos);
-      } else {
-        console.error('Error al cargar insumos:', resInsumos.reason);
-      }
+    const promise = (async () => {
+      try {
+        const [resInsumos, resComandas] = await Promise.allSettled([
+          inventarioService.obtenerInsumos(),
+          comandaService.obtenerActivas({ incluir_completados: true })
+        ]);
 
-      if (resComandas.status === 'fulfilled') {
-        const rawComandas = resComandas.value;
-        const listaComandas = Array.isArray(rawComandas)
-          ? rawComandas
-          : rawComandas?.data || [];
-        setComandas(listaComandas);
-      } else {
-        console.error('Error al cargar comandas activas:', resComandas.reason);
+        if (currentGeneration !== generationRef.current) {
+          return;
+        }
+
+        if (resInsumos.status === 'fulfilled') {
+          const rawInsumos = resInsumos.value;
+          const listaInsumos = Array.isArray(rawInsumos)
+            ? rawInsumos
+            : rawInsumos?.data || [];
+          setInsumos(listaInsumos);
+        } else {
+          console.error('Error al cargar insumos:', resInsumos.reason);
+        }
+
+        if (resComandas.status === 'fulfilled') {
+          const rawComandas = resComandas.value;
+          const listaComandas = Array.isArray(rawComandas)
+            ? rawComandas
+            : rawComandas?.data || [];
+          setComandas(listaComandas);
+        } else {
+          console.error('Error al cargar comandas activas:', resComandas.reason);
+        }
+      } catch (err) {
+        if (currentGeneration === generationRef.current) {
+          console.error('Error general al cargar panel:', err);
+          setError(err.message || 'No se pudieron cargar los datos del panel.');
+        }
+      } finally {
+        if (currentGeneration === generationRef.current) {
+          setCargando(false);
+        }
+        if (inFlightRef.current === promise) {
+          inFlightRef.current = null;
+        }
       }
-    } catch (err) {
-      console.error('Error general al cargar panel:', err);
-      setError(err.message || 'No se pudieron cargar los datos del panel.');
-    } finally {
-      setCargando(false);
-    }
+    })();
+
+    inFlightRef.current = promise;
+    return promise;
   }, []);
 
   useEffect(() => {
     cargarDatos();
-    window.addEventListener('orders-updated', cargarDatos);
-    window.addEventListener('storage', cargarDatos);
+    const handleOrdersUpdated = () => {
+      cargarDatos();
+    };
+    const handleStorage = (e) => {
+      if (e.key === 'nextbyte_orders_revision' && e.newValue) {
+        cargarDatos();
+      }
+    };
+    window.addEventListener('orders-updated', handleOrdersUpdated);
+    window.addEventListener('storage', handleStorage);
     return () => {
-      window.removeEventListener('orders-updated', cargarDatos);
-      window.removeEventListener('storage', cargarDatos);
+      window.removeEventListener('orders-updated', handleOrdersUpdated);
+      window.removeEventListener('storage', handleStorage);
     };
   }, [cargarDatos]);
 

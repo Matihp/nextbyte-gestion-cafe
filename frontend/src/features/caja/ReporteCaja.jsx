@@ -225,8 +225,10 @@ export default function ReporteCaja() {
   }, [getRangoPestana2]);
 
   useEffect(() => {
-    cargarDatosPestana2();
-  }, [cargarDatosPestana2]);
+    if (pestanaActiva === 'ingresos-retiros') {
+      cargarDatosPestana2();
+    }
+  }, [pestanaActiva, cargarDatosPestana2]);
 
   const cargarDatosPestana3 = useCallback(async () => {
     setCargandoP3(true);
@@ -923,7 +925,7 @@ export default function ReporteCaja() {
       </div>
 
       {/* COLUMNA DERECHA: Pestañas Estilo Google Chrome y Contenido */}
-      <div className="xl:col-span-3 flex flex-col min-h-[620px]">
+      <div className="xl:col-span-3 flex flex-col min-h-155">
 
         {/* ── Barra de Pestañas estilo Google Chrome (Sin scroll, nombres limpios) ── */}
         <div className="flex items-end justify-between flex-wrap gap-2 px-3 pt-3 bg-[#FAF7F5] border-t border-l border-r border-border/30 rounded-t-2xl">
@@ -934,7 +936,7 @@ export default function ReporteCaja() {
               onClick={() => setPestanaActiva('transacciones')}
               className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-t border-l border-r whitespace-nowrap ${
                 pestanaActiva === 'transacciones'
-                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-[1px]'
+                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-px'
                   : 'bg-[#EDE7E2] text-muted-foreground border-transparent hover:bg-[#E4DCD6] hover:text-primary mb-0'
               }`}
             >
@@ -947,7 +949,7 @@ export default function ReporteCaja() {
               onClick={() => setPestanaActiva('ingresos-retiros')}
               className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-t border-l border-r whitespace-nowrap ${
                 pestanaActiva === 'ingresos-retiros'
-                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-[1px]'
+                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-px'
                   : 'bg-[#EDE7E2] text-muted-foreground border-transparent hover:bg-[#E4DCD6] hover:text-primary mb-0'
               }`}
             >
@@ -960,7 +962,7 @@ export default function ReporteCaja() {
               onClick={() => setPestanaActiva('eliminados')}
               className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-t border-l border-r whitespace-nowrap ${
                 pestanaActiva === 'eliminados'
-                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-[1px]'
+                  ? 'bg-white text-primary border-border/30 border-t-2 border-t-primary shadow-xs z-10 -mb-px'
                   : 'bg-[#EDE7E2] text-muted-foreground border-transparent hover:bg-[#E4DCD6] hover:text-primary mb-0'
               }`}
             >
@@ -1273,7 +1275,7 @@ export default function ReporteCaja() {
                                     {m.tipo}
                                   </span>
                                 </td>
-                                <td className="py-2 pr-3 text-primary font-medium break-words whitespace-pre-wrap">
+                                <td className="py-2 pr-3 text-primary font-medium wrap-break-word whitespace-pre-wrap">
                                   {m.detalle}
                                 </td>
                                 <td className="py-2 pr-3 text-right font-bold text-emerald-700 whitespace-nowrap">
@@ -1466,7 +1468,7 @@ export default function ReporteCaja() {
                               }
                             }}
                             placeholder="Escribir detalle del movimiento (ej: Pago de flete, cambio...)"
-                            className="w-full bg-white border border-border/40 rounded-xl px-2.5 py-1.5 text-xs text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs resize-none overflow-y-auto min-h-[34px] max-h-28 break-words whitespace-pre-wrap leading-normal align-middle block"
+                            className="w-full bg-white border border-border/40 rounded-xl px-2.5 py-1.5 text-xs text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs resize-none overflow-y-auto min-h-8.5 max-h-28 wrap-break-word whitespace-pre-wrap leading-normal align-middle block"
                           />
                         </td>
                         <td className="py-2 px-2 align-middle">
@@ -1545,7 +1547,7 @@ export default function ReporteCaja() {
                               <div className="text-[10px] text-muted-foreground">{m.hora || '-'}</div>
                             </td>
 
-                            <td className="py-2.5 px-2.5 text-primary font-medium align-top break-words min-w-0">
+                            <td className="py-2.5 px-2.5 text-primary font-medium align-top wrap-break-word min-w-0">
                               <div className="flex items-start gap-2 min-w-0">
                                 <span
                                   className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 mt-0.5 ${
@@ -1556,7 +1558,7 @@ export default function ReporteCaja() {
                                 >
                                   {m.tipo}
                                 </span>
-                                <span className="font-semibold text-primary break-words whitespace-pre-wrap leading-relaxed min-w-0 flex-1">
+                                <span className="font-semibold text-primary wrap-break-word whitespace-pre-wrap leading-relaxed min-w-0 flex-1">
                                   {m.detalle}
                                 </span>
                               </div>

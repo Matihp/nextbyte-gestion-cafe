@@ -23,7 +23,7 @@ export function RecentOrders({ orders = [] }) {
       className={`flex items-center justify-between gap-2.5 bg-[#FAF6F3] rounded-xl border border-[#EAD5C8]/70 transition-all ${
         isMultiColumn
           ? 'px-3 py-1.5'
-          : 'px-3.5 py-1.5 md:px-4 md:py-2'
+          : 'px-3 py-1.5 md:px-3.5 md:py-1.5'
       }`}
     >
       {/* 1. Nombre y primera inicial del apellido */}
@@ -71,21 +71,21 @@ export function RecentOrders({ orders = [] }) {
   );
 
   return (
-    <Card className="bg-white rounded-2xl shadow-sm p-3.5 md:p-4 lg:p-5 border border-[#D7BBA6]/50 h-full flex flex-col min-h-0 overflow-hidden">
+    <Card className="bg-white rounded-2xl shadow-sm p-3 md:p-3.5 lg:p-4 border border-[#D7BBA6]/50 h-full flex flex-col min-h-0 overflow-hidden">
       {/* Cabecera de la card con menor separación hacia la lista */}
-      <div className="flex items-center justify-between mb-2 md:mb-2.5 border-b border-gray-100 pb-2 shrink-0">
+      <div className="flex items-center justify-between mb-1.5 md:mb-2 border-b border-gray-100 pb-1.5 md:pb-2 shrink-0">
         <h2 className="text-xl md:text-2xl lg:text-3xl font-extrabold text-[#4B2B1D] flex items-center gap-2 tracking-tight">
           <span>Pedidos Recientes</span>
         </h2>
         <Badge
           variant="outline"
-          className="text-xs md:text-sm font-bold text-[#70422B] bg-[#F3E5DC]/80 border-[#D7BBA6] px-3 py-0.5 rounded-full"
+          className="text-xs md:text-sm font-bold text-[#70422B] bg-[#F3E5DC]/80 border-[#D7BBA6] px-2.5 py-0.5 rounded-full"
         >
           {filteredOrders.length} en preparación
         </Badge>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5">
         {filteredOrders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-center py-8">
             <Clock className="w-12 h-12 text-gray-300 stroke-[1.5]" />
