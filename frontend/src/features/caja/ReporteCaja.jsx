@@ -1239,18 +1239,10 @@ export default function ReporteCaja() {
                       })}
                       {/* Totales alineados exactamente con sus columnas correspondientes */}
                       <tfoot className="border-t-2 border-border/30 bg-[#FAF7F5]/80 font-sans">
+                        {/* Fila 1: Subtotal Costos y Total Ventas alineados bajo sus respectivas columnas */}
                         <tr>
-                          {/* Columnas 1 a 7 (Fecha a Venta U.): Dato secundario discreto de Diferencia */}
-                          <td colSpan={7} className="py-3.5 pr-3 text-right align-middle">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-lg border border-border/30 shadow-2xs">
-                              <span className="text-[11px] text-muted-foreground font-medium">
-                                Diferencia (Ventas - Costos):
-                              </span>
-                              <span className="text-xs font-bold text-emerald-700">
-                                {formatearPrecio(diferenciaVentasCostos)}
-                              </span>
-                            </div>
-                          </td>
+                          {/* Columnas 1 a 7: Vacías */}
+                          <td colSpan={7} className="py-3.5 pr-3"></td>
 
                           {/* Columna 8 (Costo Tot.): Subtotal (Costos) grande y llamativo */}
                           <td className="py-3.5 pr-2 text-right align-middle whitespace-nowrap">
@@ -1274,6 +1266,22 @@ export default function ReporteCaja() {
 
                           {/* Columnas 10 y 11: Espaciadores */}
                           <td colSpan={2} className="py-3.5"></td>
+                        </tr>
+
+                        {/* Fila 2: Diferencia ubicada directamente debajo de esos dos importes */}
+                        <tr className="border-t border-border/15">
+                          <td colSpan={7}></td>
+                          <td colSpan={2} className="py-2.5 pr-2 text-right align-middle">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-border/20 shadow-2xs">
+                              <span className="text-[11px] text-muted-foreground font-medium">
+                                Diferencia (Ventas - Costos):
+                              </span>
+                              <span className="text-xs font-bold text-emerald-700">
+                                {formatearPrecio(diferenciaVentasCostos)}
+                              </span>
+                            </div>
+                          </td>
+                          <td colSpan={2}></td>
                         </tr>
                       </tfoot>
                     </table>
