@@ -235,13 +235,31 @@
   body > #print-area {
     display: block !important;
     position: static !important;
-    width: 78mm !important;
-    max-width: 78mm !important;
-    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box;
     page-break-inside: auto !important;
     break-inside: auto !important;
+  }
+
+  /* Formato ticket térmico (Comandas y Orden de Pedido para ticketera) */
+  body > #print-area:has(.ticket-termico),
+  body > #print-area.ticket-termico,
+  #print-area .ticket-termico {
+    width: 78mm !important;
+    max-width: 78mm !important;
+    margin: 0 auto !important;
+  }
+
+  /* Formato Reportes A4 (Caja Diaria, Caja Mes, Ingresos/Retiros, Mermas/Eliminados) */
+  body > #print-area:has(.reporte-a4),
+  body > #print-area.reporte-a4,
+  #print-area .reporte-a4 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
   }
 
   #print-area table {
@@ -262,7 +280,7 @@
 
   @page {
     size: auto;
-    margin: 3mm 4mm;
+    margin: 6mm 8mm;
   }
 }
 

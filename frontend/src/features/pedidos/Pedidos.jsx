@@ -449,7 +449,7 @@ export default function Pedidos() {
       />
 
       {orderToPrint && (
-        <PrintPortal>
+        <PrintPortal pageType="ticket" className="ticket-termico">
           <TicketPrintArea order={orderToPrint} />
         </PrintPortal>
       )}
