@@ -149,7 +149,7 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
     await closeDb();
   });
 
-  it('camino feliz: completa pedido en en_empaque, descuenta stock y crea el registro de venta', async () => {
+  it('completa pedido en en_empaque sin consumir inventario y registra la venta', async () => {
     await dbLocal('pedidos').insert({
       id: 'PED-HAPPY-01',
       cliente: 'Mariana',
@@ -175,13 +175,13 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.estado).toBe('completado');
     expect(Array.isArray(res.body.data.insumos_descontados)).toBe(true);
-    expect(res.body.data.insumos_descontados).toHaveLength(2);
+    expect(res.body.data.insumos_descontados).toHaveLength(0);
 
     const insumoCafe = await dbLocal('insumos').where({ id: 1 }).first();
     const insumoLeche = await dbLocal('insumos').where({ id: 2 }).first();
 
-    expect(Number(insumoCafe.cantidad_disponible)).toBeCloseTo(0.96, 2);
-    expect(Number(insumoLeche.cantidad_disponible)).toBeCloseTo(1.6, 2);
+    expect(Number(insumoCafe.cantidad_disponible)).toBe(1);
+    expect(Number(insumoLeche.cantidad_disponible)).toBe(2);
 
     const pedidoEnDb = await dbLocal('pedidos').where({ id: 'PED-HAPPY-01' }).first();
     expect(pedidoEnDb.estado).toBe('completado');
@@ -192,7 +192,7 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
     expect(Number(venta.total_costo)).toBe(600.0);
   });
 
-  it('stock insuficiente: responde 409 y no modifica ningun stock ni crea registro de venta', async () => {
+  it('completa sin revalidar inventario ni reinterpretar reservas históricas', async () => {
     await dbLocal('pedidos').insert({
       id: 'PED-FAIL-01',
       cliente: 'Carlos',
@@ -214,36 +214,36 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
 
     const res = await request(app).patch('/api/comandas/PED-FAIL-01/completar');
 
-    expect(res.status).toBe(409);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error).toBe('STOCK_INSUFICIENTE');
-    expect(res.body.message).toContain('Stock insuficiente');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.insumos_descontados).toEqual([]);
 
     const insumoCafe = await dbLocal('insumos').where({ id: 1 }).first();
     const insumoLeche = await dbLocal('insumos').where({ id: 2 }).first();
 
-    expect(Number(insumoCafe.cantidad_disponible)).toBeCloseTo(0.96, 2);
-    expect(Number(insumoLeche.cantidad_disponible)).toBeCloseTo(1.6, 2);
+    expect(Number(insumoCafe.cantidad_disponible)).toBe(1);
+    expect(Number(insumoLeche.cantidad_disponible)).toBe(2);
 
     const pedidoEnDb = await dbLocal('pedidos').where({ id: 'PED-FAIL-01' }).first();
-    expect(pedidoEnDb.estado).toBe('en_empaque');
+    expect(pedidoEnDb.estado).toBe('completado');
 
     const venta = await dbLocal('registro_ventas').where({ pedido_id: 'PED-FAIL-01' }).first();
-    expect(venta).toBeUndefined();
+    expect(venta).toBeDefined();
   });
 
-  it('completar dos veces el mismo pedido: la segunda vez devuelve 409 y no vuelve a descontar stock', async () => {
+  it('completar dos veces es idempotente y no duplica la venta', async () => {
     const resSegundaVez = await request(app).patch('/api/comandas/PED-HAPPY-01/completar');
 
-    expect(resSegundaVez.status).toBe(409);
-    expect(resSegundaVez.body.success).toBe(false);
-    expect(resSegundaVez.body.error).toBe('TRANSICION_INVALIDA');
+    expect(resSegundaVez.status).toBe(200);
+    expect(resSegundaVez.body.success).toBe(true);
+    const ventas = await dbLocal('registro_ventas').where({ pedido_id: 'PED-HAPPY-01' });
+    expect(ventas).toHaveLength(1);
 
     const insumoCafe = await dbLocal('insumos').where({ id: 1 }).first();
     const insumoLeche = await dbLocal('insumos').where({ id: 2 }).first();
 
-    expect(Number(insumoCafe.cantidad_disponible)).toBeCloseTo(0.96, 2);
-    expect(Number(insumoLeche.cantidad_disponible)).toBeCloseTo(1.6, 2);
+    expect(Number(insumoCafe.cantidad_disponible)).toBe(1);
+    expect(Number(insumoLeche.cantidad_disponible)).toBe(2);
   });
 
   it('rechaza completar pedidos que no esten en estado en_empaque o que sean inexistentes', async () => {
@@ -265,7 +265,7 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
     expect(resInexistente.body.error).toBe('NO_ENCONTRADO');
   });
 
-  it('descuenta stock_actual directamente para productos sin receta', async () => {
+  it('no vuelve a descontar stock_actual de productos sin receta', async () => {
     await dbLocal('pedidos').insert({
       id: 'PED-SINRECETA-01',
       cliente: 'Tomas',
@@ -291,6 +291,6 @@ describe('Pruebas de integracion - PATCH /api/comandas/:id/completar', () => {
     expect(res.body.success).toBe(true);
 
     const producto = await dbLocal('productos').where({ id: 2 }).first();
-    expect(producto.stock_actual).toBe(3);
+    expect(producto.stock_actual).toBe(5);
   });
 });

@@ -248,7 +248,7 @@ describe('Integración endpoints de pedidos', () => {
     expect(res.body.data.detalles.length).toBe(1);
   });
 
-  it('PATCH /api/pedidos/:id/cancelar pasa el pedido a cancelado y rechaza si ya esta cancelado', async () => {
+  it('PATCH /api/pedidos/:id/cancelar cancela de forma idempotente sin devolver stock dos veces', async () => {
     const pedidoCreado = await request(app)
       .post('/api/pedidos')
       .set('Authorization', `Bearer ${token}`)
@@ -272,8 +272,9 @@ describe('Integración endpoints de pedidos', () => {
       .patch(`/api/pedidos/${id}/cancelar`)
       .set('Authorization', `Bearer ${token}`);
 
-    expect(resReintento.status).toBe(409);
-    expect(resReintento.body.success).toBe(false);
+    expect(resReintento.status).toBe(200);
+    expect(resReintento.body.success).toBe(true);
+    expect(resReintento.body.data.estado).toBe('cancelado');
   });
 
   it('DELETE /api/pedidos/:id/items/:detalleId quita un item recalculando el total y cancela si queda vacio', async () => {

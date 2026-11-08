@@ -247,11 +247,25 @@ describe('Pruebas de integracion - API /api/comandas', () => {
     expect(estados).toContain('completado');
   });
 
+  it('PATCH /api/comandas/:id/entregar permite entregar pedidos activos asegurando el registro de venta', async () => {
+    const res = await request(app).patch('/api/comandas/PED-COM-06/entregar');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.estado).toBe('entregado');
+    const pedido = await dbLocal('pedidos').where({ id: 'PED-COM-06' }).first();
+    expect(pedido.estado).toBe('entregado');
+    const venta = await dbLocal('registro_ventas').where({ pedido_id: 'PED-COM-06' }).first();
+    expect(venta).toBeDefined();
+  });
+
   it('PATCH /api/comandas/:id/entregar pasa el pedido a entregado', async () => {
     const res = await request(app).patch('/api/comandas/PED-COM-04/entregar');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.estado).toBe('entregado');
+    const repetida = await request(app).patch('/api/comandas/PED-COM-04/entregar');
+    expect(repetida.status).toBe(200);
+    expect(repetida.body.data.estado).toBe('entregado');
 
     // Ya no debe figurar en activas (incluso con incluir_completados)
     const resActivas = await request(app).get('/api/comandas/activas?incluir_completados=true');

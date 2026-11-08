@@ -1,11 +1,14 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { dbLocal } = require('../src/config/db');
+const { dbLocal, resetDb, closeDb } = require('./helpers/db');
 
 describe('Distinción estricta entre Empleados del Comercio y Usuarios del Sistema', () => {
   let adminToken;
+  const originalAuth = process.env.AUTH_ENABLED;
+  const originalSecret = process.env.JWT_SECRET;
 
   beforeAll(async () => {
+    await resetDb();
     process.env.JWT_SECRET = 'secreto_usuarios_test';
     process.env.AUTH_ENABLED = 'true';
 
@@ -48,13 +51,11 @@ describe('Distinción estricta entre Empleados del Comercio y Usuarios del Siste
   });
 
   afterAll(async () => {
-    await dbLocal('empleados').whereIn('email', [
-      'admin.root@nextbyte.com',
-      'juan.empleado@test.com',
-      'carlos.usuario.externo@test.com'
-    ]).del();
-    await dbLocal('roles').whereIn('id', ['ROL-ADMIN-TEST', 'ROL-CAJA-TEST']).del();
-    await dbLocal.destroy();
+    if (originalAuth === undefined) delete process.env.AUTH_ENABLED;
+    else process.env.AUTH_ENABLED = originalAuth;
+    if (originalSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalSecret;
+    await closeDb();
   });
 
   it('1. Crear un empleado nuevo crea automáticamente su usuario de acceso habilitado', async () => {
