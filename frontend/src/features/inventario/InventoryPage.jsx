@@ -10,6 +10,9 @@ import {
   FileText,
   List,
   RefreshCw,
+  ChevronDown,
+  Check,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,6 +26,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 import { inventarioService } from '@/services/inventarioService';
 import { formatearPrecio, formatearSoloFecha } from '@/utils/formatters';
@@ -33,6 +42,21 @@ const UNIT_OPTIONS = [
   { value: 'lts', label: 'lts' },
 ];
 
+const DEFAULT_CATEGORIES = ['Ingredientes', 'Bebidas', 'Suministros', 'Panadería'];
+
+const getSavedCategories = () => {
+  try {
+    const saved = localStorage.getItem('inventario_categorias');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error('Error leyendo inventario_categorias:', e);
+  }
+  return DEFAULT_CATEGORIES;
+};
+
 export default function InventoryPage() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,8 +66,17 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState('Todos');
   const [sortOption, setSortOption] = useState('none'); // 'none' | '+En Falta' | '+Próximos a Vencer'
 
-  // Categorías dinámicas
-  const [customCategories, setCustomCategories] = useState(['Ingredientes', 'Bebidas', 'Suministros', 'Panadería']);
+  // Categorías dinámicas persistidas
+  const [customCategories, setCustomCategories] = useState(getSavedCategories);
+
+  const saveCustomCategories = (newCategories) => {
+    setCustomCategories(newCategories);
+    try {
+      localStorage.setItem('inventario_categorias', JSON.stringify(newCategories));
+    } catch (e) {
+      console.error('Error guardando inventario_categorias:', e);
+    }
+  };
 
   // Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,8 +93,19 @@ export default function InventoryPage() {
     expirationDate: '',
   });
 
+  // Modal: Agregar Categoría
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Modal: Editar / Gestionar Categorías
+  const [isEditCategoriesModalOpen, setIsEditCategoriesModalOpen] = useState(false);
+  const [editingCatName, setEditingCatName] = useState(null);
+  const [categoryRenameValue, setCategoryRenameValue] = useState('');
+  const [savingCategoryRename, setSavingCategoryRename] = useState(false);
+
+  // Modal: Confirmar Eliminación de Categoría
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [deletingCategory, setDeletingCategory] = useState(false);
 
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -74,14 +118,16 @@ export default function InventoryPage() {
       const items = Array.isArray(data) ? data : [];
       setInventory(items);
 
-      // Extraer categorías existentes
-      const cats = new Set(customCategories);
+      // Extraer categorías existentes y sincronizarlas con el almacenamiento local
+      const savedCats = getSavedCategories();
+      const catsSet = new Set(savedCats);
       items.forEach((item) => {
         if (item.rubro && item.rubro.trim()) {
-          cats.add(item.rubro.trim());
+          catsSet.add(item.rubro.trim());
         }
       });
-      setCustomCategories(Array.from(cats));
+      const mergedCats = Array.from(catsSet);
+      saveCustomCategories(mergedCats);
     } catch (error) {
       toast.error(error.message || 'Error al cargar el inventario');
     } finally {
@@ -92,6 +138,120 @@ export default function InventoryPage() {
   useEffect(() => {
     loadInventory();
   }, []);
+
+  // Renombrar categoría existente y actualizar sus insumos
+  const handleSaveCategoryRename = async (oldName) => {
+    const trimmed = categoryRenameValue.trim();
+    if (!trimmed) {
+      toast.error('El nombre de la categoría no puede estar vacío');
+      return;
+    }
+    if (trimmed.toLowerCase() === oldName.toLowerCase()) {
+      setEditingCatName(null);
+      return;
+    }
+    if (
+      customCategories.some(
+        (c) => c.toLowerCase() === trimmed.toLowerCase() && c.toLowerCase() !== oldName.toLowerCase()
+      )
+    ) {
+      toast.error('Ya existe una categoría con ese nombre');
+      return;
+    }
+
+    try {
+      setSavingCategoryRename(true);
+      const itemsToUpdate = inventory.filter(
+        (i) => (i.rubro || '').toLowerCase() === oldName.toLowerCase()
+      );
+
+      for (const item of itemsToUpdate) {
+        await inventarioService.actualizarInsumo(item.id, {
+          nombre: item.nombre,
+          rubro: trimmed,
+          cantidad_disponible: item.cantidad_disponible,
+          unidad_medida: item.unidad_medida,
+          stock_minimo: item.stock_minimo,
+          precio_costo: item.precio_costo,
+          fecha_ingreso: item.fecha_ingreso,
+          fecha_vencimiento: item.fecha_vencimiento,
+        });
+      }
+
+      const updated = customCategories.map((c) => (c === oldName ? trimmed : c));
+      saveCustomCategories(updated);
+
+      if (categoryFilter === oldName) {
+        setCategoryFilter(trimmed);
+      }
+
+      setEditingCatName(null);
+      await loadInventory();
+      toast.success(`Categoría renombrada a "${trimmed}"`);
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Error al renombrar la categoría');
+    } finally {
+      setSavingCategoryRename(false);
+    }
+  };
+
+  // Eliminar categoría y sus insumos asociados si los tiene
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    try {
+      setDeletingCategory(true);
+      const associatedItems = inventory.filter(
+        (i) => (i.rubro || 'General').toLowerCase() === categoryToDelete.toLowerCase()
+      );
+
+      let deletedCount = 0;
+      const errors = [];
+
+      for (const item of associatedItems) {
+        try {
+          await inventarioService.eliminarInsumo(item.id);
+          deletedCount++;
+        } catch (err) {
+          errors.push(`${item.nombre}: ${err.message || 'Error al eliminar'}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        toast.error(`No se pudieron eliminar ${errors.length} insumos: ${errors.join('; ')}`);
+        await loadInventory();
+        setCategoryToDelete(null);
+        return;
+      }
+
+      const updatedCategories = customCategories.filter(
+        (c) => c.toLowerCase() !== categoryToDelete.toLowerCase()
+      );
+      saveCustomCategories(updatedCategories);
+
+      if (categoryFilter.toLowerCase() === categoryToDelete.toLowerCase()) {
+        setCategoryFilter('Todos');
+      }
+
+      setCategoryToDelete(null);
+      await loadInventory();
+
+      if (deletedCount > 0) {
+        toast.success(
+          `Categoría "${categoryToDelete}" y ${deletedCount} ${
+            deletedCount === 1 ? 'insumo asociado fueron eliminados' : 'insumos asociados fueron eliminados'
+          }.`
+        );
+      } else {
+        toast.success(`Categoría "${categoryToDelete}" eliminada exitosamente.`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || 'Error al eliminar la categoría');
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
 
   // Cálculo de días restantes hasta el vencimiento
   const getExpirationDiff = (expirationDateStr) => {
@@ -354,15 +514,32 @@ export default function InventoryPage() {
             <span>Generar Lista de Compras</span>
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsCategoryModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm h-10"
-          >
-            <List className="w-4 h-4" />
-            <span>Categorías</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm h-10 cursor-pointer text-sm font-medium">
+              <List className="w-4 h-4 text-[#A67C52]" />
+              <span>Categoría</span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-white rounded-xl shadow-lg border border-gray-200 p-1.5 z-50">
+              <DropdownMenuItem
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-[#FDF8F5] hover:text-[#4B2B1D] flex items-center gap-2.5 cursor-pointer rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4 text-[#A67C52]" />
+                <span>Agregar Nueva Categoría</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingCatName(null);
+                  setIsEditCategoriesModalOpen(true);
+                }}
+                className="w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-[#FDF8F5] hover:text-[#4B2B1D] flex items-center gap-2.5 cursor-pointer rounded-lg font-medium transition-colors"
+              >
+                <Edit2 className="w-4 h-4 text-[#A67C52]" />
+                <span>Editar Categorías</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             type="button"
@@ -691,12 +868,15 @@ export default function InventoryPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (newCategoryName.trim()) {
-                const nombre = newCategoryName.trim();
-                if (!customCategories.includes(nombre)) {
-                  setCustomCategories([...customCategories, nombre]);
-                  toast.success(`Categoría "${nombre}" agregada`);
+              const nombre = newCategoryName.trim();
+              if (nombre) {
+                if (customCategories.some((c) => c.toLowerCase() === nombre.toLowerCase())) {
+                  toast.error(`La categoría "${nombre}" ya existe`);
+                  return;
                 }
+                const updated = [...customCategories, nombre];
+                saveCustomCategories(updated);
+                toast.success(`Categoría "${nombre}" agregada`);
                 setNewCategoryName('');
                 setIsCategoryModalOpen(false);
               }
@@ -734,6 +914,233 @@ export default function InventoryPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Editar Categorías (Lista con botones editar y eliminar) */}
+      <Dialog open={isEditCategoriesModalOpen} onOpenChange={setIsEditCategoriesModalOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl p-0 overflow-hidden shadow-xl border-0">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div>
+              <DialogTitle className="text-xl font-bold text-gray-800">Editar Categorías</DialogTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Lista de categorías de insumos cargadas</p>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-3">
+            {customCategories.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                No hay categorías registradas.
+              </div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                {customCategories.map((cat) => {
+                  const count = inventory.filter(
+                    (i) => (i.rubro || 'General').toLowerCase() === cat.toLowerCase()
+                  ).length;
+                  const isEditing = editingCatName === cat;
+
+                  return (
+                    <div
+                      key={cat}
+                      className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-white transition-colors"
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 w-full">
+                          <Input
+                            autoFocus
+                            value={categoryRenameValue}
+                            onChange={(e) => setCategoryRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveCategoryRename(cat);
+                              } else if (e.key === 'Escape') {
+                                setEditingCatName(null);
+                              }
+                            }}
+                            className="h-8 text-sm flex-1 border-[#A67C52] focus-visible:ring-[#A67C52]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCategoryRename(cat)}
+                            disabled={savingCategoryRename}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                            title="Guardar nombre"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingCatName(null)}
+                            disabled={savingCategoryRename}
+                            className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+                            title="Cancelar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-gray-800">{cat}</span>
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                                count > 0
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}
+                            >
+                              {count} {count === 1 ? 'insumo' : 'insumos'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCatName(cat);
+                                setCategoryRenameValue(cat);
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-[#4B2B1D] hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                              title="Editar categoría"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCategoryToDelete(cat)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Eliminar categoría"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditCategoriesModalOpen(false);
+                  setIsCategoryModalOpen(true);
+                }}
+                className="text-xs text-[#A67C52] border-[#A67C52] hover:bg-[#FDF8F5]"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Nueva Categoría
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setEditingCatName(null);
+                  setIsEditCategoriesModalOpen(false);
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Confirmar Eliminación de Categoría */}
+      <Dialog
+        open={Boolean(categoryToDelete)}
+        onOpenChange={(open) => !open && !deletingCategory && setCategoryToDelete(null)}
+      >
+        <DialogContent className="max-w-md bg-white rounded-2xl p-6 shadow-xl border-0">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <span>Eliminar Categoría</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {(() => {
+            const associatedItems = categoryToDelete
+              ? inventory.filter(
+                  (i) => (i.rubro || 'General').toLowerCase() === categoryToDelete.toLowerCase()
+                )
+              : [];
+            const hasItems = associatedItems.length > 0;
+
+            return (
+              <div className="space-y-4 pt-2">
+                {hasItems ? (
+                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-red-700">
+                          Esta categoría tiene {associatedItems.length}{' '}
+                          {associatedItems.length === 1 ? 'insumo cargado' : 'insumos cargados'}.
+                        </p>
+                        <p className="text-xs text-red-600 mt-0.5">
+                          Si eliminas esta categoría, <strong>también se eliminarán definitivamente todos los insumos asociados</strong> a ella.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-red-200/60 text-xs text-red-800">
+                      <span className="font-semibold block mb-1">Insumos que se eliminarán:</span>
+                      <div className="max-h-24 overflow-y-auto space-y-0.5 bg-white/80 p-2 rounded border border-red-100">
+                        {associatedItems.map((item) => (
+                          <div key={item.id} className="flex justify-between text-gray-700">
+                            <span>• {item.nombre}</span>
+                            <span className="text-gray-500 font-mono">
+                              {item.cantidad_disponible} {item.unidad_medida}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-sm">
+                    Esta categoría no contiene ningún insumo actualmente.
+                  </div>
+                )}
+
+                <p className="text-sm text-gray-700">
+                  ¿Estás seguro de que deseas eliminar la categoría{' '}
+                  <strong className="text-gray-900">"{categoryToDelete}"</strong>?
+                  <br />
+                  <span className="text-xs text-gray-500">Esta acción no se puede deshacer.</span>
+                </p>
+
+                <DialogFooter className="pt-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCategoryToDelete(null)}
+                    disabled={deletingCategory}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleConfirmDeleteCategory}
+                    disabled={deletingCategory}
+                    className="bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm"
+                  >
+                    {deletingCategory && <RefreshCw className="w-4 h-4 animate-spin mr-2" />}
+                    Eliminar Categoría{hasItems ? ' e Insumos' : ''}
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
