@@ -73,11 +73,11 @@ function TarjetaPedido({ pedido, onVerResumen, onMarcarEntregado, entregandoId }
   const clienteFormateado = formatCustomerName(pedido.cliente || pedido.customer);
 
   return (
-    <div className="bg-white border border-[#EAD5C8] rounded-xl p-3.5 space-y-2.5 hover:shadow-sm transition-shadow">
-      {/* Fila 1: ID, Cliente y Botón de Entregado */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="font-extrabold text-[#4B2B1D] text-sm tracking-tight font-mono shrink-0">
+    <div className="bg-white border border-[#EAD5C8] rounded-xl p-3 space-y-2.5 hover:shadow-sm transition-shadow">
+      {/* Fila única: ID, Cliente, Estado del pedido y Precio Total */}
+      <div className="flex items-center justify-between gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="font-extrabold text-[#4B2B1D] text-xs sm:text-sm tracking-tight font-mono shrink-0">
             {formatearIdPedido(pedido)}
           </span>
           {clienteFormateado ? (
@@ -90,44 +90,47 @@ function TarjetaPedido({ pedido, onVerResumen, onMarcarEntregado, entregandoId }
           ) : null}
         </div>
 
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span
+            className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
+              pedido.estado || pedido.status
+            )}`}
+          >
+            {formatEstadoNombre(pedido.estado || pedido.status)}
+          </span>
+
+          <span className="font-bold text-gray-900 text-xs sm:text-sm whitespace-nowrap shrink-0">
+            {formatearPrecio(pedido.total)}
+          </span>
+        </div>
+      </div>
+
+      {/* Fila de Botones: Ver Resumen y Entregado (mismo tamaño) */}
+      <div className="flex items-center gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={() => onVerResumen && onVerResumen(pedido)}
+          className="flex-1 py-1.5 px-2 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <Eye className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Ver Resumen</span>
+        </button>
+
         <button
           type="button"
           disabled={isEntregando}
           onClick={() => onMarcarEntregado && onMarcarEntregado(pedido)}
-          title="Pedido Entregado"
-          className="p-1 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          className="flex-1 py-1.5 px-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 text-emerald-800 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+          title="Marcar como entregado"
         >
           {isEntregando ? (
-            <span className="w-5 h-5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+            <span className="w-3.5 h-3.5 block border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
           ) : (
-            <Check className="w-5 h-5 stroke-[2.5]" />
+            <Check className="w-3.5 h-3.5 stroke-[2.5] text-emerald-600 shrink-0" />
           )}
+          <span className="truncate">Entregado</span>
         </button>
       </div>
-
-      {/* Fila 2: Estado del pedido y Precio */}
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <span
-          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 ${getBadgeEstado(
-            pedido.estado || pedido.status
-          )}`}
-        >
-          {formatEstadoNombre(pedido.estado || pedido.status)}
-        </span>
-
-        <span className="font-bold text-gray-900 text-sm whitespace-nowrap">
-          {formatearPrecio(pedido.total)}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onVerResumen && onVerResumen(pedido)}
-        className="w-full py-1.5 px-3 border border-[#D1B8A5] hover:border-[#8C6D58] hover:bg-[#F3E5DC]/30 text-[#70422B] rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-      >
-        <Eye className="w-3.5 h-3.5" />
-        <span>Ver Resumen</span>
-      </button>
     </div>
   );
 }
@@ -506,10 +509,10 @@ export default function Home() {
       </div>
 
       {/* SECCIÓN INFERIOR: 3 Columnas de Pedidos Activos por Canal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 items-start">
 
         {/* COLUMNA 1: Mostrador */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Campana Mostrador">
               🛎️
@@ -536,7 +539,7 @@ export default function Home() {
         </div>
 
         {/* COLUMNA 2: Take away */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Take away">
               🏃
@@ -563,7 +566,7 @@ export default function Home() {
         </div>
 
         {/* COLUMNA 3: Delivery */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-border/20 flex flex-col min-h-[480px]">
           <div className="flex items-center gap-2 pb-4 border-b border-border/10 mb-4">
             <span className="text-lg leading-none" role="img" aria-label="Delivery">
               🛵
