@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Maximize2, X } from 'lucide-react';
+import { Maximize2, X, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { RecentOrders } from './RecentOrders';
 import { CompletedOrders } from './CompletedOrders';
 import { comandaService } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { normalizeStatusDisplay, normalizeOrderTypeDisplay } from '@/features/comandas/OrdersPage';
+import { assignDailyOrderNumbers } from '@/features/comandas/orderSequence';
 
 // Función para formatear el nombre mostrando el primer nombre y solo la inicial del apellido
 export const formatCustomerName = (fullName) => {
@@ -39,12 +41,13 @@ export function CustomerViewerPage() {
   const ordersRef = useRef([]);
   const [orders, setOrders] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
 
-  // Carga de pedidos activos y actualizados desde el backend
+  // Carga de pedidos activos y actualizados desde el backend en tiempo real
   const fetchOrders = useCallback(async () => {
     try {
       const [activasRes, todosRes] = await Promise.allSettled([
@@ -65,20 +68,31 @@ export function CustomerViewerPage() {
       const todos = extractData(todosRes);
 
       let backendOrders = null;
-      if (todos !== null && activas !== null) {
-        const activasMap = new Map(activas.map((a) => [String(a.id), a]));
-        backendOrders = todos.map((t) => {
-          const act = activasMap.get(String(t.id));
-          return act ? { ...t, ...act } : t;
+      if (activas !== null) {
+        // La fuente de la verdad para las comandas activas y sus estados en este instante es comandaService.obtenerActivas
+        const todosMap = todos ? new Map(todos.map((t) => [String(t.id), t])) : new Map();
+        backendOrders = activas.map((act) => {
+          const t = todosMap.get(String(act.id)) || {};
+          return {
+            ...t,
+            ...act, // act contiene el estado exacto de comanda en este instante
+          };
         });
       } else if (todos !== null) {
-        backendOrders = todos;
-      } else if (activas !== null) {
-        backendOrders = activas;
+        backendOrders = todos.filter((o) => {
+          const st = String(o.estado || o.status || '').toLowerCase().trim();
+          return st !== 'entregado' && st !== 'cancelado';
+        });
       }
 
       if (backendOrders !== null) {
-        const mapped = backendOrders.map((o) => {
+        // Filtrar pedidos entregados o cancelados (no deben aparecer en pantalla cliente)
+        const ordenesVisibles = backendOrders.filter((o) => {
+          const st = String(o.estado || o.status || '').toLowerCase().trim();
+          return st !== 'entregado' && st !== 'cancelado';
+        });
+
+        const mapped = ordenesVisibles.map((o) => {
           const prevOrder = ordersRef.current.find((p) => String(p.id) === String(o.id));
           const itemsRaw = (o.detalles && o.detalles.length > 0)
             ? o.detalles
@@ -116,35 +130,64 @@ export function CustomerViewerPage() {
             orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
             time: timeStr,
             date: dateStr,
+            created_at: o.created_at,
             items
           };
         });
 
-        setOrders(mapped);
+        const sequenced = assignDailyOrderNumbers(mapped);
+        setOrders(sequenced);
+        localStorage.setItem('nextbyte_orders', JSON.stringify(sequenced));
       } else {
         // Fallback a localStorage si el backend no respondió
         const saved = localStorage.getItem('nextbyte_orders');
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed)) setOrders(parsed);
+            if (Array.isArray(parsed)) {
+              const filtrados = parsed.filter((o) => {
+                const st = String(o.status || o.estado || '').toLowerCase().trim();
+                return st !== 'entregado' && st !== 'cancelado';
+              });
+              setOrders(assignDailyOrderNumbers(filtrados));
+            }
           } catch {
             setOrders([]);
           }
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('Error al actualizar comandas en pantalla cliente:', err);
       const saved = localStorage.getItem('nextbyte_orders');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) setOrders(parsed);
+          if (Array.isArray(parsed)) {
+            const filtrados = parsed.filter((o) => {
+              const st = String(o.status || o.estado || '').toLowerCase().trim();
+              return st !== 'entregado' && st !== 'cancelado';
+            });
+            setOrders(assignDailyOrderNumbers(filtrados));
+          }
         } catch {
           setOrders([]);
         }
       }
     }
   }, []);
+
+  // Actualización manual instantánea de comandas y estados
+  const handleManualRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await fetchOrders();
+      toast.success('Comandas y estados actualizados');
+    } catch {
+      toast.error('Error al actualizar comandas');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Carga inicial y sondeo periódico cada 8 segundos para actualización pasiva en salón
   useEffect(() => {
@@ -259,6 +302,17 @@ export function CustomerViewerPage() {
                   <span className="font-extrabold text-[#70422B]">"PANTALLA COMPLETA"</span>
                 </span>
               </div>
+
+              {/* Botón Actualizar Pantalla (a la izquierda de pantalla completa, no visible en pantalla completa) */}
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="p-2.5 md:p-3 bg-white shadow-md text-gray-700 rounded-full hover:text-[#4B2B1D] hover:bg-gray-50 transition-all cursor-pointer shadow-sm hover:shadow shrink-0 disabled:opacity-60"
+                title="Actualizar pantalla"
+              >
+                <RefreshCw className={`w-5 h-5 md:w-6 md:h-6 ${isRefreshing ? 'animate-spin text-[#4B2B1D]' : ''}`} />
+              </button>
 
               <button
                 type="button"

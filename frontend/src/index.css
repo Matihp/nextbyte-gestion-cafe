@@ -226,6 +226,8 @@
 
   [data-slot="dialog-overlay"],
   [data-slot="dialog-close"],
+  [data-slot="dialog-content"],
+  [role="dialog"],
   .print\:hidden {
     display: none !important;
   }
@@ -233,9 +235,9 @@
   body > #print-area {
     display: block !important;
     position: static !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    width: 78mm !important;
+    max-width: 78mm !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     box-sizing: border-box;
     page-break-inside: auto !important;
@@ -260,7 +262,7 @@
 
   @page {
     size: auto;
-    margin: 10mm 15mm;
+    margin: 3mm 4mm;
   }
 }
 

@@ -482,8 +482,16 @@ export function OrdersPage() {
   };
 
   // Imprimir comanda (modal de resumen de pedido)
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (order) => {
+    const ordenAImprimir = order || selectedOrder;
+    if (!ordenAImprimir) return;
+    setPrintingOrder(ordenAImprimir);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        setPrintingOrder(null);
+      }, 500);
+    }, 100);
   };
 
   return (

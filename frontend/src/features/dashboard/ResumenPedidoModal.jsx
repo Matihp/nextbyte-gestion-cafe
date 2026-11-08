@@ -119,7 +119,7 @@ export function ResumenPedidoModal({
               className="w-full py-3 px-4 bg-[#4B2B1D] hover:bg-[#3D2314] text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              <span>Imprimir Comanda</span>
+              <span>Imprimir Orden de Pedido</span>
             </button>
 
             <button

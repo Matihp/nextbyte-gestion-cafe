@@ -35,18 +35,18 @@ export function PrintTicketModal({ order, open, onConfirmPrint, onCancel }) {
         <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-3">
           <Button
             type="button"
-            variant="outline"
-            onClick={onCancel}
-            className="flex-1 py-3 h-auto bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-colors"
+            onClick={onConfirmPrint}
+            className="flex-1 py-3 h-auto bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold transition-colors shadow-sm cursor-pointer"
           >
-            Cancelar
+            Imprimir
           </Button>
           <Button
             type="button"
-            onClick={onConfirmPrint}
-            className="flex-1 py-3 h-auto bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold transition-colors shadow-sm"
+            variant="outline"
+            onClick={onCancel}
+            className="flex-1 py-3 h-auto bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-colors cursor-pointer"
           >
-            IMPRIMIR
+            No Imprimir
           </Button>
         </div>
       </DialogContent>
