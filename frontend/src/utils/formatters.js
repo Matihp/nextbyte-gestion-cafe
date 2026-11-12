@@ -30,6 +30,10 @@ export function formatearFecha(fecha) {
 export function formatearSoloFecha(fecha) {
   if (!fecha) return '-';
   const str = String(fecha).trim();
+  if (str.includes(' a ')) {
+    const [desde, hasta] = str.split(' a ');
+    return `${formatearSoloFecha(desde)} al ${formatearSoloFecha(hasta)}`;
+  }
   // Si viene en formato YYYY-MM-DD
   const matchYmd = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (matchYmd) {
@@ -43,7 +47,7 @@ export function formatearSoloFecha(fecha) {
     return `${d}/${m}/${y.slice(-2)}`;
   }
   const d = new Date(fecha);
-  if (isNaN(d.getTime())) return '-';
+  if (isNaN(d.getTime())) return str;
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: '2-digit',

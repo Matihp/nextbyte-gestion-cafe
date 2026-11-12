@@ -11,7 +11,7 @@ export const getHoyIso = () => {
   return `${anio}-${mes}-${dia}`;
 };
 
-const getMesActualIso = () => {
+export const getMesActualIso = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
@@ -50,15 +50,18 @@ export function useReporteCaja() {
       return { fecha: getHoyIso() };
     }
     if (modoFiltro === 'fecha') {
-      return { fecha: fechaEspecifica };
+      return { fecha: fechaEspecifica || getHoyIso() };
     }
-    const [anioStr, mesStr] = (modoFiltro === 'mes' ? getMesActualIso() : mesSeleccionado).split('-');
-    const anio = parseInt(anioStr, 10);
-    const mes = parseInt(mesStr, 10);
+    const mesIso = (modoFiltro === 'mes' || !mesSeleccionado || !mesSeleccionado.includes('-'))
+      ? getMesActualIso()
+      : mesSeleccionado;
+    const [anioStr, mesStr] = mesIso.split('-');
+    const anio = parseInt(anioStr, 10) || new Date().getFullYear();
+    const mes = parseInt(mesStr, 10) || (new Date().getMonth() + 1);
     const ultimoDia = new Date(anio, mes, 0).getDate();
     return {
-      desde: `${anioStr}-${String(mes).padStart(2, '0')}-01`,
-      hasta: `${anioStr}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`
+      desde: `${anio}-${String(mes).padStart(2, '0')}-01`,
+      hasta: `${anio}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`
     };
   }, [modoFiltro, fechaEspecifica, mesSeleccionado]);
 
@@ -406,7 +409,8 @@ export function useReporteCaja() {
     eliminarMovimiento,
     exportarAExcel,
     imprimirReporte,
-    getHoyIso
+    getHoyIso,
+    getMesActualIso
   };
 }
 

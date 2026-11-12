@@ -15,6 +15,7 @@ import CustomerViewerPage from './features/clientes/CustomerViewerPage';
 import LoginPage from './features/auth/LoginPage';
 import Configuracion from './features/configuracion/Configuracion';
 import { Toaster } from './components/ui/sonner';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -39,28 +40,30 @@ function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" richColors />
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/" element={<Home />} />
-          <Route path="/pedidos" element={<Pedidos />} />
-          <Route path="/comandas" element={<OrdersPage />} />
-          <Route path="/productos" element={<Productos />} />
-          <Route path="/inventario" element={<InventoryPage />} />
-          <Route path="/empleados" element={<EmployeesPage />} />
-          <Route path="/caja" element={<ReporteCaja />} />
-          <Route path="/proveedores" element={<SuppliersPage />} />
-          <Route path="/estadisticas" element={<Estadisticas />} />
-          <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
-          <Route path="/configuracion" element={<Configuracion />} />
-        </Route>
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/" element={<Home />} />
+            <Route path="/pedidos" element={<Pedidos />} />
+            <Route path="/comandas" element={<OrdersPage />} />
+            <Route path="/productos" element={<Productos />} />
+            <Route path="/inventario" element={<InventoryPage />} />
+            <Route path="/empleados" element={<EmployeesPage />} />
+            <Route path="/caja" element={<ReporteCaja />} />
+            <Route path="/proveedores" element={<SuppliersPage />} />
+            <Route path="/estadisticas" element={<Estadisticas />} />
+            <Route path="/pantalla-cliente" element={<CustomerViewerPage />} />
+            <Route path="/configuracion" element={<Configuracion />} />
+          </Route>
+        </Routes>
+      </ErrorBoundary>
     </AuthProvider>
   );
 }

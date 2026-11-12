@@ -5,6 +5,10 @@ import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/form
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
   const str = String(fechaStr).trim();
+  if (str.includes(' a ')) {
+    const [desde, hasta] = str.split(' a ');
+    return `${formatearFechaDDMMAAAA(desde)} al ${formatearFechaDDMMAAAA(hasta)}`;
+  }
   const soloFecha = str.split('T')[0];
   const partes = soloFecha.split('-');
   if (partes.length === 3) {
@@ -501,7 +505,7 @@ export function ReporteCajaPrint({
             <div className="w-80 space-y-1.5 text-xs text-right">
               <div className="flex justify-between font-semibold text-gray-700">
                 <span>Total Registros:</span>
-                <span>{mermas.length} productos</span>
+                <span>{mermas ? mermas.length : 0} productos</span>
               </div>
               <div className="flex justify-between font-black text-sm text-black border-t-2 border-black pt-1">
                 <span>TOTAL VALOR COSTOS ELIMINADOS:</span>
