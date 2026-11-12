@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs');
 
 const checkConnection = require('./middlewares/checkConnection');
 const checkRoleOffline = require('./middlewares/checkRole');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 const { databaseMode } = require('./config/db');
+const { getConnectivityService } = require('./services/connectivityService');
 
 const app = express();
 
@@ -24,31 +27,9 @@ app.use('/api', checkRoleOffline);
 // --- RUTAS ---
 
 // Ruta de prueba base
-const { getConnectivityService } = require('./services/connectivityService');
-
-app.get('/api/health', async (req, res) => {
+app.get('/api/health', (req, res) => {
   const connectivity = getConnectivityService({ databaseMode });
-  let state = connectivity.getState(req.user);
-
-  // Si estamos en contingencia offline o sin conexión en Turso, intentar reconectar y sincronizar
-  const modeUpper = String(state.mode || '').toUpperCase();
-  if (databaseMode === 'cloud' && (modeUpper === 'OFFLINE_ACTIVE' || !req.isOnline || !state.isOnline)) {
-    try {
-      const { verificarConexionTurso, sincronizar } = require('./jobs/syncJob');
-      const tursoOk = await verificarConexionTurso(2000);
-      if (tursoOk) {
-        if (state.syncEnabled && modeUpper === 'OFFLINE_ACTIVE') {
-          await sincronizar().catch((e) => console.warn('Aviso al sincronizar en health:', e.message));
-        } else {
-          connectivity.mode = 'ONLINE';
-          connectivity.reason = null;
-          connectivity.reportCloudSuccess();
-        }
-        state = connectivity.getState(req.user);
-        req.isOnline = true;
-      }
-    } catch {}
-  }
+  const state = connectivity.getState(req.user);
 
   res.json({
     message: 'Backend NextByte funcionando correctamente!',
@@ -56,7 +37,17 @@ app.get('/api/health', async (req, res) => {
     databaseMode,
     mode: state.mode,
     localReady: state.localReady,
-    status: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : state.isOnline ? 'Online (Turso)' : 'Turso no disponible (sin fallback)'
+    pendingCount: state.pendingCount || 0,
+    uncertainCount: state.uncertainCount || 0,
+    lastCloudSeq: state.lastCloudSeq || 0,
+    reason: state.reason || null,
+    status: databaseMode === 'local'
+      ? 'SQLite local (base principal)'
+      : databaseMode === 'test'
+        ? 'SQLite de prueba'
+        : state.isOnline
+          ? 'Online (Turso)'
+          : 'Turso no disponible (sin fallback)'
   });
 });
 
@@ -64,8 +55,6 @@ app.get('/api/health', async (req, res) => {
 app.use('/api', require('./routes'));
 
 // Servir frontend compilado (Vite) en modo producción / Electron
-const path = require('path');
-const fs = require('fs');
 const frontendDist = path.join(__dirname, '../../frontend/dist');
 
 if (fs.existsSync(frontendDist) && process.env.NODE_ENV !== 'test') {

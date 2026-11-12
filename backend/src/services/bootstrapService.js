@@ -22,7 +22,6 @@ const TABLAS_ORDENADAS = [
   'movimientos_caja'
 ];
 
-
 async function executeBootstrap({
   sourceDb,
   targetDbPath,
@@ -65,7 +64,6 @@ async function executeBootstrap({
   const tableCounts = {};
 
   try {
-
     await tempKnex.migrate.latest();
 
     for (const tabla of TABLAS_ORDENADAS) {
@@ -89,7 +87,6 @@ async function executeBootstrap({
 
         await tempKnex.transaction(async (trx) => {
           if (tabla === 'recetas') {
-
             const adaptadas = filas.map((r) => ({ ...r, producto_id: null }));
             await trx('recetas').insert(adaptadas);
           } else {
@@ -191,55 +188,77 @@ async function executeBootstrap({
 async function applyIncrementalJournal({
   sourceDb,
   targetDb,
-  batchLimit = 50
+  batchLimit = 50,
+  targetHead = null
 }) {
   const localState = await targetDb('contingency_state').where({ id: 'local' }).first();
   if (!localState || localState.bootstrap_status !== 'READY') {
     throw new AppError('El espejo local no tiene un bootstrap válido completado', 400, 'BOOTSTRAP_REQUERIDO');
   }
 
-  const lastSeqApplied = Number(localState.last_cloud_seq_applied || 0);
-
-  const pendingOps = await sourceDb('sync_operations')
-    .where('seq', '>', lastSeqApplied)
-    .orderBy('seq', 'asc')
-    .limit(batchLimit);
-
-  if (pendingOps.length === 0) {
-    return { appliedCount: 0, lastSeq: lastSeqApplied };
+  let finalTargetHead = targetHead;
+  if (finalTargetHead === null || finalTargetHead === undefined) {
+    const [writerState, maxOpRow] = await Promise.all([
+      sourceDb('sync_writer_state').where({ id: 'global' }).first().catch(() => null),
+      sourceDb('sync_operations').max('seq as max_seq').first().catch(() => null)
+    ]);
+    const writerHead = Number(writerState?.head_seq || 0);
+    const opsHead = Number(maxOpRow?.max_seq || 0);
+    finalTargetHead = Math.max(writerHead, opsHead);
   }
 
-  let currentSeq = lastSeqApplied;
+  let currentSeq = Number(localState.last_cloud_seq_applied || 0);
+  let totalApplied = 0;
 
-  for (const op of pendingOps) {
-    const expectedSeq = currentSeq + 1;
-    if (Number(op.seq) !== expectedSeq) {
-      throw new AppError(
-        `Salto inesperado de secuencia en journal cloud: esperado ${expectedSeq}, recibido ${op.seq}`,
-        409,
-        'SECUENCIA_INVALIDA'
-      );
+  while (currentSeq < finalTargetHead) {
+    const pendingOps = await sourceDb('sync_operations')
+      .where('seq', '>', currentSeq)
+      .where('seq', '<=', finalTargetHead)
+      .orderBy('seq', 'asc')
+      .limit(batchLimit);
+
+    if (pendingOps.length === 0) {
+      if (currentSeq < finalTargetHead) {
+        throw new AppError(
+          `Salto inesperado de secuencia en journal cloud: esperado ${currentSeq + 1}, recibido vacio`,
+          409,
+          'SECUENCIA_INVALIDA'
+        );
+      }
+      break;
     }
 
-    const effects = op.effects ? JSON.parse(op.effects) : [];
-
-    await targetDb.transaction(async (trx) => {
-      if (effects.length > 0) {
-        await applyEffectsToDatabase(trx, effects);
+    for (const op of pendingOps) {
+      const expectedSeq = currentSeq + 1;
+      if (Number(op.seq) !== expectedSeq) {
+        throw new AppError(
+          `Salto inesperado de secuencia en journal cloud: esperado ${expectedSeq}, recibido ${op.seq}`,
+          409,
+          'SECUENCIA_INVALIDA'
+        );
       }
 
-      await trx('contingency_state').where({ id: 'local' }).update({
-        last_cloud_seq_applied: op.seq,
-        last_head_acknowledged: op.seq,
-        last_sync_at: trx.fn.now()
-      });
-    });
+      const effects = op.effects ? JSON.parse(op.effects) : [];
 
-    currentSeq = op.seq;
+      await targetDb.transaction(async (trx) => {
+        if (effects.length > 0) {
+          await applyEffectsToDatabase(trx, effects);
+        }
+
+        await trx('contingency_state').where({ id: 'local' }).update({
+          last_cloud_seq_applied: op.seq,
+          last_head_acknowledged: op.seq,
+          last_sync_at: trx.fn.now()
+        });
+      });
+
+      currentSeq = Number(op.seq);
+      totalApplied++;
+    }
   }
 
   return {
-    appliedCount: pendingOps.length,
+    appliedCount: totalApplied,
     lastSeq: currentSeq
   };
 }

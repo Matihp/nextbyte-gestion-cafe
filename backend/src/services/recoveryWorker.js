@@ -122,7 +122,6 @@ class RecoveryWorker {
 
         try {
           await cloudDb.transaction(async (cloudTrx) => {
-            // 2. Comprobar deduplicación antes de exigir el head (detecta ack perdido)
             const existente = await cloudTrx('sync_operations').where({ operation_id: item.operation_id }).first();
             if (existente) {
               if (existente.request_hash !== item.request_hash) {
@@ -183,7 +182,7 @@ class RecoveryWorker {
               }
             }
 
-              await cloudTrx('sync_operations').insert({
+            await cloudTrx('sync_operations').insert({
               operation_id: item.operation_id,
               seq: newSeq,
               writer_id: writerId,
@@ -245,10 +244,7 @@ class RecoveryWorker {
         processedCount++;
       }
 
-      try {
-        await applyIncrementalJournal({ sourceDb: cloudDb, targetDb: localDb });
-      } catch {
-      }
+      await applyIncrementalJournal({ sourceDb: cloudDb, targetDb: localDb });
 
       await localDb('contingency_state').where({ id: 'local' }).update({
         active_offline_session_id: null,

@@ -78,7 +78,6 @@ async function runBusinessMutation({
         status: 'pending'
       });
 
-      // Actualizar contador de pendientes en el servicio de estado
       connectivity.setLocalMirrorState({
         ready: true,
         pendingCount: (state.pendingCount || 0) + 1,
@@ -96,6 +95,38 @@ async function runBusinessMutation({
     let result;
     let cloudSeq = 0;
 
+    const mirrorDb = localDb || (() => {
+      try {
+        const helper = require('../config/contingencyDb');
+        return helper && typeof helper.isContingencyReady === 'function' && helper.isContingencyReady()
+          ? helper.getContingencyDb()
+          : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    let intentRecorded = false;
+    if (mirrorDb) {
+      try {
+        const maxOrderRow = await mirrorDb('operation_outbox').max('local_order as max_order').first();
+        const nextOrder = (Number(maxOrderRow?.max_order) || 0) + 1;
+        await mirrorDb('operation_outbox').insert({
+          operation_id: effectiveOpId,
+          local_order: nextOrder,
+          origin: 'online_intent',
+          actor_id: actorId,
+          operation_type: operationType,
+          request_hash: requestHash,
+          request_payload: payload ? JSON.stringify(payload) : null,
+          status: 'prepared',
+          created_at: mirrorDb.fn.now(),
+          updated_at: mirrorDb.fn.now()
+        });
+        intentRecorded = true;
+      } catch {}
+    }
+
     try {
       result = await db.transaction(async (trx) => {
         const existente = await trx('sync_operations').where({ operation_id: effectiveOpId }).first();
@@ -103,6 +134,7 @@ async function runBusinessMutation({
           if (existente.request_hash !== requestHash) {
             throw new AppError('La Idempotency-Key ya fue utilizada con otro payload', 409, 'IDEMPOTENCY_CONFLICT');
           }
+          cloudSeq = existente.seq;
           return existente.result ? JSON.parse(existente.result) : null;
         }
 
@@ -133,18 +165,33 @@ async function runBusinessMutation({
 
       connectivity.reportCloudSuccess();
     } catch (error) {
+      if (mirrorDb && intentRecorded) {
+        try {
+          await mirrorDb('operation_outbox').where({ operation_id: effectiveOpId, status: 'prepared' }).del();
+        } catch {}
+      }
       await connectivity.reportCloudFailure(error);
       throw error;
     }
 
-    if (localDb && collector.getEffects().length > 0) {
+    if (mirrorDb && collector.getEffects().length > 0) {
       try {
-        await localDb.transaction(async (localTrx) => {
+        await mirrorDb.transaction(async (localTrx) => {
           await applyEffectsToDatabase(localTrx, collector.getEffects());
-          await localTrx('contingency_state').where({ id: 'local' }).update({
-            last_cloud_seq_applied: cloudSeq,
-            updated_at: localTrx.fn.now()
-          });
+          if (intentRecorded) {
+            await localTrx('operation_outbox').where({ operation_id: effectiveOpId }).update({
+              status: 'acknowledged',
+              updated_at: localTrx.fn.now()
+            });
+          }
+          const stateRow = await localTrx('contingency_state').where({ id: 'local' }).first();
+          if (stateRow) {
+            await localTrx('contingency_state').where({ id: 'local' }).update({
+              last_cloud_seq_applied: cloudSeq,
+              last_head_acknowledged: cloudSeq,
+              last_sync_at: localTrx.fn.now()
+            });
+          }
         });
       } catch (mirrorError) {
         connectivity.setLocalMirrorState({
@@ -155,6 +202,13 @@ async function runBusinessMutation({
           lastCloudSeq: cloudSeq
         });
       }
+    } else if (mirrorDb && intentRecorded) {
+      try {
+        await mirrorDb('operation_outbox').where({ operation_id: effectiveOpId }).update({
+          status: 'acknowledged',
+          updated_at: mirrorDb.fn.now()
+        });
+      } catch {}
     }
 
     return result;

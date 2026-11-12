@@ -1,8 +1,10 @@
+const crypto = require('crypto');
 const { dbLocal } = require('../config/db');
 const movimientoCajaRepository = require('../repositories/movimientoCajaRepository');
 const productoRepository = require('../repositories/productoRepository');
 const insumoRepository = require('../repositories/insumoRepository');
 const AppError = require('../utils/AppError');
+const { runBusinessMutation } = require('./mutationExecutor');
 
 const TIPOS_VALIDOS = ['INGRESO', 'RETIRO'];
 
@@ -28,18 +30,26 @@ const validarDatos = (datos) => {
   return errores;
 };
 
-const listarMovimientos = async (filtros = {}) => {
-  return movimientoCajaRepository.getAll(filtros);
+const listarMovimientos = async (filtros = {}, opciones = {}) => {
+  return movimientoCajaRepository.getAll(filtros, opciones.db || dbLocal);
 };
 
-const crearMovimiento = async (datos, usuarioId = null) => {
+const crearMovimiento = async (datos, usuarioIdOrOptions = null, maybeOptions = {}) => {
+  let usuarioId = usuarioIdOrOptions;
+  let opciones = maybeOptions;
+  if (usuarioIdOrOptions && typeof usuarioIdOrOptions === 'object' && !Array.isArray(usuarioIdOrOptions)) {
+    usuarioId = usuarioIdOrOptions.usuarioId || null;
+    opciones = usuarioIdOrOptions;
+  }
+
   const errores = validarDatos(datos);
   if (errores.length > 0) {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
+  const targetDb = opciones.db || dbLocal;
   if (datos.tipo === 'RETIRO') {
-    const { saldo } = await movimientoCajaRepository.getSaldoTotal();
+    const { saldo } = await movimientoCajaRepository.getSaldoTotal(targetDb);
     if (Number(saldo) < Number(datos.monto)) {
       throw new AppError(
         `Saldo insuficiente. Saldo actual: $${saldo}`,
@@ -49,25 +59,64 @@ const crearMovimiento = async (datos, usuarioId = null) => {
     }
   }
 
-  return dbLocal.transaction(async (trx) => {
-    return movimientoCajaRepository.create(
-      {
-        ...datos,
-        usuario_id: usuarioId,
-      },
-      trx
-    );
+  const actorId = opciones.actorId || usuarioId || 'cajero_principal';
+  const opId = opciones.operationId || crypto.randomUUID();
+
+  return await runBusinessMutation({
+    db: targetDb,
+    localDb: opciones.localDb || null,
+    operationId: opId,
+    actorId,
+    operationType: 'CREAR_MOVIMIENTO_CAJA',
+    payload: { ...datos, usuario_id: usuarioId },
+    execute: async ({ db, trx, collector, isOffline }) => {
+      if (datos.tipo === 'RETIRO') {
+        const { saldo } = await movimientoCajaRepository.getSaldoTotal(trx);
+        if (Number(saldo) < Number(datos.monto)) {
+          throw new AppError(
+            `Saldo insuficiente. Saldo actual: $${saldo}`,
+            422,
+            'SALDO_INSUFICIENTE'
+          );
+        }
+      }
+
+      const creado = await movimientoCajaRepository.create(
+        {
+          ...datos,
+          usuario_id: usuarioId,
+        },
+        trx
+      );
+
+      if (collector) {
+        collector.recordInsert('movimientos_caja', creado.id, {
+          id: creado.id,
+          fecha: creado.fecha,
+          hora: creado.hora,
+          tipo: creado.tipo,
+          detalle: creado.detalle,
+          monto: Number(creado.monto),
+          usuario_id: creado.usuario_id || null,
+          created_at: creado.created_at,
+          updated_at: creado.updated_at
+        });
+      }
+
+      return creado;
+    }
   });
 };
 
-const eliminarMovimiento = async (id) => {
-  const movimiento = await movimientoCajaRepository.getById(id);
+const eliminarMovimiento = async (id, opciones = {}) => {
+  const targetDb = opciones.db || dbLocal;
+  const movimiento = await movimientoCajaRepository.getById(id, targetDb);
   if (!movimiento) {
     throw new AppError('Movimiento no encontrado', 404, 'NO_ENCONTRADO');
   }
 
   if (movimiento.tipo === 'INGRESO') {
-    const { saldo } = await movimientoCajaRepository.getSaldoTotal();
+    const { saldo } = await movimientoCajaRepository.getSaldoTotal(targetDb);
     if (Number(saldo) - Number(movimiento.monto) < 0) {
       throw new AppError(
         `No se puede eliminar este ingreso: dejaría el saldo en negativo. Saldo actual: $${saldo}`,
@@ -77,9 +126,41 @@ const eliminarMovimiento = async (id) => {
     }
   }
 
-  return dbLocal.transaction(async (trx) => {
-    await movimientoCajaRepository.delete(id, trx);
-    return { id };
+  const actorId = opciones.actorId || opciones.usuarioId || 'cajero_principal';
+  const opId = opciones.operationId || `del_mov_${id}`;
+
+  return await runBusinessMutation({
+    db: targetDb,
+    localDb: opciones.localDb || null,
+    operationId: opId,
+    actorId,
+    operationType: 'ELIMINAR_MOVIMIENTO_CAJA',
+    payload: { id },
+    execute: async ({ db, trx, collector, isOffline }) => {
+      const movEnTrx = await movimientoCajaRepository.getById(id, trx);
+      if (!movEnTrx) {
+        throw new AppError('Movimiento no encontrado', 404, 'NO_ENCONTRADO');
+      }
+
+      if (movEnTrx.tipo === 'INGRESO') {
+        const { saldo } = await movimientoCajaRepository.getSaldoTotal(trx);
+        if (Number(saldo) - Number(movEnTrx.monto) < 0) {
+          throw new AppError(
+            `No se puede eliminar este ingreso: dejaría el saldo en negativo. Saldo actual: $${saldo}`,
+            422,
+            'SALDO_INSUFICIENTE'
+          );
+        }
+      }
+
+      await movimientoCajaRepository.delete(id, trx);
+
+      if (collector) {
+        collector.recordDelete('movimientos_caja', id, movEnTrx);
+      }
+
+      return { id };
+    }
   });
 };
 
@@ -100,7 +181,6 @@ const getMermasMes = async (mes) => {
   const mermas = await movimientoCajaRepository.getMermasMes(mes);
   if (!mermas || mermas.length === 0) return [];
 
-  // Recolectar productos de mermas que no tengan precio_costo
   const prodsSinCosto = mermas.filter(
     (m) => !(Number(m.precio_costo) > 0) && m.producto_id
   );
@@ -136,4 +216,3 @@ module.exports = {
   getSaldoAnterior,
   getMermasMes,
 };
-

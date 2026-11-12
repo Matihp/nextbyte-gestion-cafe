@@ -9,6 +9,7 @@ const detallePedidoRepository = require('../repositories/detallePedidoRepository
 const productoRepository = require('../repositories/productoRepository');
 const categoriaRepository = require('../repositories/categoriaRepository');
 const registroMermaRepository = require('../repositories/registroMermaRepository');
+const { runBusinessMutation } = require('./mutationExecutor');
 
 const generarIdPedido = () => {
   const hex = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -35,7 +36,6 @@ const calcularCostoUnitario = (ingredientes = []) => {
 };
 
 const hashPayload = (datos) => {
-  // Canonicalizar propiedades sin alterar tipos ni el orden de los ítems.
   const estable = (valor) => {
     if (Array.isArray(valor)) return `[${valor.map(estable).join(',')}]`;
     if (valor !== null && typeof valor === 'object') {
@@ -51,13 +51,14 @@ const hashPayload = (datos) => {
   }
 };
 
-const buscarReplay = async (key, hash, trx = null) => {
-  const existente = await (trx || dbLocal)('pedidos').where({ idempotency_key: key }).first();
+const buscarReplay = async (key, hash, targetDb = null) => {
+  const target = targetDb || dbLocal;
+  const existente = await target('pedidos').where({ idempotency_key: key }).first();
   if (!existente) return null;
   if (existente.idempotency_hash !== hash) {
     throw new AppError('La Idempotency-Key ya fue utilizada con otro payload', 409, 'IDEMPOTENCY_CONFLICT');
   }
-  return pedidoRepository.getWithDetails(existente.id, trx);
+  return pedidoRepository.getWithDetails(existente.id, target);
 };
 
 const esConflictoIdempotencyKey = (error) => {
@@ -79,7 +80,7 @@ const crear = async (datos, opciones = {}) => {
   }
   const hash = key === undefined ? null : hashPayload(datos);
   if (key !== undefined) {
-    const replay = await buscarReplay(key, hash);
+    const replay = await buscarReplay(key, hash, opciones.db);
     if (replay) return replay;
   }
 
@@ -88,189 +89,127 @@ const crear = async (datos, opciones = {}) => {
     throw new AppError(`Datos inválidos: ${errores.join(', ')}`, 400, 'VALIDACION');
   }
 
+  const actorId = opciones.actorId || opciones.usuarioId || 'cajero_principal';
+  const opId = key || opciones.operationId || generarIdPedido();
+
   try {
-    return await dbLocal.transaction(async (trx) => {
-      if (key !== undefined) {
-        const replay = await buscarReplay(key, hash, trx);
-        if (replay) return replay;
-      }
-      const cabecera = {
-        id: generarIdPedido(),
-        cliente: typeof datos.cliente === 'string' && datos.cliente.trim() !== ''
-          ? datos.cliente.trim() : 'Consumidor Final',
-        total: 0,
-        estado: datos.estado || ESTADOS_PEDIDO.PENDIENTE,
-        tipo_pedido: datos.tipo_pedido,
-        metodo_pago: datos.metodo_pago,
-        direccion: datos.direccion ? datos.direccion.trim() : null,
-        telefono: datos.telefono ? datos.telefono.trim() : null,
-        fecha: hoy(),
-        hora: ahora()
-      };
-      if (key !== undefined) {
-        // Reclamar la clave antes de validar stock. Cabecera, clave y reservas
-        // se confirman juntas; un conflicto único revierte toda esta transacción.
-        await pedidoRepository.create(cabecera, trx);
-        await trx('pedidos').where({ id: cabecera.id }).update({
-          idempotency_key: key,
-          idempotency_hash: hash
-        });
-      }
-      const detalles = [];
-      for (const item of datos.items) {
-        const producto = await productoRepository.getByIdWithDetails(Number(item.producto_id), trx);
-        if (!producto) {
-          throw new AppError(`El producto con id ${item.producto_id} no existe`, 404, 'NO_ENCONTRADO');
+    return await runBusinessMutation({
+      db: opciones.db || dbLocal,
+      localDb: opciones.localDb || null,
+      operationId: opId,
+      actorId,
+      operationType: 'CREAR_PEDIDO',
+      payload: datos,
+      execute: async ({ db, trx, collector, isOffline }) => {
+        if (key !== undefined) {
+          const replay = await buscarReplay(key, hash, trx);
+          if (replay) return replay;
         }
 
-        const cantPedida = item.cantidad;
-        const afectados = await trx('productos')
-          .where({ id: producto.id })
-          .where('stock_actual', '>=', cantPedida)
-          .decrement('stock_actual', cantPedida)
-          .update({ updated_at: trx.fn.now() });
-        if (afectados !== 1) {
-          throw new AppError(
-            `No hay productos suficientes de "${producto.nombre}". Disponibles: ${producto.stock_actual}, solicitados: ${cantPedida}`,
-            409,
-            'STOCK_INSUFICIENTE'
-          );
+        const cabeceraId = key ? (opciones.pedidoId || generarIdPedido()) : opId;
+        const cabecera = {
+          id: cabeceraId,
+          cliente: typeof datos.cliente === 'string' && datos.cliente.trim() !== ''
+            ? datos.cliente.trim() : 'Consumidor Final',
+          total: 0,
+          estado: datos.estado || ESTADOS_PEDIDO.PENDIENTE,
+          tipo_pedido: datos.tipo_pedido,
+          metodo_pago: datos.metodo_pago,
+          direccion: datos.direccion ? datos.direccion.trim() : null,
+          telefono: datos.telefono ? datos.telefono.trim() : null,
+          fecha: hoy(),
+          hora: ahora()
+        };
+
+        if (key !== undefined) {
+          await pedidoRepository.create(cabecera, trx);
+          await trx('pedidos').where({ id: cabecera.id }).update({
+            idempotency_key: key,
+            idempotency_hash: hash
+          });
         }
 
-        detalles.push({
-          producto_id: producto.id,
-          nombre_producto: producto.nombre,
-          cantidad: cantPedida,
-          precio_venta: Number(producto.precio_venta),
-          precio_costo: Number(producto.precio_costo) || 0
-        });
-      }
+        const detalles = [];
+        for (const item of datos.items) {
+          const producto = await productoRepository.getByIdWithDetails(Number(item.producto_id), trx);
+          if (!producto) {
+            throw new AppError(`El producto con id ${item.producto_id} no existe`, 404, 'NO_ENCONTRADO');
+          }
 
-      const total = calcularTotal(detalles);
-      let pedidoCreado;
-      if (key !== undefined) {
-        await detallePedidoRepository.createMany(detalles.map((detalle) => ({
-          ...detalle, pedido_id: cabecera.id
-        })), trx);
-        await pedidoRepository.update(cabecera.id, { total }, trx);
-        pedidoCreado = await pedidoRepository.getWithDetails(cabecera.id, trx);
-      } else {
-        pedidoCreado = await pedidoRepository.createWithDetails({ ...cabecera, total }, detalles, trx);
-      }
+          const cantPedida = item.cantidad;
+          const afectados = await trx('productos')
+            .where({ id: producto.id })
+            .where('stock_actual', '>=', cantPedida)
+            .decrement('stock_actual', cantPedida)
+            .update({ updated_at: trx.fn.now() });
+          if (afectados !== 1) {
+            throw new AppError(
+              `No hay productos suficientes de "${producto.nombre}". Disponibles: ${producto.stock_actual}, solicitados: ${cantPedida}`,
+              409,
+              'STOCK_INSUFICIENTE'
+            );
+          }
 
-      // Si estamos operando offline en contingencia, registrar atómicamente en la outbox de SQLite
-      if (process.env.CONTINGENCY_ENABLED === 'true') {
-        try {
-          const { requestContext } = require('../config/db');
-          const store = requestContext ? requestContext.getStore() : null;
-          if (store?.isOfflineContingency) {
-            const { recordOfflineOperation } = require('./operationJournalService');
-            const { EffectCollector } = require('./effectCollector');
-            const collector = new EffectCollector();
+          const prodActualizado = await trx('productos').where({ id: producto.id }).first();
 
-            const cabeceraData = {
-              id: pedidoCreado.id,
-              cliente: pedidoCreado.cliente,
-              total: Number(pedidoCreado.total || 0),
-              estado: pedidoCreado.estado,
-              tipo_pedido: pedidoCreado.tipo_pedido,
-              metodo_pago: pedidoCreado.metodo_pago,
-              direccion: pedidoCreado.direccion || null,
-              telefono: pedidoCreado.telefono || null,
-              fecha: pedidoCreado.fecha,
-              hora: pedidoCreado.hora,
-              numero_pedido: pedidoCreado.numero_pedido || null,
-              idempotency_key: pedidoCreado.idempotency_key || null,
-              idempotency_hash: pedidoCreado.idempotency_hash || null,
-              created_at: pedidoCreado.created_at,
-              updated_at: pedidoCreado.updated_at
-            };
-            collector.recordInsert('pedidos', pedidoCreado.id, cabeceraData);
-
-            if (Array.isArray(pedidoCreado.detalles)) {
-              for (const det of pedidoCreado.detalles) {
-                collector.recordInsert('detalles_pedidos', det.id, {
-                  id: det.id,
-                  pedido_id: pedidoCreado.id,
-                  producto_id: det.producto_id || null,
-                  nombre_producto: det.nombre_producto,
-                  cantidad: Number(det.cantidad || 1),
-                  precio_venta: Number(det.precio_venta || 0),
-                  precio_costo: Number(det.precio_costo || 0),
-                  created_at: det.created_at,
-                  updated_at: det.updated_at
-                });
-
-                if (det.producto_id) {
-                  const prod = await trx('productos').where({ id: det.producto_id }).first();
-                  if (prod) {
-                    collector.recordUpdate('productos', det.producto_id, {
-                      stock_actual: prod.stock_actual,
-                      updated_at: prod.updated_at
-                    });
-                  }
-                }
-              }
-            }
-
-            await recordOfflineOperation(trx, {
-              operationId: cabecera.id,
-              actorId: 'cajero_principal',
-              operationType: 'CREAR_PEDIDO',
-              requestHash: hash || cabecera.id,
-              requestPayload: datos,
-              collector,
-              result: pedidoCreado,
-              status: 'pending'
+          if (collector) {
+            collector.recordUpdate('productos', producto.id, {
+              stock_actual: prodActualizado.stock_actual,
+              updated_at: prodActualizado.updated_at
+            }, {
+              stock_actual: producto.stock_actual
             });
-          } else {
-            // Replicar al espejo local en contingencia.db de forma asíncrona
-            const helper = (() => {
-              try { return require('../config/contingencyDb'); } catch { return null; }
-            })();
-            if (helper && helper.isContingencyReady()) {
-              const localDb = helper.getContingencyDb();
-              (async () => {
-                try {
-                  const { detalles, display_id, displayId, orderNumber, ...cabeceraClean } = pedidoCreado;
-                  const existe = await localDb('pedidos').where({ id: pedidoCreado.id }).first();
-                  if (!existe) {
-                    await localDb('pedidos').insert(cabeceraClean);
-                  }
-                  if (Array.isArray(detalles)) {
-                    for (const d of detalles) {
-                      const detExiste = await localDb('detalles_pedidos').where({ id: d.id }).first();
-                      if (!detExiste) {
-                        await localDb('detalles_pedidos').insert({
-                          id: d.id,
-                          pedido_id: pedidoCreado.id,
-                          producto_id: d.producto_id || null,
-                          nombre_producto: d.nombre_producto,
-                          cantidad: Number(d.cantidad || 1),
-                          precio_venta: Number(d.precio_venta || 0),
-                          precio_costo: Number(d.precio_costo || 0),
-                          created_at: d.created_at,
-                          updated_at: d.updated_at
-                        });
-                      }
-                    }
-                  }
-                } catch {}
-              })().catch(() => {});
+          }
+
+          detalles.push({
+            id: crypto.randomUUID(),
+            producto_id: producto.id,
+            nombre_producto: producto.nombre,
+            cantidad: cantPedida,
+            precio_venta: Number(producto.precio_venta),
+            precio_costo: Number(producto.precio_costo) || 0
+          });
+        }
+
+        const total = calcularTotal(detalles);
+        let pedidoCreado;
+        if (key !== undefined) {
+          await detallePedidoRepository.createMany(detalles.map((detalle) => ({
+            ...detalle, pedido_id: cabecera.id
+          })), trx);
+          await pedidoRepository.update(cabecera.id, { total }, trx);
+          pedidoCreado = await pedidoRepository.getWithDetails(cabecera.id, trx);
+        } else {
+          pedidoCreado = await pedidoRepository.createWithDetails({ ...cabecera, total }, detalles, trx);
+        }
+
+        if (collector) {
+          const { detalles: dets, display_id, displayId, orderNumber, ...cabeceraClean } = pedidoCreado;
+          collector.recordInsert('pedidos', pedidoCreado.id, cabeceraClean);
+
+          if (Array.isArray(dets)) {
+            for (const d of dets) {
+              collector.recordInsert('detalles_pedidos', d.id, {
+                id: d.id,
+                pedido_id: pedidoCreado.id,
+                producto_id: d.producto_id || null,
+                nombre_producto: d.nombre_producto,
+                cantidad: Number(d.cantidad || 1),
+                precio_venta: Number(d.precio_venta || 0),
+                precio_costo: Number(d.precio_costo || 0),
+                created_at: d.created_at,
+                updated_at: d.updated_at
+              });
             }
           }
-        } catch (e) {
-          console.warn('Aviso al registrar en outbox:', e.message);
         }
-      }
 
-      return pedidoCreado;
+        return pedidoCreado;
+      }
     });
   } catch (error) {
-    // Solo recuperar el conflicto de ESTA clave después de completar el rollback.
-    // Errores de red, otras restricciones y commits inciertos nunca se reintentan.
     if (key !== undefined && esConflictoIdempotencyKey(error)) {
-      const replay = await buscarReplay(key, hash);
+      const replay = await buscarReplay(key, hash, opciones.db);
       if (replay) return replay;
     }
     throw error;

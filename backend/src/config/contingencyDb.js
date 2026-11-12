@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const knex = require('knex');
 const knexConfig = require('../../knexfile');
-const { executeBootstrap } = require('../services/bootstrapService');
+const { executeBootstrap, applyIncrementalJournal } = require('../services/bootstrapService');
 const { getConnectivityService } = require('../services/connectivityService');
 
 let contingencyKnexInstance = null;
@@ -46,7 +46,30 @@ function getContingencyDb() {
 
 function isContingencyReady() {
   const dbPath = getContingencyDbPath();
-  return fs.existsSync(dbPath);
+  if (!fs.existsSync(dbPath)) {
+    return false;
+  }
+
+  try {
+    const stats = fs.statSync(dbPath);
+    if (!stats.isFile() || stats.size === 0) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  try {
+    const connectivity = getConnectivityService();
+    if (connectivity && typeof connectivity.getState === 'function') {
+      const state = connectivity.getState();
+      if (state && state.localReady !== undefined) {
+        return Boolean(state.localReady);
+      }
+    }
+  } catch {}
+
+  return true;
 }
 
 async function initContingencyOnBoot({ sourceDb, writerId = 'wr_caja_principal' }) {
@@ -56,40 +79,41 @@ async function initContingencyOnBoot({ sourceDb, writerId = 'wr_caja_principal' 
 
   if (!exists && sourceDb) {
     try {
-      console.log('📦 Inicializando base SQLite local de contingencia desde Turso Cloud...');
       await executeBootstrap({
         sourceDb,
         targetDbPath: dbPath,
         writerId
       });
-      console.log('✅ Base SQLite de contingencia creada y lista en:', dbPath);
       connectivity.setLocalMirrorState({ ready: true, reason: null });
     } catch (err) {
-      console.warn('⚠️ No se pudo completar el bootstrap inicial de contingencia:', err.message);
       connectivity.setLocalMirrorState({ ready: false, reason: 'BOOTSTRAP_FALLO' });
     }
   } else if (exists) {
     try {
       const db = getContingencyDb();
-      // Si hay conexión a Turso en el arranque, verificar si podemos actualizar el espejo local
       if (sourceDb) {
         const hayPendientes = await db('operation_outbox')
-          .whereIn('status', ['pending', 'sending', 'uncertain'])
+          .whereIn('status', ['pending', 'sending', 'uncertain', 'conflict', 'prepared'])
           .first()
           .catch(() => null);
 
-        if (!hayPendientes) {
+        const stateRow = await db('contingency_state').where({ id: 'local' }).first().catch(() => null);
+        if (!hayPendientes && stateRow?.bootstrap_status === 'READY') {
           try {
-            console.log('🔄 Actualizando base SQLite local con el estado más reciente de Turso Cloud...');
+            await applyIncrementalJournal({ sourceDb, targetDb: db });
+          } catch (incErr) {
+            console.warn('Aviso al aplicar journal incremental en boot:', incErr.message);
+          }
+        } else if (!hayPendientes && (!stateRow || stateRow.bootstrap_status !== 'READY')) {
+          try {
             await closeContingencyDb();
             await executeBootstrap({
               sourceDb,
               targetDbPath: dbPath,
               writerId
             });
-            console.log('✅ Base SQLite local actualizada exitosamente desde Turso Cloud');
           } catch (bootErr) {
-            console.warn('Aviso al refrescar base local desde Turso:', bootErr.message);
+            console.warn('Aviso al ejecutar bootstrap inicial en boot:', bootErr.message);
           }
         }
       }
@@ -100,17 +124,14 @@ async function initContingencyOnBoot({ sourceDb, writerId = 'wr_caja_principal' 
       connectivity.setLocalMirrorState({
         ready: isReady,
         reason: isReady ? null : 'BOOTSTRAP_PENDIENTE',
-        lastCloudSeq: state?.last_cloud_seq_applied || 0
+        lastCloudSeq: Number(state?.last_cloud_seq_applied || 0)
       });
-      if (isReady) {
-        console.log('✅ Base SQLite local de contingencia detectada y lista:', dbPath);
-        if (!sourceDb && connectivity.mode === 'starting') {
-          connectivity.mode = 'offline_active';
-          connectivity.reason = 'INTERNET_UNREACHABLE';
-        }
+      if (isReady && !sourceDb && connectivity.mode === 'starting') {
+        connectivity.mode = 'offline_active';
+        connectivity.reason = 'INTERNET_UNREACHABLE';
       }
-    } catch {
-      connectivity.setLocalMirrorState({ ready: true, reason: null });
+    } catch (err) {
+      connectivity.setLocalMirrorState({ ready: false, reason: 'ERROR_INICIALIZACION_LOCAL' });
     }
   }
 }
@@ -120,7 +141,6 @@ async function closeContingencyDb() {
     try {
       await contingencyKnexInstance.destroy();
     } catch {
-      // Ignorar fallos al cerrar
     } finally {
       contingencyKnexInstance = null;
     }
@@ -134,4 +154,3 @@ module.exports = {
   initContingencyOnBoot,
   closeContingencyDb
 };
-
