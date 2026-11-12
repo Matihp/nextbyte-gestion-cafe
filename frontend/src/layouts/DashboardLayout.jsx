@@ -154,7 +154,6 @@ export default function DashboardLayout() {
   };
 
   useEffect(() => {
-    // Verificación inicial activa al montar
     verificarConexionReal(true);
 
     const handleOnline = () => {
@@ -186,7 +185,6 @@ export default function DashboardLayout() {
     };
     window.addEventListener('nextbyte:network-status', handleNetworkEvent);
 
-    // Sondeo periódico en background cada 10 segundos
     const intervalId = setInterval(() => {
       verificarConexionReal(true);
     }, 10000);
@@ -199,8 +197,14 @@ export default function DashboardLayout() {
     };
   }, []);
 
-  const handleReintentarConexion = () => {
-    verificarConexionReal(false);
+  const handleReintentarConexion = async () => {
+    setCheckingConnection(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      await fetch(`${apiUrl}/sync/ejecutar`, { method: 'POST', cache: 'no-store' }).catch(() => {});
+    } finally {
+      await verificarConexionReal(false);
+    }
   };
 
   const handleLogout = () => {

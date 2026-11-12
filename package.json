@@ -20,10 +20,20 @@
       "backend/**/*",
       "frontend/dist/**/*",
       "!backend/tests/**/*",
-      "!**/node_modules/*/{test,__tests__,tests}/**/*"
+      "!backend/node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": [
+          "!**/{test,__tests__,tests}/**/*"
+        ]
+      }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "electron/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -36,4 +46,3 @@
     "electron-builder": "^25.1.8"
   }
 }
-
