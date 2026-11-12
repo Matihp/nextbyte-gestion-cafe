@@ -19,17 +19,44 @@ if (process.env.NODE_ENV !== 'test') {
 
 // Middlewares de Arquitectura offline/online
 app.use(checkConnection);
-app.use(checkRoleOffline);
+app.use('/api', checkRoleOffline);
 
 // --- RUTAS ---
 
 // Ruta de prueba base
-app.get('/api/health', (req, res) => {
+const { getConnectivityService } = require('./services/connectivityService');
+
+app.get('/api/health', async (req, res) => {
+  const connectivity = getConnectivityService({ databaseMode });
+  let state = connectivity.getState(req.user);
+
+  // Si estamos en contingencia offline o sin conexión en Turso, intentar reconectar y sincronizar
+  const modeUpper = String(state.mode || '').toUpperCase();
+  if (databaseMode === 'cloud' && (modeUpper === 'OFFLINE_ACTIVE' || !req.isOnline || !state.isOnline)) {
+    try {
+      const { verificarConexionTurso, sincronizar } = require('./jobs/syncJob');
+      const tursoOk = await verificarConexionTurso(2000);
+      if (tursoOk) {
+        if (state.syncEnabled && modeUpper === 'OFFLINE_ACTIVE') {
+          await sincronizar().catch((e) => console.warn('Aviso al sincronizar en health:', e.message));
+        } else {
+          connectivity.mode = 'ONLINE';
+          connectivity.reason = null;
+          connectivity.reportCloudSuccess();
+        }
+        state = connectivity.getState(req.user);
+        req.isOnline = true;
+      }
+    } catch {}
+  }
+
   res.json({
     message: 'Backend NextByte funcionando correctamente!',
-    isOnline: Boolean(req.isOnline),
+    isOnline: Boolean(req.isOnline !== undefined ? req.isOnline : state.isOnline),
     databaseMode,
-    status: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : req.isOnline ? 'Online (Turso)' : 'Turso no disponible (sin fallback)'
+    mode: state.mode,
+    localReady: state.localReady,
+    status: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : state.isOnline ? 'Online (Turso)' : 'Turso no disponible (sin fallback)'
   });
 });
 
@@ -43,7 +70,7 @@ const frontendDist = path.join(__dirname, '../../frontend/dist');
 
 if (fs.existsSync(frontendDist) && process.env.NODE_ENV !== 'test') {
   app.use(express.static(frontendDist));
-  app.get('*', (req, res, next) => {
+  app.get('{*path}', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(frontendDist, 'index.html'));
   });

@@ -194,6 +194,32 @@ const cambiarEstado = async (id, nuevoEstado) => {
       throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
     }
     await actualizarEstado(pedido, nuevoEstado, trx);
+
+    if (process.env.CONTINGENCY_ENABLED === 'true') {
+      try {
+        const { requestContext } = require('../config/db');
+        const store = requestContext ? requestContext.getStore() : null;
+        if (store?.isOfflineContingency) {
+          const { recordOfflineOperation } = require('./operationJournalService');
+          const { EffectCollector } = require('./effectCollector');
+          const collector = new EffectCollector();
+          collector.recordUpdate('pedidos', pedido.id, { estado: nuevoEstado }, { estado: pedido.estado });
+          await recordOfflineOperation(trx, {
+            operationId: `CMD_${pedido.id}_${Date.now()}`,
+            actorId: 'cajero_principal',
+            operationType: 'CAMBIAR_ESTADO_COMANDA',
+            requestHash: `${pedido.id}_${nuevoEstado}`,
+            requestPayload: { id: pedido.id, nuevoEstado },
+            collector,
+            result: { id: pedido.id, estado: nuevoEstado },
+            status: 'pending'
+          });
+        }
+      } catch (e) {
+        console.warn('Aviso al registrar comanda en outbox:', e.message);
+      }
+    }
+
     return pedidoRepository.getWithDetails(pedido.id, trx);
   });
 };
@@ -241,6 +267,32 @@ const entregar = async (id) => dbLocal.transaction(async (trx) => {
   }
 
   await actualizarEstado({ ...pedido, estado: ESTADOS_PEDIDO.COMPLETADO }, ESTADOS_PEDIDO.ENTREGADO, trx);
+
+  if (process.env.CONTINGENCY_ENABLED === 'true') {
+    try {
+      const { requestContext } = require('../config/db');
+      const store = requestContext ? requestContext.getStore() : null;
+      if (store?.isOfflineContingency) {
+        const { recordOfflineOperation } = require('./operationJournalService');
+        const { EffectCollector } = require('./effectCollector');
+        const collector = new EffectCollector();
+        collector.recordUpdate('pedidos', pedido.id, { estado: ESTADOS_PEDIDO.ENTREGADO }, { estado: pedido.estado });
+        await recordOfflineOperation(trx, {
+          operationId: `ENT_${pedido.id}_${Date.now()}`,
+          actorId: 'cajero_principal',
+          operationType: 'ENTREGAR_PEDIDO',
+          requestHash: `entregar_${pedido.id}`,
+          requestPayload: { id: pedido.id },
+          collector,
+          result: { id: pedido.id, estado: ESTADOS_PEDIDO.ENTREGADO },
+          status: 'pending'
+        });
+      }
+    } catch (e) {
+      console.warn('Aviso al registrar entrega en outbox:', e.message);
+    }
+  }
+
   return pedidoRepository.getWithDetails(pedido.id, trx);
 });
 
@@ -278,6 +330,32 @@ const completar = async (id) => {
     }
 
     const pedidoActualizado = await pedidoRepository.getWithDetails(pedido.id, trx);
+
+    if (process.env.CONTINGENCY_ENABLED === 'true') {
+      try {
+        const { requestContext } = require('../config/db');
+        const store = requestContext ? requestContext.getStore() : null;
+        if (store?.isOfflineContingency) {
+          const { recordOfflineOperation } = require('./operationJournalService');
+          const { EffectCollector } = require('./effectCollector');
+          const collector = new EffectCollector();
+          collector.recordUpdate('pedidos', pedido.id, { estado: ESTADOS_PEDIDO.COMPLETADO }, { estado: pedido.estado });
+          await recordOfflineOperation(trx, {
+            operationId: `CMP_${pedido.id}_${Date.now()}`,
+            actorId: 'cajero_principal',
+            operationType: 'COMPLETAR_PEDIDO',
+            requestHash: `completar_${pedido.id}`,
+            requestPayload: { id: pedido.id },
+            collector,
+            result: { id: pedido.id, estado: ESTADOS_PEDIDO.COMPLETADO },
+            status: 'pending'
+          });
+        }
+      } catch (e) {
+        console.warn('Aviso al registrar completar en outbox:', e.message);
+      }
+    }
+
     return {
       ...pedidoActualizado,
       pedido: pedidoActualizado,

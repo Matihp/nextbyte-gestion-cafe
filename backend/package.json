@@ -17,6 +17,9 @@
     "testEnvironment": "node",
     "roots": [
       "<rootDir>/tests"
+    ],
+    "setupFiles": [
+      "<rootDir>/tests/helpers/setupEnv.js"
     ]
   },
   "keywords": [],

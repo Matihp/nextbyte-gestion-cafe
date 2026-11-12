@@ -17,6 +17,30 @@ function isNetworkError(error) {
   return false;
 }
 
+function isQuotaError(error) {
+  const seen = new Set();
+  for (let current = error; current && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    const code = String(current.code || '').toUpperCase();
+    const status = Number(current.status || current.statusCode);
+    if (code === 'BLOCKED' || status === 429) return true;
+    if (/usage limit|quota exceeded|too many requests/i.test(current.message || '')) return true;
+  }
+  return false;
+}
+
+function isAuthError(error) {
+  const seen = new Set();
+  for (let current = error; current && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    const code = String(current.code || '').toUpperCase();
+    const status = Number(current.status || current.statusCode);
+    if (status === 401 || status === 403 || code === 'UNAUTHORIZED' || code === 'FORBIDDEN') return true;
+    if (/unauthorized|forbidden|invalid auth token|authentication failed/i.test(current.message || '')) return true;
+  }
+  return false;
+}
+
 function isCloudUnavailable(error) {
   const seen = new Set();
   for (let current = error; current && !seen.has(current); current = current.cause) {
@@ -29,4 +53,9 @@ function isCloudUnavailable(error) {
   return status === 429 || status >= 500 || error?.code === 'SERVER_ERROR';
 }
 
-module.exports = { isNetworkError, isCloudUnavailable };
+module.exports = {
+  isNetworkError,
+  isCloudUnavailable,
+  isQuotaError,
+  isAuthError
+};

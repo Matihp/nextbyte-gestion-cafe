@@ -147,14 +147,124 @@ const crear = async (datos, opciones = {}) => {
       }
 
       const total = calcularTotal(detalles);
+      let pedidoCreado;
       if (key !== undefined) {
         await detallePedidoRepository.createMany(detalles.map((detalle) => ({
           ...detalle, pedido_id: cabecera.id
         })), trx);
         await pedidoRepository.update(cabecera.id, { total }, trx);
-        return pedidoRepository.getWithDetails(cabecera.id, trx);
+        pedidoCreado = await pedidoRepository.getWithDetails(cabecera.id, trx);
+      } else {
+        pedidoCreado = await pedidoRepository.createWithDetails({ ...cabecera, total }, detalles, trx);
       }
-      return pedidoRepository.createWithDetails({ ...cabecera, total }, detalles, trx);
+
+      // Si estamos operando offline en contingencia, registrar atómicamente en la outbox de SQLite
+      if (process.env.CONTINGENCY_ENABLED === 'true') {
+        try {
+          const { requestContext } = require('../config/db');
+          const store = requestContext ? requestContext.getStore() : null;
+          if (store?.isOfflineContingency) {
+            const { recordOfflineOperation } = require('./operationJournalService');
+            const { EffectCollector } = require('./effectCollector');
+            const collector = new EffectCollector();
+
+            const cabeceraData = {
+              id: pedidoCreado.id,
+              cliente: pedidoCreado.cliente,
+              total: Number(pedidoCreado.total || 0),
+              estado: pedidoCreado.estado,
+              tipo_pedido: pedidoCreado.tipo_pedido,
+              metodo_pago: pedidoCreado.metodo_pago,
+              direccion: pedidoCreado.direccion || null,
+              telefono: pedidoCreado.telefono || null,
+              fecha: pedidoCreado.fecha,
+              hora: pedidoCreado.hora,
+              numero_pedido: pedidoCreado.numero_pedido || null,
+              idempotency_key: pedidoCreado.idempotency_key || null,
+              idempotency_hash: pedidoCreado.idempotency_hash || null,
+              created_at: pedidoCreado.created_at,
+              updated_at: pedidoCreado.updated_at
+            };
+            collector.recordInsert('pedidos', pedidoCreado.id, cabeceraData);
+
+            if (Array.isArray(pedidoCreado.detalles)) {
+              for (const det of pedidoCreado.detalles) {
+                collector.recordInsert('detalles_pedidos', det.id, {
+                  id: det.id,
+                  pedido_id: pedidoCreado.id,
+                  producto_id: det.producto_id || null,
+                  nombre_producto: det.nombre_producto,
+                  cantidad: Number(det.cantidad || 1),
+                  precio_venta: Number(det.precio_venta || 0),
+                  precio_costo: Number(det.precio_costo || 0),
+                  created_at: det.created_at,
+                  updated_at: det.updated_at
+                });
+
+                if (det.producto_id) {
+                  const prod = await trx('productos').where({ id: det.producto_id }).first();
+                  if (prod) {
+                    collector.recordUpdate('productos', det.producto_id, {
+                      stock_actual: prod.stock_actual,
+                      updated_at: prod.updated_at
+                    });
+                  }
+                }
+              }
+            }
+
+            await recordOfflineOperation(trx, {
+              operationId: cabecera.id,
+              actorId: 'cajero_principal',
+              operationType: 'CREAR_PEDIDO',
+              requestHash: hash || cabecera.id,
+              requestPayload: datos,
+              collector,
+              result: pedidoCreado,
+              status: 'pending'
+            });
+          } else {
+            // Replicar al espejo local en contingencia.db de forma asíncrona
+            const helper = (() => {
+              try { return require('../config/contingencyDb'); } catch { return null; }
+            })();
+            if (helper && helper.isContingencyReady()) {
+              const localDb = helper.getContingencyDb();
+              (async () => {
+                try {
+                  const { detalles, display_id, displayId, orderNumber, ...cabeceraClean } = pedidoCreado;
+                  const existe = await localDb('pedidos').where({ id: pedidoCreado.id }).first();
+                  if (!existe) {
+                    await localDb('pedidos').insert(cabeceraClean);
+                  }
+                  if (Array.isArray(detalles)) {
+                    for (const d of detalles) {
+                      const detExiste = await localDb('detalles_pedidos').where({ id: d.id }).first();
+                      if (!detExiste) {
+                        await localDb('detalles_pedidos').insert({
+                          id: d.id,
+                          pedido_id: pedidoCreado.id,
+                          producto_id: d.producto_id || null,
+                          nombre_producto: d.nombre_producto,
+                          cantidad: Number(d.cantidad || 1),
+                          precio_venta: Number(d.precio_venta || 0),
+                          precio_costo: Number(d.precio_costo || 0),
+                          created_at: d.created_at,
+                          updated_at: d.updated_at
+                        });
+                      }
+                    }
+                  }
+                } catch {}
+              })().catch(() => {});
+            }
+          }
+        } catch (e) {
+          console.warn('Aviso al registrar en outbox:', e.message);
+        }
+      }
+
+      return pedidoCreado;
     });
   } catch (error) {
     // Solo recuperar el conflicto de ESTA clave después de completar el rollback.
