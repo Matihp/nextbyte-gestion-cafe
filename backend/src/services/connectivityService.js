@@ -68,6 +68,10 @@ class ConnectivityService {
     this.lastCloudSuccessAt = this.clock.now();
     this.cloudStatus = ESTADOS_CLOUD.REACHABLE;
     this.internetStatus = ESTADOS_INTERNET.REACHABLE;
+    try {
+      const { setOnlineStatus } = require('../config/db');
+      setOnlineStatus(true);
+    } catch {}
 
     if (this.mode === MODOS_OPERATIVOS.STARTING ||
         this.mode === MODOS_OPERATIVOS.CHECKING_CONNECTIVITY ||
@@ -84,6 +88,11 @@ class ConnectivityService {
   }
 
   async reportCloudFailure(error) {
+    try {
+      const { setOnlineStatus } = require('../config/db');
+      setOnlineStatus(false);
+    } catch {}
+
     if (isQuotaError(error)) {
       this.cloudStatus = ESTADOS_CLOUD.QUOTA;
       this.reason = CODIGOS_ERROR.TURSO_QUOTA;
@@ -247,9 +256,19 @@ class ConnectivityService {
           const now = this.clock.now();
           const timeSinceLastSuccess = this.lastCloudSuccessAt ? (now - this.lastCloudSuccessAt) : Infinity;
 
-          if (timeSinceLastSuccess > this.config.idleProbeIntervalMs) {
-            if (this.mode === MODOS_OPERATIVOS.ONLINE || this.mode === MODOS_OPERATIVOS.CLOUD_UNAVAILABLE) {
-              await this.verifyConnectivity();
+          if (timeSinceLastSuccess >= this.config.idleProbeIntervalMs) {
+            if (this.mode === MODOS_OPERATIVOS.ONLINE) {
+              try {
+                const { verificarConexionTurso } = require('../jobs/syncJob');
+                const tursoOk = await verificarConexionTurso(2500);
+                if (tursoOk) {
+                  this.reportCloudSuccess();
+                } else {
+                  await this.reportCloudFailure(new Error('Turso no disponible'));
+                }
+              } catch (err) {
+                await this.reportCloudFailure(err);
+              }
             }
           }
         }

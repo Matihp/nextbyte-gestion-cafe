@@ -40,7 +40,7 @@ function parseContingencyConfig(env = process.env, dbMode = null) {
     dbPath,
     dataDir,
     probeUrls,
-    idleProbeIntervalMs: Number(env.IDLE_PROBE_INTERVAL_MS || 30000),
+    idleProbeIntervalMs: Number(env.IDLE_PROBE_INTERVAL_MS || 8000),
     probeTimeoutMs: Number(env.PROBE_TIMEOUT_MS || 3000),
     probeRetryDelayMs: Number(env.PROBE_RETRY_DELAY_MS || 2000)
   };

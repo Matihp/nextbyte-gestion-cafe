@@ -33,7 +33,7 @@ app.get('/api/health', (req, res) => {
 
   res.json({
     message: 'Backend NextByte funcionando correctamente!',
-    isOnline: Boolean(req.isOnline !== undefined ? req.isOnline : state.isOnline),
+    isOnline: Boolean(databaseMode === 'local' ? true : databaseMode === 'test' ? (req.isOnline ?? state.isOnline) : state.isOnline),
     databaseMode,
     mode: state.mode,
     localReady: state.localReady,
