@@ -495,8 +495,8 @@ export function OrdersPage() {
                 <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-28">
                   Tipo Pedido
                 </th>
-                <th className="px-2.5 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-14">
-                  Acciones
+                <th className="px-2.5 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                  Ver Pedido
                 </th>
               </tr>
             </thead>
@@ -515,20 +515,11 @@ export function OrdersPage() {
                     </td>
 
                     {/* 2. Cliente */}
-                    <td className="px-3.5 py-2.5 max-w-[150px] md:max-w-[190px]">
-                      <div className="text-gray-900 font-semibold truncate" title={order.customer}>
-                        {order.customer}
-                      </div>
-                      {(order.address || order.direccion) && (
-                        <div className="text-[11px] text-gray-500 font-normal truncate" title={order.address || order.direccion}>
-                          📍 {order.address || order.direccion}
-                        </div>
-                      )}
-                      {(order.phone || order.telefono) && (
-                        <div className="text-[11px] text-gray-500 font-normal truncate" title={order.phone || order.telefono}>
-                          📞 {order.phone || order.telefono}
-                        </div>
-                      )}
+                    <td
+                      className="px-3.5 py-2.5 text-gray-900 font-semibold max-w-[130px] md:max-w-[160px] truncate"
+                      title={order.customer}
+                    >
+                      {order.customer}
                     </td>
 
                     {/* 3. Artículos */}
@@ -576,13 +567,13 @@ export function OrdersPage() {
                       </span>
                     </td>
 
-                    {/* 8. Acciones */}
+                    {/* 8. Ver Pedido */}
                     <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(order.id)}
                         className="p-1.5 hover:bg-[#F3E5DC]/60 text-gray-600 hover:text-[#4B2B1D] rounded-lg transition-colors cursor-pointer"
-                        title="Ver detalles del pedido"
+                        title="Ver pedido"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
