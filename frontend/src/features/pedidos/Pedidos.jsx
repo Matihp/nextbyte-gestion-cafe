@@ -250,7 +250,7 @@ export default function Pedidos() {
         producto_id: Number(item.productId),
         cantidad: Number(item.quantity),
       })),
-      estado: 'en_preparacion'
+      estado: 'pendiente'
     };
 
     submittingRef.current = true;
