@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
 import reporteService from '@/services/reporteService';
 import cajaService from '@/services/cajaService';
-import { formatearPrecio, formatearIdPedido, formatearSoloFecha } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido, formatearSoloFecha, formatearMetodoPago } from '@/utils/formatters';
 import { ReporteCajaPrint } from './ReporteCajaPrint';
 import { DetallePedidoModal } from './DetallePedidoModal';
 import { ModalConfirmarEliminar } from './ModalConfirmarEliminar';
@@ -620,7 +620,7 @@ export default function ReporteCaja() {
             horaPedido,
             pedidoIdFormateado,
             p.tipo_pedido || 'Mostrador',
-            p.metodo_pago || 'Efectivo',
+            formatearMetodoPago(p.metodo_pago),
             `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
             item.cantidad,
             Math.round(Number(item.precio_costo) || 0),
@@ -1187,7 +1187,7 @@ export default function ReporteCaja() {
                                         {formatearIdPedido(pedido)}
                                       </button>
                                       <span className="text-[10px] text-muted-foreground whitespace-nowrap block">
-                                        {pedido.tipo_pedido || 'Mostrador'} • {pedido.metodo_pago || 'Efectivo'}
+                                        {pedido.tipo_pedido || 'Mostrador'} • {formatearMetodoPago(pedido.metodo_pago)}
                                       </span>
                                     </td>
                                   )}

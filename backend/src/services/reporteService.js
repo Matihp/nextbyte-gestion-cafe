@@ -219,6 +219,8 @@ async function obtenerReporteCaja(filtros = {}) {
         displayId: displayId,
         orderNumber: displayId,
         cliente: fila.cliente || 'Consumidor Final',
+        direccion: fila.direccion || null,
+        telefono: fila.telefono || null,
         fecha: fila.fecha,
         hora: fila.hora ? fila.hora.slice(0, 5) : '',
         tipo_pedido: fila.tipo_pedido || 'Mostrador',

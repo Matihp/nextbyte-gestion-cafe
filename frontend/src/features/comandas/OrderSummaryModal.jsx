@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido, formatearMetodoPago } from '@/utils/formatters';
 import { normalizeOrderTypeDisplay } from './OrdersPage';
 import { formatDateDDMMAAAA } from './orderSequence';
 
@@ -77,9 +77,19 @@ export function OrderSummaryModal({
                 Tipo: <span className="font-semibold text-gray-900">{normalizeOrderTypeDisplay(order.orderType)}</span>
               </p>
             )}
-            {order.paymentMethod && (
+            {(order.paymentMethod || order.metodo_pago) && (
               <p className="text-sm text-gray-700 mt-1">
-                Medio de pago: <span className="font-semibold text-gray-900">{order.paymentMethod}</span>
+                Medio de pago: <span className="font-semibold text-gray-900">{formatearMetodoPago(order.paymentMethod || order.metodo_pago)}</span>
+              </p>
+            )}
+            {(order.address || order.direccion) && (
+              <p className="text-sm text-gray-700 mt-1">
+                Dirección: <span className="font-semibold text-gray-900">{order.address || order.direccion}</span>
+              </p>
+            )}
+            {(order.phone || order.telefono) && (
+              <p className="text-sm text-gray-700 mt-1">
+                Teléfono: <span className="font-semibold text-gray-900">{order.phone || order.telefono}</span>
               </p>
             )}
           </div>

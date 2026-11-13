@@ -10,7 +10,7 @@ import ModalConfirmarCancelarPedido from './ModalConfirmarCancelarPedido';
 import { comandaService, createComandaPolling, getAllowedOrderStatuses, getComandaErrorMessage, notifyOrdersUpdated } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearMetodoPago } from '@/utils/formatters';
 import { useAuth } from '@/hooks/useAuth';
 import {
   formatDateDDMMAAAA,
@@ -177,7 +177,7 @@ export function OrdersPage() {
         total: Number(o.total || 0),
         status: normalizeStatusDisplay(o.estado || o.status),
         orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
-        paymentMethod: o.metodo_pago || o.paymentMethod || 'Efectivo',
+        paymentMethod: formatearMetodoPago(o.metodo_pago || o.paymentMethod || 'Efectivo'),
         address: o.direccion || o.address || '',
         phone: o.telefono || o.phone || '',
         date: dateStr,
@@ -495,8 +495,8 @@ export function OrdersPage() {
                 <th className="px-3.5 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-28">
                   Tipo Pedido
                 </th>
-                <th className="px-2.5 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap w-14">
-                  Acciones
+                <th className="px-2.5 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider whitespace-nowrap">
+                  Ver Pedido
                 </th>
               </tr>
             </thead>
@@ -567,13 +567,13 @@ export function OrdersPage() {
                       </span>
                     </td>
 
-                    {/* 8. Acciones */}
+                    {/* 8. Ver Pedido */}
                     <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(order.id)}
                         className="p-1.5 hover:bg-[#F3E5DC]/60 text-gray-600 hover:text-[#4B2B1D] rounded-lg transition-colors cursor-pointer"
-                        title="Ver detalles del pedido"
+                        title="Ver pedido"
                       >
                         <Eye className="w-4 h-4" />
                       </button>

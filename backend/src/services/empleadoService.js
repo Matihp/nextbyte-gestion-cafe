@@ -84,6 +84,7 @@ const crear = async (datos) => {
     email: emailLimpio,
     contrasena: contrasenaHash,
     telefono: datos.telefono ? datos.telefono.trim() : null,
+    direccion: datos.direccion ? datos.direccion.trim() : null,
     foto: datos.foto ? datos.foto.trim() : null,
     fecha_nacimiento: datos.fecha_nacimiento || null,
     fecha_ingreso: datos.fecha_ingreso || null,
@@ -149,6 +150,7 @@ const actualizar = async (id, datos, usuario) => {
   if (datos.rol_id !== undefined) payload.rol_id = datos.rol_id;
   if (datos.contrasena) payload.contrasena = bcrypt.hashSync(datos.contrasena, 10);
   if (datos.telefono !== undefined) payload.telefono = datos.telefono ? datos.telefono.trim() : null;
+  if (datos.direccion !== undefined) payload.direccion = datos.direccion ? datos.direccion.trim() : null;
   if (datos.foto !== undefined) payload.foto = datos.foto ? datos.foto.trim() : null;
   if (datos.fecha_nacimiento !== undefined) payload.fecha_nacimiento = datos.fecha_nacimiento;
   if (datos.fecha_ingreso !== undefined) payload.fecha_ingreso = datos.fecha_ingreso;

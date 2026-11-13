@@ -10,7 +10,7 @@ const ESTADOS_PEDIDO = Object.freeze({
 const ESTADOS_ACTIVOS = Object.freeze(['pendiente', 'en_preparacion', 'en_empaque']);
 
 const TIPOS_PEDIDO = Object.freeze(['mesa', 'take_away', 'delivery']);
-const METODOS_PAGO = Object.freeze(['efectivo', 'debito', 'credito', 'mercadopago']);
+const METODOS_PAGO = Object.freeze(['efectivo', 'debito', 'credito', 'mercadopago', 'transferencia', 'otros']);
 const UNIDADES_MEDIDA = Object.freeze(['kg', 'lts', 'un']);
 const ESTADOS_TURNO = Object.freeze(['presente', 'ausente', 'franco', 'licencia', 'tarde']);
 

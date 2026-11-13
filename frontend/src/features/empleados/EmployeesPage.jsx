@@ -185,6 +185,8 @@ export function EmployeesPage() {
                 ? e.dias_franco
                 : Object.keys(e.workDayShifts || {}),
               phone: e.telefono || e.phone,
+              address: e.direccion || e.address || '',
+              direccion: e.direccion || e.address || '',
               photo: e.foto || e.photo,
               roleId: e.rol_id || e.roleId
             }));
@@ -253,6 +255,7 @@ export function EmployeesPage() {
       legajo: legajoLimpio,
       email: emailLimpio,
       telefono: emp.phone || emp.telefono || null,
+      direccion: emp.address || emp.direccion || null,
       foto: emp.photo || emp.foto || null,
       fecha_nacimiento: emp.birthDate || emp.fecha_nacimiento || null,
       fecha_ingreso: emp.joinDate || emp.fecha_ingreso || null,
@@ -287,7 +290,9 @@ export function EmployeesPage() {
                   displayName: (emp.displayName || `${nombreLimpio} ${apellidoLimpio}`).trim(),
                   email: updated.email || emailLimpio,
                   photo: updated.foto || emp.photo || emp.foto,
-                  foto: updated.foto || emp.photo || emp.foto
+                  foto: updated.foto || emp.photo || emp.foto,
+                  address: updated.direccion || emp.address || emp.direccion || '',
+                  direccion: updated.direccion || emp.address || emp.direccion || ''
                 }
               : item
           )
@@ -312,7 +317,9 @@ export function EmployeesPage() {
           email: created.email || emailLimpio,
           roleId: created.rol_id || emp.roleId,
           photo: created.foto || emp.photo || emp.foto,
-          foto: created.foto || emp.photo || emp.foto
+          foto: created.foto || emp.photo || emp.foto,
+          address: created.direccion || emp.address || emp.direccion || '',
+          direccion: created.direccion || emp.address || emp.direccion || ''
         };
 
         setEmployees((prev) => [...prev, newEmpObj]);

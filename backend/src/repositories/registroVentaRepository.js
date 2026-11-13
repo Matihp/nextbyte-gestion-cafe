@@ -223,6 +223,8 @@ async function obtenerTransaccionesCaja(filtros = {}) {
         pedido_id: p.id,
         numero_pedido: p.numero_pedido,
         cliente: p.cliente,
+        direccion: p.direccion || null,
+        telefono: p.telefono || null,
         fecha: p.fecha,
         hora: p.hora,
         tipo_pedido: p.tipo_pedido,

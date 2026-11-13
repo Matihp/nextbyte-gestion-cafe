@@ -23,7 +23,9 @@ const validarPedido = (body = {}) => {
     errores.push('El tipo de pedido es inválido');
   }
 
-  if (!metodo_pago || !METODOS_PAGO.includes(metodo_pago)) {
+  const metodoNormalizado = typeof metodo_pago === 'string' ? metodo_pago.trim().toLowerCase() : '';
+  const esMetodoValido = METODOS_PAGO.includes(metodoNormalizado) || metodoNormalizado.startsWith('otros');
+  if (!metodo_pago || !esMetodoValido) {
     errores.push('El método de pago es inválido');
   }
 

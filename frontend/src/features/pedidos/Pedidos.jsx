@@ -205,10 +205,12 @@ export default function Pedidos() {
       case 'Tarjeta de Crédito':
         return 'credito';
       case 'Mercado Pago':
-      case 'Transferencia':
         return 'mercadopago';
-      case 'Efectivo':
+      case 'Transferencia':
+        return 'transferencia';
       case 'Otros':
+        return customPaymentMethod.trim() ? `otros: ${customPaymentMethod.trim()}` : 'otros';
+      case 'Efectivo':
       default:
         return 'efectivo';
     }
@@ -250,7 +252,7 @@ export default function Pedidos() {
         producto_id: Number(item.productId),
         cantidad: Number(item.quantity),
       })),
-      estado: 'en_preparacion'
+      estado: 'pendiente'
     };
 
     submittingRef.current = true;
@@ -302,7 +304,7 @@ export default function Pedidos() {
         orderType,
         paymentMethod:
           paymentMethod === 'Otros'
-            ? customPaymentMethod.trim() || 'Otros'
+            ? (customPaymentMethod.trim() ? `Otros: ${customPaymentMethod.trim()}` : 'Otros')
             : paymentMethod,
         items: respuesta?.detalles?.length
           ? respuesta.detalles.map((d) => ({
@@ -470,11 +472,7 @@ export default function Pedidos() {
         onCancel={handleCancelPrint}
       />
 
-      {orderToPrint && (
-        <PrintPortal pageType="ticket" className="ticket-termico">
-          <TicketPrintArea order={orderToPrint} />
-        </PrintPortal>
-      )}
+      {orderToPrint && <TicketPrintArea order={orderToPrint} />}
     </div>
   );
 }
