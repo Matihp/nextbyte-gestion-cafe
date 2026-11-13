@@ -67,6 +67,22 @@ export function DetallePedidoModal({ pedido, abierto, alCerrar, alImprimir }) {
                 <span className="text-muted-foreground font-medium">Tipo:</span>
                 <span className="font-medium">{pedido.tipo_pedido || 'Mostrador'}</span>
               </div>
+              {(pedido.direccion || pedido.address) && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Dirección:</span>
+                  <span className="font-semibold text-right max-w-[220px] truncate">
+                    {pedido.direccion || pedido.address}
+                  </span>
+                </div>
+              )}
+              {(pedido.telefono || pedido.phone) && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Teléfono:</span>
+                  <span className="font-semibold">
+                    {pedido.telefono || pedido.phone}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground font-medium">Estado:</span>
                 <span className="font-semibold">{formatEstadoNombre(pedido.estado)}</span>

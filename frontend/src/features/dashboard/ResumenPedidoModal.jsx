@@ -58,6 +58,22 @@ export function ResumenPedidoModal({
               <strong className="font-bold text-gray-900">Tipo:</strong>{' '}
               <span className="font-medium text-gray-700">{tipoDisplay()}</span>
             </p>
+            {(pedido.direccion || pedido.address) && (
+              <p>
+                <strong className="font-bold text-gray-900">Dirección:</strong>{' '}
+                <span className="font-medium text-gray-700">
+                  {pedido.direccion || pedido.address}
+                </span>
+              </p>
+            )}
+            {(pedido.telefono || pedido.phone) && (
+              <p>
+                <strong className="font-bold text-gray-900">Teléfono:</strong>{' '}
+                <span className="font-medium text-gray-700">
+                  {pedido.telefono || pedido.phone}
+                </span>
+              </p>
+            )}
           </div>
 
           <hr className="border-t border-gray-100" />

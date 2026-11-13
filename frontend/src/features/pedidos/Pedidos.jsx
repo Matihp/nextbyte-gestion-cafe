@@ -470,11 +470,7 @@ export default function Pedidos() {
         onCancel={handleCancelPrint}
       />
 
-      {orderToPrint && (
-        <PrintPortal pageType="ticket" className="ticket-termico">
-          <TicketPrintArea order={orderToPrint} />
-        </PrintPortal>
-      )}
+      {orderToPrint && <TicketPrintArea order={orderToPrint} />}
     </div>
   );
 }

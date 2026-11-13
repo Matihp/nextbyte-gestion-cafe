@@ -72,46 +72,76 @@ export function ReporteCajaPrint({
   saldoMesAnterior = undefined,
   esMensual = false
 }) {
-  // CASO 1: Reimpresión de ticket individual de control interno (igual al PDF de muestra)
+  // CASO 1: Reimpresión de pedido individual como CONTROL INTERNO (Visualización idéntica a DetallePedidoModal, en hoja A4)
   if (ticketPedido) {
-    const idStr = String(ticketPedido.id).startsWith('#') ? ticketPedido.id : `#${ticketPedido.id}`;
+    const idStr = formatearIdPedido(ticketPedido);
     const items = ticketPedido.items && ticketPedido.items.length > 0 ? ticketPedido.items : [];
     const fechaTexto = ticketPedido.fecha ? formatearFechaDDMMAAAA(ticketPedido.fecha) : '';
     const fechaHoraStr = `${fechaTexto} ${ticketPedido.hora || ''}`.trim() || '-';
+    const direccion = ticketPedido.direccion || ticketPedido.address;
+    const telefono = ticketPedido.telefono || ticketPedido.phone;
 
     return (
-      <PrintPortal id="print-area" pageType="ticket" className="ticket-termico">
-        <div className="ticket-termico p-4 w-[76mm] max-w-[76mm] mx-auto bg-white text-black font-sans leading-normal">
+      <PrintPortal id="print-area" pageType="a4" className="reporte-a4 w-full">
+        <div className="reporte-a4 p-8 max-w-xl mx-auto bg-white text-black font-sans leading-normal border border-gray-300 rounded-2xl">
           {/* Encabezado */}
-          <div className="text-center mb-4">
-            <h1 className="text-2xl font-bold uppercase tracking-wider text-black">
+          <div className="text-center pb-4 border-b border-gray-300">
+            <h1 className="text-2xl font-black uppercase tracking-wider text-black">
               ANDÉN
             </h1>
-            <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase mt-1">
-              CONTROL INTERNO
+            <p className="text-xs font-bold tracking-wider text-gray-600 uppercase mt-0.5">
+              Control Interno de Venta
             </p>
-            <p className="text-xs text-gray-700 mt-1 font-medium">
-              {fechaHoraStr}
+            <h2 className="text-base font-extrabold text-black mt-2">
+              Detalles Internos {idStr}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5 font-medium">
+              Fecha y Hora: {fechaHoraStr}
             </p>
           </div>
 
-          <div className="border-b-2 border-black mb-4" />
-
-          {/* Datos del pedido */}
-          <div className="space-y-1.5 text-xs text-black mb-5">
-            <p><span className="font-bold">ID Pedido:</span> {idStr}</p>
-            <p><span className="font-bold">Cliente:</span> {ticketPedido.cliente || 'Consumidor Final'}</p>
-            <p><span className="font-bold">Tipo:</span> {ticketPedido.tipo_pedido || 'Mostrador'}</p>
-            <p><span className="font-bold">Medio de Pago:</span> {ticketPedido.metodo_pago || 'Efectivo'}</p>
-            <p><span className="font-bold">Estado:</span> {formatEstadoNombre(ticketPedido.estado)}</p>
+          {/* Metadatos del pedido (igual a la visualización de DetallePedidoModal) */}
+          <div className="space-y-1.5 text-xs text-black py-4 border-b border-dashed border-gray-300">
+            <div className="flex justify-between">
+              <span className="font-bold">ID Pedido:</span>
+              <span className="font-mono font-bold text-sm">{idStr}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-bold">Cliente:</span>
+              <span className="font-semibold">{ticketPedido.cliente || 'Consumidor Final'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-bold">Tipo:</span>
+              <span>{ticketPedido.tipo_pedido || 'Mostrador'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-bold">Medio de Pago:</span>
+              <span>{ticketPedido.metodo_pago || 'Efectivo'}</span>
+            </div>
+            {direccion && (
+              <div className="flex justify-between">
+                <span className="font-bold">Dirección:</span>
+                <span className="font-medium text-right max-w-[280px]">{direccion}</span>
+              </div>
+            )}
+            {telefono && (
+              <div className="flex justify-between">
+                <span className="font-bold">Teléfono:</span>
+                <span className="font-medium">{telefono}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="font-bold">Estado:</span>
+              <span className="font-bold uppercase text-[11px]">{formatEstadoNombre(ticketPedido.estado)}</span>
+            </div>
           </div>
 
           {/* Tabla de artículos */}
-          <table className="w-full text-left text-xs mb-4">
+          <table className="w-full text-left text-xs my-4 border-collapse">
             <thead>
-              <tr className="border-b border-black text-black font-bold">
-                <th className="py-2 text-left">Descripción</th>
-                <th className="py-2 text-center">Cant</th>
+              <tr className="border-b-2 border-black text-black font-bold uppercase text-[11px]">
+                <th className="py-2 text-left">Artículo</th>
+                <th className="py-2 text-center w-12">Cant</th>
                 <th className="py-2 text-right">Costo</th>
                 <th className="py-2 text-right">Venta</th>
               </tr>
@@ -128,29 +158,27 @@ export function ReporteCajaPrint({
             </tbody>
           </table>
 
-          <div className="border-b-2 border-black mb-4" />
-
-          {/* Totales del ticket */}
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between font-bold text-gray-800">
-              <span>TOTAL COSTOS</span>
-              <span>{formatearPrecio(ticketPedido.total_costo)}</span>
+          {/* Totales del registro interno */}
+          <div className="space-y-1.5 text-xs pt-3 border-t-2 border-black">
+            <div className="flex justify-between font-bold text-gray-700">
+              <span>TOTAL COSTOS:</span>
+              <span className="text-red-700 font-extrabold">{formatearPrecio(ticketPedido.total_costo)}</span>
             </div>
-            <div className="flex justify-between font-extrabold text-base text-black pt-1">
-              <span>TOTAL VENTA</span>
+            <div className="flex justify-between font-black text-base text-black pt-1 border-t border-gray-200">
+              <span>TOTAL VENTA:</span>
               <span>{formatearPrecio(ticketPedido.total_venta)}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-600 pt-0.5">
               <span>DIFERENCIA (Ganancia Bruta):</span>
-              <span className="font-bold">
+              <span className="font-bold text-emerald-700">
                 {formatearPrecio((ticketPedido.total_venta || 0) - (ticketPedido.total_costo || 0))}
               </span>
             </div>
           </div>
 
-          {/* Pie de ticket */}
+          {/* Pie */}
           <div className="mt-6 pt-3 border-t border-dashed border-gray-400 text-center text-[10px] text-gray-500">
-            <p>Comprobante no válido como factura.</p>
+            <p className="font-semibold text-gray-700">Documento de Control Interno de Venta • No válido como factura.</p>
             <p>Sistema de Gestión Andén Café.</p>
           </div>
         </div>

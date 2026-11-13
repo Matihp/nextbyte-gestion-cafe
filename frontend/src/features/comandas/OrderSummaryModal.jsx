@@ -82,6 +82,16 @@ export function OrderSummaryModal({
                 Medio de pago: <span className="font-semibold text-gray-900">{order.paymentMethod}</span>
               </p>
             )}
+            {(order.address || order.direccion) && (
+              <p className="text-sm text-gray-700 mt-1">
+                Dirección: <span className="font-semibold text-gray-900">{order.address || order.direccion}</span>
+              </p>
+            )}
+            {(order.phone || order.telefono) && (
+              <p className="text-sm text-gray-700 mt-1">
+                Teléfono: <span className="font-semibold text-gray-900">{order.phone || order.telefono}</span>
+              </p>
+            )}
           </div>
 
           {/* Lista de Artículos */}

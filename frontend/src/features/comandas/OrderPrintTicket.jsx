@@ -7,10 +7,16 @@ import { formatDateDDMMAAAA } from './orderSequence';
 export function OrderPrintTicket({ order }) {
   if (!order) return null;
 
-  const items = order.items || [];
-  const fechaStr = order.date
-    ? `${formatDateDDMMAAAA(order.date)} ${order.time || ''}`.trim()
+  const items = order.items || order.detalles || [];
+  const fechaStr = (order.date || order.fecha)
+    ? `${formatDateDDMMAAAA(order.date || order.fecha)} ${order.time || order.hora || ''}`.trim()
     : formatearFecha(order.created_at || new Date());
+
+  const cliente = order.customer || order.cliente || 'Consumidor Final';
+  const tipoPedido = normalizeOrderTypeDisplay(order.orderType || order.tipo_pedido);
+  const medioPago = order.paymentMethod || order.metodo_pago || 'Efectivo';
+  const direccion = order.address || order.direccion || '';
+  const telefono = order.phone || order.telefono || '';
 
   return (
     <PrintPortal id="print-area" pageType="ticket" className="ticket-termico">
@@ -29,22 +35,22 @@ export function OrderPrintTicket({ order }) {
             <span className="font-mono text-base">{formatearIdPedido(order)}</span>
           </div>
           <p>
-            <span className="font-bold">Cliente:</span> {order.customer || 'Consumidor Final'}
+            <span className="font-bold">Cliente:</span> {cliente}
           </p>
           <p>
-            <span className="font-bold">Tipo:</span> {normalizeOrderTypeDisplay(order.orderType)}
+            <span className="font-bold">Tipo:</span> {tipoPedido}
           </p>
           <p>
-            <span className="font-bold">Medio de Pago:</span> {order.paymentMethod || 'Efectivo'}
+            <span className="font-bold">Medio de Pago:</span> {medioPago}
           </p>
-          {order.address && (
+          {direccion && (
             <p>
-              <span className="font-bold">Dirección:</span> {order.address}
+              <span className="font-bold">Dirección:</span> {direccion}
             </p>
           )}
-          {order.phone && (
+          {telefono && (
             <p>
-              <span className="font-bold">Teléfono:</span> {order.phone}
+              <span className="font-bold">Teléfono:</span> {telefono}
             </p>
           )}
         </div>
@@ -59,11 +65,15 @@ export function OrderPrintTicket({ order }) {
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              const precioTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+              const cantidad = Number(item.quantity ?? item.cantidad ?? 1);
+              const nombre = item.name || item.nombre_producto || 'Producto';
+              const precioUnit = Number(item.price ?? item.precio_venta ?? 0);
+              const precioTotal = Number(item.total_venta ?? item.precio_total ?? (precioUnit * cantidad));
+
               return (
                 <tr key={item.id || idx} className="border-b border-gray-200">
-                  <td className="py-1 font-bold">{item.quantity}</td>
-                  <td className="py-1">{item.name}</td>
+                  <td className="py-1 font-bold">{cantidad}</td>
+                  <td className="py-1">{nombre}</td>
                   <td className="py-1 text-right font-medium">{formatearPrecio(precioTotal)}</td>
                 </tr>
               );
