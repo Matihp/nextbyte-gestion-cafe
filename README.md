@@ -45,8 +45,8 @@ El sistema utiliza una separación clara entre Frontend y Backend:
 
 ### Tecnologías:
 * **Frontend:** React 19, Vite, Tailwind CSS v4, Lucide React (iconos), Sonner (notificaciones), Recharts (gráficos), Axios.
-* **Backend:** Node.js (v18+), Express, Knex.js (Query Builder), BcryptJS (contraseñas seguras), JsonWebToken (autenticación).
-* **Base de Datos Híbrida:** SQLite 3 local (`dev_local.db`) + Turso Cloud libSQL (para sincronización remota).
+* **Backend:** Node.js (v18+), Express, Knex.js (Query Builder con dialecto libSQL personalizado), BcryptJS (contraseñas seguras), JsonWebToken (autenticación).
+* **Base de Datos y Contingencia:** Turso Cloud libSQL como autoridad principal online + SQLite 3 persistente (`contingencia.db`) como espejo y outbox transaccional de contingencia offline.
 * **Testing:** Jest + Supertest (302 pruebas automatizadas pasando).
 
 ---
@@ -94,7 +94,11 @@ Modelo relacional normalizado con claves foráneas:
 * **`pedidos` y `detalles_pedidos`**: Registro de pedidos tomados, número de orden, método de pago informado y estado de comanda.
 * **`movimientos_caja`**: Registro operativo de entradas y retiros de efectivo con detalle y monto.
 * **`registros_mermas`**: Registro de insumos o productos descartados con cantidad y motivo justificado.
-* **`sync_pendientes`**: Cola local de operaciones guardadas en modo offline para replicar a Turso Cloud al recuperar conexión.
+* **`sync_writer_state`**: Control de fencing cloud (`writer_id`, `generation`, `head_seq`).
+* **`sync_operations`**: Journal de operaciones confirmadas en Turso con idempotencia estricta (`operation_id`, `seq`, `effects`, `result`).
+* **`contingency_state`**: Metadatos de preparación (`localReady`), sesión offline y cursores en SQLite local.
+* **`operation_outbox`**: Outbox atómica de SQLite para ventas aceptadas offline durante el corte de Internet.
+* **`sync_pendientes`**: Tabla legada que se preserva para auditoría histórica.
 
 ---
 
@@ -123,8 +127,27 @@ cd nextbyte-gestion-cafe
 2. Creá tu archivo `.env` copiando el de ejemplo:
    ```bash
    cp .env.example .env
-   ``` 
-   El `.env` ya viene listo por defecto para usar SQLite local (`dev_local.db`).
+   ```
+   Configurá las variables de entorno principales:
+   ```env
+   PORT=3000
+   NODE_ENV=development
+
+   # Base de datos principal (Turso Cloud o SQLite local)
+   DB_MODE=cloud
+   TURSO_DB_URL=libsql://tu-base.turso.io
+   TURSO_AUTH_TOKEN=tu_token_de_turso
+
+   # Contingencia Offline y Replicación (opt-in)
+   CONTINGENCY_ENABLED=true
+   LOCAL_DB_PATH=./data/contingencia.db
+   APP_ROLE=CAJA_PRINCIPAL
+
+   # Seguridad y JWT
+   AUTH_ENABLED=true
+   JWT_SECRET=tu_secreto_super_seguro
+   JWT_EXPIRES_IN=24h
+   ```
 
 3. Iniciá el servidor en modo desarrollo:
    ```bash

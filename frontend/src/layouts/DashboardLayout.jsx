@@ -118,7 +118,7 @@ export default function DashboardLayout() {
         const modeUpper = String(data?.mode || '').toUpperCase();
         const online = Boolean(
           data &&
-          data.isOnline !== false &&
+          data.isOnline === true &&
           modeUpper !== 'OFFLINE_ACTIVE' &&
           modeUpper !== 'CLOUD_UNAVAILABLE' &&
           modeUpper !== 'BLOCKED_UNSAFE'
@@ -187,7 +187,7 @@ export default function DashboardLayout() {
 
     const intervalId = setInterval(() => {
       verificarConexionReal(true);
-    }, 10000);
+    }, 8000);
 
     return () => {
       clearInterval(intervalId);
