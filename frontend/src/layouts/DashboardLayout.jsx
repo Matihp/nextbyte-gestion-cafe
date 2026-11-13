@@ -244,7 +244,6 @@ export default function DashboardLayout() {
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
-                          asChild
                           render={<Link to={item.url} className="w-full flex flex-row items-center gap-3.5" />}
                           size="lg"
                           isActive={isActive}
@@ -254,10 +253,8 @@ export default function DashboardLayout() {
                               : 'text-sidebar-foreground/90 hover:!bg-accent/40 hover:!text-white'
                           }`}
                         >
-                          <Link to={item.url} className="w-full flex flex-row items-center gap-3.5">
-                            <Icon className="!w-5 !h-5 !size-5 shrink-0" />
-                            <span className="text-sm font-medium whitespace-nowrap">{item.title}</span>
-                          </Link>
+                          <Icon className="!w-5 !h-5 !size-5 shrink-0" />
+                          <span className="text-sm font-medium whitespace-nowrap">{item.title}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );

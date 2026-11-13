@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
+  ArrowLeft,
   Bell, 
   LogOut, 
   Plus, 
@@ -666,8 +667,28 @@ export function Configuracion() {
     navigate('/login');
   };
 
+  const handleVolver = () => {
+    if (window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
-    <div className="p-8">
+    <div className="p-6 md:p-8 space-y-6">
+      {/* Botón Volver prominente en la cabecera */}
+      <div className="flex items-center justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleVolver}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-[#4B2B1D]/20 text-[#4B2B1D] hover:bg-[#F3E5DC]/60 hover:text-[#4B2B1D] font-semibold rounded-xl shadow-xs cursor-pointer transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Volver a la pantalla anterior
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Contenido Principal (2 columnas en desktop) ── */}
         <div className="lg:col-span-2 space-y-6">
@@ -1722,6 +1743,16 @@ export function Configuracion() {
                   <Shield className="w-4 h-4" /> Gestión Roles de Usuarios
                 </button>
               )}
+
+              <div className="pt-2 border-t border-gray-100 mt-2">
+                <button
+                  type="button"
+                  onClick={handleVolver}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-[#F3E5DC]/50 hover:text-[#4B2B1D] rounded-lg transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Volver al Sistema
+                </button>
+              </div>
             </div>
           </Card>
 

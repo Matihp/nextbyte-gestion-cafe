@@ -160,6 +160,11 @@ const actualizar = async (id, datos, currentUser) => {
     payload.foto = datos.foto ? datos.foto.trim() : null;
   }
 
+  if (currentUser && !currentUser.es_admin) {
+    delete payload.rol_id;
+    delete payload.permisos;
+  }
+
   const actualizado = await empleadoRepository.update(id, payload);
   return quitarContrasena(actualizado);
 };
