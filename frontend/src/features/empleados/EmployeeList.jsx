@@ -73,6 +73,9 @@ export function EmployeeList({ employees = [], roles = [], onEdit, onDelete }) {
               <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#4B2B1D] uppercase tracking-wider">
                 Contacto
               </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#4B2B1D] uppercase tracking-wider">
+                Dirección
+              </th>
               <th scope="col" className="relative px-6 py-3 text-right text-xs font-semibold text-[#4B2B1D] uppercase">
                 Acciones
               </th>
@@ -118,6 +121,9 @@ export function EmployeeList({ employees = [], roles = [], onEdit, onDelete }) {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[150px] truncate" title={emp.phone || emp.telefono || '-'}>
                     {emp.phone || emp.telefono || '-'}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[180px] truncate" title={emp.direccion || emp.address || '-'}>
+                    {emp.direccion || emp.address || '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       type="button"
@@ -141,7 +147,7 @@ export function EmployeeList({ employees = [], roles = [], onEdit, onDelete }) {
             })}
             {filteredEmployees.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                   No se encontraron empleados.
                 </td>
               </tr>

@@ -98,6 +98,7 @@ module.exports = {
       email: data.email,
       contrasena: data.contrasena || data.password,
       telefono: data.telefono || null,
+      direccion: data.direccion ? data.direccion.trim() : null,
       foto: data.foto || null,
       fecha_nacimiento: data.fecha_nacimiento || data.fechaNacimiento || null,
       fecha_ingreso: data.fecha_ingreso || data.fechaIngreso || null,

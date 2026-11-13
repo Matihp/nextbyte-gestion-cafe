@@ -25,6 +25,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
     legajo: '',
     email: '',
     phone: '',
+    address: '',
     birthDate: '',
     joinDate: '',
     usualShift: 'Turno Mañana',
@@ -143,6 +144,7 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
         legajo: initialData.legajo || '',
         email: initialData.email || '',
         phone: initialData.phone || initialData.telefono || '',
+        address: initialData.address || initialData.direccion || '',
         birthDate: initialData.birthDate || initialData.fecha_nacimiento || '',
         joinDate: initialData.joinDate || initialData.fecha_ingreso || '',
         usualShift: initialData.usualShift || initialData.turno_habitual || 'Turno Mañana',
@@ -247,6 +249,8 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
       legajo: legajoLimpio,
       email: formData.email.trim(),
       telefono: formData.phone?.trim() || null,
+      direccion: formData.address?.trim() || null,
+      address: formData.address?.trim() || null,
       foto: formData.photo?.trim() || null,
       fecha_nacimiento: formData.birthDate || null,
       fecha_ingreso: formData.joinDate || null,
@@ -459,19 +463,35 @@ export function EmployeeForm({ roles = [], initialData = null, existingEmployees
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
-                  Teléfono
-                </Label>
-                <Input
-                  id="phone"
-                  type="text"
-                  name="phone"
-                  placeholder="11-1234-5678"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="mt-1"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                    Teléfono
+                  </Label>
+                  <Input
+                    id="phone"
+                    type="text"
+                    name="phone"
+                    placeholder="11-1234-5678"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="address" className="text-sm font-medium text-gray-700">
+                    Dirección
+                  </Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    name="address"
+                    placeholder="Av. Corrientes 1234"
+                    value={formData.address}
+                    onChange={handleChange}
+                    className="mt-1"
+                  />
+                </div>
               </div>
 
               {/* Días y Turnos de Trabajo */}
