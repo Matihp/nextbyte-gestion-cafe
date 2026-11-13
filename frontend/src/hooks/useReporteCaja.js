@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import reporteService from '../services/reporteService';
 import cajaService from '../services/cajaService';
-import { formatearPrecio, formatearSoloFecha } from '../utils/formatters';
+import { formatearPrecio, formatearSoloFecha, formatearMetodoPago } from '../utils/formatters';
 
 export const getHoyIso = () => {
   const d = new Date();
@@ -144,7 +144,7 @@ export function useReporteCaja() {
     return (reporte.pedidos || []).filter((p) => {
       const matchId = String(p.id).toLowerCase().includes(term);
       const matchTipo = String(p.tipo_pedido || '').toLowerCase().includes(term);
-      const matchPago = String(p.metodo_pago || '').toLowerCase().includes(term);
+      const matchPago = String(formatearMetodoPago(p.metodo_pago) || p.metodo_pago || '').toLowerCase().includes(term);
       const matchItems = (p.items || []).some((item) =>
         String(item.nombre_producto || '').toLowerCase().includes(term)
       );
@@ -290,7 +290,7 @@ export function useReporteCaja() {
           horaPedido,
           pedidoIdFormateado,
           p.tipo_pedido || 'Mostrador',
-          p.metodo_pago || 'Efectivo',
+          formatearMetodoPago(p.metodo_pago),
           `"${(item.nombre_producto || '').replace(/"/g, '""')}"`,
           item.cantidad,
           Math.round(Number(item.precio_costo) || 0),

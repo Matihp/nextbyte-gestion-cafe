@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha, formatearIdPedido, formatearMetodoPago } from '@/utils/formatters';
 import { normalizeOrderTypeDisplay } from './OrdersPage';
 import { formatDateDDMMAAAA } from './orderSequence';
 
@@ -14,7 +14,7 @@ export function OrderPrintTicket({ order }) {
 
   const cliente = order.customer || order.cliente || 'Consumidor Final';
   const tipoPedido = normalizeOrderTypeDisplay(order.orderType || order.tipo_pedido);
-  const medioPago = order.paymentMethod || order.metodo_pago || 'Efectivo';
+  const medioPago = formatearMetodoPago(order.paymentMethod || order.metodo_pago || 'Efectivo');
   const direccion = order.address || order.direccion || '';
   const telefono = order.phone || order.telefono || '';
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
-import { formatearPrecio, formatearSoloFecha, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearSoloFecha, formatearIdPedido, formatearMetodoPago } from '@/utils/formatters';
 
 const formatEstadoNombre = (estado) => {
   const s = String(estado || '').toLowerCase().trim();
@@ -129,7 +129,7 @@ export function DetallePedidoModal({ pedido, abierto, alCerrar, alImprimir }) {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between text-muted-foreground font-medium">
                 <span>Medio de pago:</span>
-                <span className="text-primary font-semibold">{pedido.metodo_pago || 'Efectivo'}</span>
+                <span className="text-primary font-semibold">{formatearMetodoPago(pedido.metodo_pago)}</span>
               </div>
               <div className="flex justify-between items-center text-red-500 font-bold">
                 <span>TOTAL COSTOS:</span>

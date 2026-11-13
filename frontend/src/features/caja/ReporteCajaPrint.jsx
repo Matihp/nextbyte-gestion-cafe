@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrintPortal } from '@/components/PrintPortal';
-import { formatearPrecio, formatearFecha, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearFecha, formatearIdPedido, formatearMetodoPago } from '@/utils/formatters';
 
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
@@ -116,7 +116,7 @@ export function ReporteCajaPrint({
             </div>
             <div className="flex justify-between">
               <span className="font-bold">Medio de Pago:</span>
-              <span>{ticketPedido.metodo_pago || 'Efectivo'}</span>
+              <span>{formatearMetodoPago(ticketPedido.metodo_pago)}</span>
             </div>
             {direccion && (
               <div className="flex justify-between">
@@ -425,7 +425,7 @@ export function ReporteCajaPrint({
                             <td rowSpan={items.length} className="py-2 px-2 font-bold text-black align-top">
                               {formatearIdPedido(pedido)}
                               <div className="text-[10px] font-normal text-gray-600">
-                                {pedido.tipo_pedido} • {pedido.metodo_pago}
+                                {pedido.tipo_pedido} • {formatearMetodoPago(pedido.metodo_pago)}
                               </div>
                             </td>
                           )}

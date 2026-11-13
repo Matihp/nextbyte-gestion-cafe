@@ -10,7 +10,7 @@ import ModalConfirmarCancelarPedido from './ModalConfirmarCancelarPedido';
 import { comandaService, createComandaPolling, getAllowedOrderStatuses, getComandaErrorMessage, notifyOrdersUpdated } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
 import { productoService } from '@/services/productoService';
-import { formatearPrecio } from '@/utils/formatters';
+import { formatearPrecio, formatearMetodoPago } from '@/utils/formatters';
 import { useAuth } from '@/hooks/useAuth';
 import {
   formatDateDDMMAAAA,
@@ -177,7 +177,7 @@ export function OrdersPage() {
         total: Number(o.total || 0),
         status: normalizeStatusDisplay(o.estado || o.status),
         orderType: normalizeOrderTypeDisplay(o.tipo_pedido || o.orderType),
-        paymentMethod: o.metodo_pago || o.paymentMethod || 'Efectivo',
+        paymentMethod: formatearMetodoPago(o.metodo_pago || o.paymentMethod || 'Efectivo'),
         address: o.direccion || o.address || '',
         phone: o.telefono || o.phone || '',
         date: dateStr,

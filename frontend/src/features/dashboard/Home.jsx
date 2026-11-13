@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { inventarioService } from '@/services/inventarioService';
 import { comandaService, notifyOrdersUpdated, getComandaErrorMessage } from '@/services/comandaService';
 import { pedidoService } from '@/services/pedidoService';
-import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido, formatearMetodoPago } from '@/utils/formatters';
 import { ResumenPedidoModal } from './ResumenPedidoModal';
 import ModalConfirmarCancelarPedido from '@/features/comandas/ModalConfirmarCancelarPedido';
 import { OrderPrintTicket } from '@/features/comandas/OrderPrintTicket';
@@ -304,7 +304,7 @@ export default function Home() {
       displayId: formatearIdPedido(ticketAImprimir),
       customer: ticketAImprimir.cliente || ticketAImprimir.customer || 'Consumidor Final',
       orderType: ticketAImprimir.tipo_pedido || ticketAImprimir.orderType || 'Mostrador',
-      paymentMethod: ticketAImprimir.metodo_pago || ticketAImprimir.paymentMethod || 'Efectivo',
+      paymentMethod: formatearMetodoPago(ticketAImprimir.metodo_pago || ticketAImprimir.paymentMethod || 'Efectivo'),
       address: ticketAImprimir.direccion || ticketAImprimir.address || '',
       phone: ticketAImprimir.telefono || ticketAImprimir.phone || '',
       date: ticketAImprimir.fecha,

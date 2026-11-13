@@ -91,4 +91,21 @@ export function formatearIdPedido(pedidoOrId) {
   return str.startsWith('#') ? str : `#${str}`;
 }
 
+export function formatearMetodoPago(metodo) {
+  if (!metodo) return 'Efectivo';
+  const m = String(metodo).trim();
+  const mLower = m.toLowerCase();
+  if (mLower === 'efectivo') return 'Efectivo';
+  if (mLower === 'debito' || mLower === 'tarjeta de debito' || mLower === 'tarjeta de débito') return 'Tarjeta de Débito';
+  if (mLower === 'credito' || mLower === 'tarjeta de credito' || mLower === 'tarjeta de crédito') return 'Tarjeta de Crédito';
+  if (mLower === 'mercadopago' || mLower === 'mercado pago') return 'Mercado Pago';
+  if (mLower === 'transferencia') return 'Transferencia';
+  if (mLower === 'otros') return 'Otros';
+  if (mLower.startsWith('otros:')) {
+    const custom = m.slice(6).trim();
+    return custom ? `Otros: ${custom}` : 'Otros';
+  }
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
 
