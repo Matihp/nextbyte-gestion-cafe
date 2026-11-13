@@ -4,6 +4,31 @@ const AppError = require('../utils/AppError');
 const empleadoRepository = require('../repositories/empleadoRepository');
 const rolRepository = require('../repositories/rolRepository');
 const { ROLES_SISTEMA } = require('../constants/roles');
+const { isNetworkError, isCloudUnavailable } = require('../config/databaseErrors');
+
+const getContingencyDb = () => {
+  try {
+    const helper = require('../config/contingencyDb');
+    if (helper && helper.isContingencyReady()) {
+      return helper.getContingencyDb();
+    }
+  } catch {}
+  return null;
+};
+
+const isSystemOffline = () => {
+  try {
+    const { getConnectivityService } = require('./connectivityService');
+    const state = getConnectivityService().getState();
+    return Boolean(
+      state.mode === 'OFFLINE_ACTIVE' ||
+      state.mode === 'CLOUD_UNAVAILABLE' ||
+      !state.isOnline
+    );
+  } catch {
+    return false;
+  }
+};
 
 const armarUsuario = (empleado, rol) => {
   const permisosEmpleado = Array.isArray(empleado?.permisos) ? empleado.permisos : [];
@@ -40,6 +65,28 @@ const armarUsuario = (empleado, rol) => {
   return { usuario, payload };
 };
 
+const cargarEmpleadoLocal = async (localDb, email) => {
+  const empleado = await localDb('empleados').where({ email }).first();
+  if (!empleado) return { empleado: null, rol: null };
+
+  if (empleado.dias_franco && typeof empleado.dias_franco === 'string') {
+    try { empleado.dias_franco = JSON.parse(empleado.dias_franco); } catch { empleado.dias_franco = []; }
+  }
+  if (empleado.permisos && typeof empleado.permisos === 'string') {
+    try { empleado.permisos = JSON.parse(empleado.permisos); } catch { empleado.permisos = []; }
+  }
+
+  let rol = null;
+  if (empleado.rol_id) {
+    rol = await localDb('roles').where({ id: empleado.rol_id }).first();
+    if (rol && rol.permisos && typeof rol.permisos === 'string') {
+      try { rol.permisos = JSON.parse(rol.permisos); } catch { rol.permisos = []; }
+    }
+  }
+
+  return { empleado, rol };
+};
+
 const login = async (datos, contrasenaAlternativa) => {
   const email = typeof datos === 'object' && datos !== null ? datos.email : datos;
   const contrasena = typeof datos === 'object' && datos !== null ? datos.contrasena : contrasenaAlternativa;
@@ -48,7 +95,36 @@ const login = async (datos, contrasenaAlternativa) => {
     throw new AppError('El email y la contraseña son obligatorios', 400, 'VALIDACION');
   }
 
-  const empleado = await empleadoRepository.getByEmail(email);
+  const localDb = getContingencyDb();
+  const offlineMode = isSystemOffline() && Boolean(localDb);
+
+  let empleado = null;
+  let rol = null;
+  let autenticadoOffline = false;
+
+  if (offlineMode) {
+    const cargado = await cargarEmpleadoLocal(localDb, email);
+    empleado = cargado.empleado;
+    rol = cargado.rol;
+    if (empleado) autenticadoOffline = true;
+  } else {
+    try {
+      empleado = await empleadoRepository.getByEmail(email);
+      if (empleado && empleado.rol_id) {
+        rol = await rolRepository.getById(empleado.rol_id);
+      }
+    } catch (err) {
+      if (localDb && (isNetworkError(err) || isCloudUnavailable(err))) {
+        const cargado = await cargarEmpleadoLocal(localDb, email);
+        empleado = cargado.empleado;
+        rol = cargado.rol;
+        if (empleado) autenticadoOffline = true;
+      } else {
+        throw err;
+      }
+    }
+  }
+
   if (!empleado) {
     throw new AppError('Credenciales inválidas', 401, 'CREDENCIALES_INVALIDAS');
   }
@@ -62,11 +138,22 @@ const login = async (datos, contrasenaAlternativa) => {
     throw new AppError('Credenciales inválidas', 401, 'CREDENCIALES_INVALIDAS');
   }
 
-  const rol = empleado.rol_id ? await rolRepository.getById(empleado.rol_id) : null;
-  const { usuario, payload } = armarUsuario(empleado, rol);
+  if (autenticadoOffline) {
+    const esCajeroAutorizado = Boolean(
+      empleado.es_contingencia ||
+      empleado.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL ||
+      (rol && (rol.id === ROLES_SISTEMA.CAJERO_PRINCIPAL || rol.es_contingencia))
+    );
 
+    if (!esCajeroAutorizado) {
+      throw new AppError('Sin conexión a internet. Solo el Cajero Principal de contingencia puede iniciar sesión en modo offline.', 403, 'OFFLINE_FORBIDDEN');
+    }
+  }
+
+  const { usuario, payload } = armarUsuario(empleado, rol);
   const secret = process.env.JWT_SECRET || 'secreto_super_seguro_dev';
-  const token = jwt.sign(payload, secret, { expiresIn: '8h' });
+  const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+  const token = jwt.sign(payload, secret, { expiresIn });
 
   return { token, usuario };
 };
@@ -76,7 +163,36 @@ const me = async (user) => {
     throw new AppError('No autenticado', 401, 'NO_AUTENTICADO');
   }
 
-  const empleado = await empleadoRepository.getById(user.id);
+  let empleado = null;
+  let rol = null;
+  try {
+    empleado = await empleadoRepository.getById(user.id);
+    if (empleado && empleado.rol_id) {
+      rol = await rolRepository.getById(empleado.rol_id);
+    }
+  } catch (err) {
+    const localDb = getContingencyDb();
+    if (localDb) {
+      try {
+        empleado = await localDb('empleados').where({ id: user.id }).first();
+        if (empleado) {
+          if (empleado.dias_franco && typeof empleado.dias_franco === 'string') {
+            try { empleado.dias_franco = JSON.parse(empleado.dias_franco); } catch { empleado.dias_franco = []; }
+          }
+          if (empleado.permisos && typeof empleado.permisos === 'string') {
+            try { empleado.permisos = JSON.parse(empleado.permisos); } catch { empleado.permisos = []; }
+          }
+          if (empleado.rol_id) {
+            rol = await localDb('roles').where({ id: empleado.rol_id }).first();
+            if (rol && rol.permisos && typeof rol.permisos === 'string') {
+              try { rol.permisos = JSON.parse(rol.permisos); } catch { rol.permisos = []; }
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
   if (!empleado) {
     return {
       id: user.id,
@@ -87,7 +203,6 @@ const me = async (user) => {
     };
   }
 
-  const rol = empleado.rol_id ? await rolRepository.getById(empleado.rol_id) : null;
   const { usuario } = armarUsuario(empleado, rol);
   return usuario;
 };

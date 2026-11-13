@@ -56,8 +56,30 @@ export default function Pedidos() {
 
       setProducts(prodsList);
       setCategories(catsList);
+
+      if (prodsList.length > 0) {
+        try {
+          localStorage.setItem('cached_productos', JSON.stringify(prodsList));
+        } catch {}
+      }
+      if (catsList.length > 0) {
+        try {
+          localStorage.setItem('cached_categorias', JSON.stringify(catsList));
+        } catch {}
+      }
     } catch (error) {
-      toast.error(error.message || 'Error al cargar productos y categorías desde el servidor');
+      const cachedProds = localStorage.getItem('cached_productos');
+      const cachedCats = localStorage.getItem('cached_categorias');
+      if (cachedProds && cachedCats) {
+        try {
+          setProducts(JSON.parse(cachedProds));
+          setCategories(JSON.parse(cachedCats));
+        } catch {
+          toast.error(error.message || 'Error al cargar productos y categorías desde el servidor');
+        }
+      } else {
+        toast.error(error.message || 'Error al cargar productos y categorías desde el servidor');
+      }
     } finally {
       setCargandoDatos(false);
     }

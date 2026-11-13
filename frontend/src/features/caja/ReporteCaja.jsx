@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { useReporteCaja } from '@/hooks/useReporteCaja';
 import reporteService from '@/services/reporteService';
 import cajaService from '@/services/cajaService';
-import { formatearPrecio, formatearIdPedido } from '@/utils/formatters';
+import { formatearPrecio, formatearIdPedido, formatearSoloFecha } from '@/utils/formatters';
 import { ReporteCajaPrint } from './ReporteCajaPrint';
 import { DetallePedidoModal } from './DetallePedidoModal';
 import { ModalConfirmarEliminar } from './ModalConfirmarEliminar';
@@ -75,6 +75,10 @@ const getBadgeMotivo = (motivo) => {
 const formatearFechaDDMMAAAA = (fechaStr) => {
   if (!fechaStr) return '-';
   const str = String(fechaStr).trim();
+  if (str.includes(' a ')) {
+    const [desde, hasta] = str.split(' a ');
+    return `${formatearFechaDDMMAAAA(desde)} al ${formatearFechaDDMMAAAA(hasta)}`;
+  }
   const soloFecha = str.split('T')[0];
   const partes = soloFecha.split('-');
   if (partes.length === 3) {
@@ -136,7 +140,8 @@ export default function ReporteCaja() {
     totalesMovimientos,
     exportarAExcel,
     imprimirReporte,
-    getHoyIso
+    getHoyIso,
+    getMesActualIso
   } = useReporteCaja();
 
   // Estado de la Pestaña Activa estilo Google Chrome
@@ -452,7 +457,7 @@ export default function ReporteCaja() {
         let mesTexto = '';
         let mesTag = '';
 
-        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado) {
+        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado && mesSeleccionado.includes('-')) {
           const [anioStr, mesStr] = mesSeleccionado.split('-');
           const anio = parseInt(anioStr, 10);
           const mes = parseInt(mesStr, 10);
@@ -699,7 +704,7 @@ export default function ReporteCaja() {
         let desdeTarget = '';
         let hastaTarget = '';
         let mesTag = '';
-        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado) {
+        if (modoFiltro === 'mes-seleccionado' && mesSeleccionado && mesSeleccionado.includes('-')) {
           const [anioStr, mesStr] = mesSeleccionado.split('-');
           const anio = parseInt(anioStr, 10);
           const mes = parseInt(mesStr, 10);
@@ -794,10 +799,27 @@ export default function ReporteCaja() {
       return `Transacciones del ${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${String(hoy.getFullYear()).slice(-2)}`;
     }
     if (modoFiltro === 'fecha') {
-      const [y, m, d] = (fechaEspecifica || '').split('-');
+      if (!fechaEspecifica || !fechaEspecifica.includes('-')) return 'Transacciones del día';
+      const [y, m, d] = fechaEspecifica.split('-');
       return `Transacciones del ${d}/${m}/${y ? y.slice(-2) : ''}`;
     }
-    return `Transacciones del período (${reporte.fecha ? formatearSoloFecha(reporte.fecha) : 'Mes'})`;
+    if (modoFiltro === 'mes') {
+      const ahora = new Date();
+      const nomMes = ahora.toLocaleString('es-ES', { month: 'long' });
+      return `Transacciones de ${nomMes.charAt(0).toUpperCase() + nomMes.slice(1)} ${ahora.getFullYear()}`;
+    }
+    if (modoFiltro === 'mes-seleccionado') {
+      const mesIso = mesSeleccionado && mesSeleccionado.includes('-') ? mesSeleccionado : getMesActualIso();
+      const [anioStr, mesStr] = mesIso.split('-');
+      const anio = parseInt(anioStr, 10);
+      const mes = parseInt(mesStr, 10);
+      if (!isNaN(anio) && !isNaN(mes)) {
+        const dRef = new Date(anio, mes - 1, 1);
+        const nomMes = dRef.toLocaleString('es-ES', { month: 'long' });
+        return `Transacciones de ${nomMes.charAt(0).toUpperCase() + nomMes.slice(1)} ${anio}`;
+      }
+    }
+    return `Transacciones del período (${reporte?.fecha ? formatearSoloFecha(reporte.fecha) : 'Mes'})`;
   };
 
   // Nombres de mes para las pestañas de Ingresos/Retiros y Motivos de Eliminación
@@ -837,6 +859,7 @@ export default function ReporteCaja() {
   };
 
   const aplicarFiltroMesSeleccionado = (nuevoMes) => {
+    if (!nuevoMes) return;
     setPestanaActiva('transacciones');
     setMesSeleccionado(nuevoMes);
     setModoFiltro('mes-seleccionado');

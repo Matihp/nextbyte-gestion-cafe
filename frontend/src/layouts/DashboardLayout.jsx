@@ -35,7 +35,6 @@ import {
   BarChart3, 
   MonitorPlay,
   User,
-  AlertTriangle,
   Wifi,
   WifiOff,
   RefreshCw
@@ -92,8 +91,6 @@ export default function DashboardLayout() {
     return userPermissions.includes(item.permission);
   });
 
-  const tieneAccesoConfiguracion = esAdmin || userPermissions.includes('settings') || userPermissions.includes('canCreateRoles');
-
   const esCajeroContingencia = Boolean(
     user?.es_contingencia ||
     user?.rol_id === ROLES_SISTEMA.CAJERO_PRINCIPAL ||
@@ -107,14 +104,60 @@ export default function DashboardLayout() {
   const wasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
 
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      if (wasOfflineRef.current) {
-        setShowRestoredBanner(true);
-        wasOfflineRef.current = false;
+  const verificarConexionReal = async (silent = false) => {
+    if (!silent) setCheckingConnection(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const res = await fetch(`${apiUrl}/health`, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        const modeUpper = String(data?.mode || '').toUpperCase();
+        const online = Boolean(
+          data &&
+          data.isOnline === true &&
+          modeUpper !== 'OFFLINE_ACTIVE' &&
+          modeUpper !== 'CLOUD_UNAVAILABLE' &&
+          modeUpper !== 'BLOCKED_UNSAFE'
+        );
+
+        if (!online) {
+          setIsOnline(false);
+          wasOfflineRef.current = true;
+          setShowRestoredBanner(false);
+          if (!silent) toast.info('Servidor local activo en Modo Contingencia.');
+        } else {
+          setIsOnline(true);
+          if (wasOfflineRef.current) {
+            setShowRestoredBanner(true);
+            wasOfflineRef.current = false;
+            if (!silent) toast.success('Conexión restablecida con éxito');
+          }
+        }
+      } else {
+        setIsOnline(false);
+        wasOfflineRef.current = true;
+        setShowRestoredBanner(false);
+        if (!silent) toast.warning('Servidor temporalmente no disponible');
       }
-      toast.success('Conexión a internet restablecida');
+    } catch {
+      setIsOnline(false);
+      wasOfflineRef.current = true;
+      setShowRestoredBanner(false);
+      if (!silent) toast.error('No se pudo conectar con el servidor.');
+    } finally {
+      if (!silent) setCheckingConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    verificarConexionReal(true);
+
+    const handleOnline = () => {
+      verificarConexionReal(true);
     };
 
     const handleOffline = () => {
@@ -142,7 +185,12 @@ export default function DashboardLayout() {
     };
     window.addEventListener('nextbyte:network-status', handleNetworkEvent);
 
+    const intervalId = setInterval(() => {
+      verificarConexionReal(true);
+    }, 8000);
+
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('nextbyte:network-status', handleNetworkEvent);
@@ -152,49 +200,10 @@ export default function DashboardLayout() {
   const handleReintentarConexion = async () => {
     setCheckingConnection(true);
     try {
-      if (!navigator.onLine) {
-        toast.error('La aplicación continúa sin conexión a internet');
-        setIsOnline(false);
-        wasOfflineRef.current = true;
-        setShowRestoredBanner(false);
-        setCheckingConnection(false);
-        return;
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      const res = await fetch(`${apiUrl}/health`, { signal: controller.signal, cache: 'no-store' });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data && data.isOnline === false) {
-          setIsOnline(false);
-          wasOfflineRef.current = true;
-          setShowRestoredBanner(false);
-          toast.info('Servidor local activo en Modo Contingencia.');
-        } else {
-          setIsOnline(true);
-          if (wasOfflineRef.current) {
-            setShowRestoredBanner(true);
-            wasOfflineRef.current = false;
-          }
-          toast.success('Conexión restablecida con éxito');
-        }
-      } else {
-        setIsOnline(false);
-        wasOfflineRef.current = true;
-        setShowRestoredBanner(false);
-        toast.warning('Servidor temporalmente no disponible');
-      }
-    } catch {
-      setIsOnline(false);
-      wasOfflineRef.current = true;
-      setShowRestoredBanner(false);
-      toast.error('No se pudo conectar con el servidor. Sigue en Modo Contingencia.');
+      await fetch(`${apiUrl}/sync/ejecutar`, { method: 'POST', cache: 'no-store' }).catch(() => {});
     } finally {
-      setCheckingConnection(false);
+      await verificarConexionReal(false);
     }
   };
 

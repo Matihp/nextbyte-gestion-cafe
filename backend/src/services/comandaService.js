@@ -5,8 +5,8 @@ const AppError = require('../utils/AppError');
 const { dbLocal } = require('../config/db');
 const pedidoRepository = require('../repositories/pedidoRepository');
 const detallePedidoRepository = require('../repositories/detallePedidoRepository');
-
 const registroVentaRepository = require('../repositories/registroVentaRepository');
+const { runBusinessMutation } = require('./mutationExecutor');
 
 const TRANSICIONES_PERMITIDAS = {
   [ESTADOS_PEDIDO.PENDIENTE]: [ESTADOS_PEDIDO.EN_PREPARACION],
@@ -150,16 +150,17 @@ const calcularTotalCosto = (detalles = []) => {
 };
 
 const obtenerActivas = async (opciones = {}) => {
+  const targetDb = opciones.db || dbLocal;
   const estados = opciones.incluirCompletados
     ? ['pendiente', 'en_preparacion', 'en_empaque', 'completado']
     : ESTADOS_ACTIVOS;
-  const pedidos = await pedidoRepository.getByEstados(estados);
+  const pedidos = await pedidoRepository.getByEstados(estados, targetDb);
   if (!pedidos || pedidos.length === 0) {
     return [];
   }
 
   const pedidoIds = pedidos.map((p) => p.id);
-  const todosLosDetalles = await detallePedidoRepository.getByPedidoIds(pedidoIds);
+  const todosLosDetalles = await detallePedidoRepository.getByPedidoIds(pedidoIds, targetDb);
 
   const detallesPorPedido = new Map();
   for (const det of todosLosDetalles) {
@@ -175,29 +176,6 @@ const obtenerActivas = async (opciones = {}) => {
   }));
 };
 
-const cambiarEstado = async (id, nuevoEstado) => {
-  const todosLosEstados = Object.values(ESTADOS_PEDIDO);
-  if (!nuevoEstado || typeof nuevoEstado !== 'string' || !todosLosEstados.includes(nuevoEstado)) {
-    throw new AppError('El estado proporcionado no es válido', 400, 'VALIDACION');
-  }
-
-  if (nuevoEstado === ESTADOS_PEDIDO.ENTREGADO) {
-    return entregar(id);
-  }
-
-  return dbLocal.transaction(async (trx) => {
-    const pedido = await pedidoRepository.getById(id, trx, true);
-    if (!pedido) {
-      throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
-    }
-    if (!puedeTransicionar(pedido.estado, nuevoEstado)) {
-      throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
-    }
-    await actualizarEstado(pedido, nuevoEstado, trx);
-    return pedidoRepository.getWithDetails(pedido.id, trx);
-  });
-};
-
 const actualizarEstado = async (pedido, estado, trx) => {
   const afectados = await pedidoRepository.updateIfEstado(pedido.id, pedido.estado, { estado }, trx);
   if (afectados !== 1) {
@@ -205,84 +183,185 @@ const actualizarEstado = async (pedido, estado, trx) => {
   }
 };
 
-const entregar = async (id) => dbLocal.transaction(async (trx) => {
-  const pedido = await pedidoRepository.getWithDetails(id, trx, true);
-  if (!pedido) {
-    throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
-  }
-  if (pedido.estado === ESTADOS_PEDIDO.ENTREGADO) {
-    return pedido;
-  }
-  if (pedido.estado === ESTADOS_PEDIDO.CANCELADO) {
-    throw new AppError('No se puede entregar un pedido cancelado', 409, 'ESTADO_INVALIDO');
+const cambiarEstado = async (id, nuevoEstado, opciones = {}) => {
+  const todosLosEstados = Object.values(ESTADOS_PEDIDO);
+  if (!nuevoEstado || typeof nuevoEstado !== 'string' || !todosLosEstados.includes(nuevoEstado)) {
+    throw new AppError('El estado proporcionado no es válido', 400, 'VALIDACION');
   }
 
-  // Si aún no estaba completado, avanzar y registrar la venta si no existía
-  if (pedido.estado !== ESTADOS_PEDIDO.COMPLETADO) {
-    if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
-      await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.EN_EMPAQUE, trx);
+  if (nuevoEstado === ESTADOS_PEDIDO.ENTREGADO) {
+    return entregar(id, opciones);
+  }
+
+  const actorId = opciones.actorId || opciones.usuarioId || 'cajero_principal';
+  const opId = opciones.operationId || `cmd_${id}_${nuevoEstado}`;
+
+  return await runBusinessMutation({
+    db: opciones.db || dbLocal,
+    localDb: opciones.localDb || null,
+    operationId: opId,
+    actorId,
+    operationType: 'CAMBIAR_ESTADO_COMANDA',
+    payload: { id, nuevoEstado },
+    execute: async ({ db, trx, collector, isOffline }) => {
+      const pedido = await pedidoRepository.getById(id, trx, true);
+      if (!pedido) {
+        throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+      }
+      if (!puedeTransicionar(pedido.estado, nuevoEstado)) {
+        throw new AppError(`No se puede pasar de ${pedido.estado} a ${nuevoEstado}`, 409, 'TRANSICION_INVALIDA');
+      }
+      await actualizarEstado(pedido, nuevoEstado, trx);
+
+      if (collector) {
+        collector.recordUpdate('pedidos', pedido.id, {
+          estado: nuevoEstado,
+          updated_at: (trx || dbLocal).fn.now()
+        }, {
+          estado: pedido.estado
+        });
+      }
+
+      return pedidoRepository.getWithDetails(pedido.id, trx);
     }
-    const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
-    const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
-    if (!ventaExistente) {
-      const totalCosto = calcularTotalCosto(detalles);
-      await registroVentaRepository.guardar(
-        {
-          id: crypto.randomUUID(),
+  });
+};
+
+const entregar = async (id, opciones = {}) => {
+  const actorId = opciones.actorId || opciones.usuarioId || 'cajero_principal';
+  const opId = opciones.operationId || `ent_${id}`;
+
+  return await runBusinessMutation({
+    db: opciones.db || dbLocal,
+    localDb: opciones.localDb || null,
+    operationId: opId,
+    actorId,
+    operationType: 'ENTREGAR_PEDIDO',
+    payload: { id },
+    execute: async ({ db, trx, collector, isOffline }) => {
+      const pedido = await pedidoRepository.getWithDetails(id, trx, true);
+      if (!pedido) {
+        throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+      }
+      if (pedido.estado === ESTADOS_PEDIDO.ENTREGADO) {
+        return pedido;
+      }
+      if (pedido.estado === ESTADOS_PEDIDO.CANCELADO) {
+        throw new AppError('No se puede entregar un pedido cancelado', 409, 'ESTADO_INVALIDO');
+      }
+
+      let ventaInsertada = null;
+      if (pedido.estado !== ESTADOS_PEDIDO.COMPLETADO) {
+        if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
+          await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.EN_EMPAQUE, trx);
+        }
+        const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+        const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
+        if (!ventaExistente) {
+          const totalCosto = calcularTotalCosto(detalles);
+          const ventaId = crypto.randomUUID();
+          ventaInsertada = {
+            id: ventaId,
+            pedido_id: pedido.id,
+            fecha: hoy(),
+            total_venta: Number(pedido.total || 0),
+            total_costo: totalCosto
+          };
+          await registroVentaRepository.guardar(ventaInsertada, trx);
+        }
+        await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.COMPLETADO, trx);
+      }
+
+      await actualizarEstado({ ...pedido, estado: ESTADOS_PEDIDO.COMPLETADO }, ESTADOS_PEDIDO.ENTREGADO, trx);
+
+      if (collector) {
+        collector.recordUpdate('pedidos', pedido.id, {
+          estado: ESTADOS_PEDIDO.ENTREGADO,
+          updated_at: (trx || dbLocal).fn.now()
+        }, {
+          estado: pedido.estado
+        });
+
+        if (ventaInsertada) {
+          collector.recordInsert('registro_ventas', ventaInsertada.id, {
+            ...ventaInsertada,
+            created_at: (trx || dbLocal).fn.now(),
+            updated_at: (trx || dbLocal).fn.now()
+          });
+        }
+      }
+
+      return pedidoRepository.getWithDetails(pedido.id, trx);
+    }
+  });
+};
+
+const completar = async (id, opciones = {}) => {
+  const actorId = opciones.actorId || opciones.usuarioId || 'cajero_principal';
+  const opId = opciones.operationId || `cmp_${id}`;
+
+  return await runBusinessMutation({
+    db: opciones.db || dbLocal,
+    localDb: opciones.localDb || null,
+    operationId: opId,
+    actorId,
+    operationType: 'COMPLETAR_PEDIDO',
+    payload: { id },
+    execute: async ({ db, trx, collector, isOffline }) => {
+      const pedido = await pedidoRepository.getWithDetails(id, trx, true);
+      if (!pedido) {
+        throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
+      }
+
+      if ([ESTADOS_PEDIDO.COMPLETADO, ESTADOS_PEDIDO.ENTREGADO].includes(pedido.estado)) {
+        return { ...pedido, pedido, insumos_descontados: [] };
+      }
+      if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
+        throw new AppError(`No se puede completar un pedido en estado ${pedido.estado}`, 409, 'TRANSICION_INVALIDA');
+      }
+
+      const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
+      await actualizarEstado(pedido, ESTADOS_PEDIDO.COMPLETADO, trx);
+
+      let ventaInsertada = null;
+      const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
+      if (!ventaExistente) {
+        const totalCosto = calcularTotalCosto(detalles);
+        const ventaId = crypto.randomUUID();
+        ventaInsertada = {
+          id: ventaId,
           pedido_id: pedido.id,
           fecha: hoy(),
           total_venta: Number(pedido.total || 0),
           total_costo: totalCosto
-        },
-        trx
-      );
+        };
+        await registroVentaRepository.guardar(ventaInsertada, trx);
+      }
+
+      if (collector) {
+        collector.recordUpdate('pedidos', pedido.id, {
+          estado: ESTADOS_PEDIDO.COMPLETADO,
+          updated_at: (trx || dbLocal).fn.now()
+        }, {
+          estado: pedido.estado
+        });
+
+        if (ventaInsertada) {
+          collector.recordInsert('registro_ventas', ventaInsertada.id, {
+            ...ventaInsertada,
+            created_at: (trx || dbLocal).fn.now(),
+            updated_at: (trx || dbLocal).fn.now()
+          });
+        }
+      }
+
+      const pedidoActualizado = await pedidoRepository.getWithDetails(pedido.id, trx);
+      return {
+        ...pedidoActualizado,
+        pedido: pedidoActualizado,
+        insumos_descontados: []
+      };
     }
-    await pedidoRepository.updateStatus(id, ESTADOS_PEDIDO.COMPLETADO, trx);
-  }
-
-  await actualizarEstado({ ...pedido, estado: ESTADOS_PEDIDO.COMPLETADO }, ESTADOS_PEDIDO.ENTREGADO, trx);
-  return pedidoRepository.getWithDetails(pedido.id, trx);
-});
-
-const completar = async (id) => {
-  return await dbLocal.transaction(async (trx) => {
-    const pedido = await pedidoRepository.getWithDetails(id, trx, true);
-    if (!pedido) {
-      throw new AppError('Pedido inexistente', 404, 'NO_ENCONTRADO');
-    }
-
-    if ([ESTADOS_PEDIDO.COMPLETADO, ESTADOS_PEDIDO.ENTREGADO].includes(pedido.estado)) {
-      return { ...pedido, pedido, insumos_descontados: [] };
-    }
-    if (pedido.estado !== ESTADOS_PEDIDO.EN_EMPAQUE) {
-      throw new AppError(`No se puede completar un pedido en estado ${pedido.estado}`, 409, 'TRANSICION_INVALIDA');
-    }
-
-    // Las unidades se reservaron al crear; los insumos se consumieron al fabricar.
-    const detalles = Array.isArray(pedido.detalles) ? pedido.detalles : [];
-    await actualizarEstado(pedido, ESTADOS_PEDIDO.COMPLETADO, trx);
-
-    const ventaExistente = await registroVentaRepository.buscarPorPedidoId(pedido.id, trx);
-    if (!ventaExistente) {
-      const totalCosto = calcularTotalCosto(detalles);
-      await registroVentaRepository.guardar(
-        {
-          id: crypto.randomUUID(),
-          pedido_id: pedido.id,
-          fecha: hoy(),
-          total_venta: Number(pedido.total || 0),
-          total_costo: totalCosto
-        },
-        trx
-      );
-    }
-
-    const pedidoActualizado = await pedidoRepository.getWithDetails(pedido.id, trx);
-    return {
-      ...pedidoActualizado,
-      pedido: pedidoActualizado,
-      insumos_descontados: []
-    };
   });
 };
 

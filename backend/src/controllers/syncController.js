@@ -6,21 +6,33 @@ const {
 } = require('../config/db');
 const syncService = require('../services/syncService');
 const syncJob = require('../jobs/syncJob');
+const { getConnectivityService } = require('../services/connectivityService');
+const { parseContingencyConfig } = require('../config/contingencyConfig');
 
 const getStatus = async (req, res, next) => {
   try {
-    const online = Boolean(req.isOnline !== undefined ? req.isOnline : isOnline());
-    const countPendientes = await syncService.contarPendientes();
+    const config = parseContingencyConfig(process.env, databaseMode);
+    const connectivity = getConnectivityService({ databaseMode });
+    const state = connectivity.getState(req.user);
+
+    const countPendientes = state.pendingCount || await syncService.contarPendientes();
     const hayPendientes = hasPendingLocalSync() || countPendientes > 0;
-    const ultimoSync = getLastSyncTime();
+    const ultimoSync = state.lastSuccessfulSyncAt || getLastSyncTime();
 
     return res.json({
       success: true,
       data: {
-        isOnline: online,
+        ...state,
+        syncEnabled: Boolean(config.isContingencyEnabled),
+        isOnline: Boolean(state.isOnline),
         databaseMode,
-        modo: databaseMode === 'local' ? 'SQLite local (base principal)' : databaseMode === 'test' ? 'SQLite de prueba' : online ? 'Online (Turso Cloud)' : 'Turso no disponible (sin fallback)',
-        syncEnabled: false,
+        modo: databaseMode === 'local'
+          ? 'SQLite local (base principal)'
+          : databaseMode === 'test'
+            ? 'SQLite de prueba'
+            : state.isOnline
+              ? 'Online (Turso Cloud)'
+              : 'Turso no disponible (sin fallback)',
         hayPendientes,
         pendientesCount: countPendientes,
         ultimoSync

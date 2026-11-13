@@ -12,6 +12,13 @@ const errorHandler = (err, req, res, next) => {
   }
 
   if (databaseMode === 'cloud' && (isCloudUnavailable(err) || err.name === 'KnexTimeoutError' || err.code === 'BLOCKED')) {
+    try {
+      const { setOnlineStatus } = require('../config/db');
+      setOnlineStatus(false);
+      const { getConnectivityService } = require('../services/connectivityService');
+      getConnectivityService().reportCloudFailure(err);
+    } catch {}
+
     const quota = err.code === 'BLOCKED';
     const write = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     console.error('[Base de datos no disponible]', { code: err.code || err.name, method: req.method, path: req.path });

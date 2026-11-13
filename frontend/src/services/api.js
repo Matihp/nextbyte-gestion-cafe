@@ -35,6 +35,17 @@ api.interceptors.response.use(
       localStorage.removeItem('usuario');
     }
 
+    if (
+      status === 503 ||
+      error.response?.data?.error === 'CLOUD_UNAVAILABLE' ||
+      error.response?.data?.error === 'OFFLINE_FORBIDDEN' ||
+      !error.response
+    ) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nextbyte:network-status', { detail: { online: false } }));
+      }
+    }
+
     const err = new Error(mensaje);
     err.status = status;
     err.response = error.response;
